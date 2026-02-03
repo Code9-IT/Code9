@@ -1,0 +1,206 @@
+{
+  "annotations": { "list": [] },
+  "description": "Live telemetry, events, and AI-generated analyses – for ship operations personnel.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+
+  "panels": [
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Live Telemetry",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "celsius",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 75   },
+              { "color": "red",    "value": 88   }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "time_series",
+          "rawSql":  "SELECT timestamp as \"time\", value as \"Vessel 001\" FROM telemetry WHERE sensor_name = 'engine_temp' AND vessel_id = 'vessel_001' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "time_series",
+          "rawSql":  "SELECT timestamp as \"time\", value as \"Vessel 002\" FROM telemetry WHERE sensor_name = 'engine_temp' AND vessel_id = 'vessel_002' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "B"
+        }
+      ],
+      "title": "Engine Temperature (°C)",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",   "value": null },
+              { "color": "green", "value": 2    }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "id": 2,
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "time_series",
+          "rawSql":  "SELECT timestamp as \"time\", value as \"Vessel 001\" FROM telemetry WHERE sensor_name = 'oil_pressure' AND vessel_id = 'vessel_001' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "time_series",
+          "rawSql":  "SELECT timestamp as \"time\", value as \"Vessel 002\" FROM telemetry WHERE sensor_name = 'oil_pressure' AND vessel_id = 'vessel_002' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "B"
+        }
+      ],
+      "title": "Oil Pressure (bar)",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null  },
+              { "color": "yellow", "value": 1200  },
+              { "color": "red",    "value": 1500  }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "id": 3,
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "time_series",
+          "rawSql":  "SELECT timestamp as \"time\", value as \"Vessel 001\" FROM telemetry WHERE sensor_name = 'engine_rpm' AND vessel_id = 'vessel_001' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "time_series",
+          "rawSql":  "SELECT timestamp as \"time\", value as \"Vessel 002\" FROM telemetry WHERE sensor_name = 'engine_rpm' AND vessel_id = 'vessel_002' AND $__timeFilter(timestamp) ORDER BY timestamp",
+          "refId": "B"
+        }
+      ],
+      "title": "Engine RPM",
+      "type": "timeseries"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 200,
+      "title": "Events & AI Analysis",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "fieldConfig": {
+        "defaults": { "custom": { "displayMode": "auto" } },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "id": 4,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "table",
+          "rawSql":  "SELECT id, timestamp, vessel_id, sensor_name, event_type, severity, acknowledged FROM events ORDER BY timestamp DESC LIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Events",
+      "type": "table"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "fieldConfig": {
+        "defaults": { "custom": { "displayMode": "auto" } },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "id": 5,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "table",
+          "rawSql":  "SELECT a.id, a.timestamp, e.vessel_id, e.event_type, a.analysis_text, a.confidence, a.model_used, a.status FROM ai_analyses a JOIN events e ON a.event_id = e.id ORDER BY a.timestamp DESC LIMIT 10",
+          "refId": "A"
+        }
+      ],
+      "title": "AI Analyses",
+      "type": "table"
+    }
+
+  ],
+
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["maritime", "operations"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Ship Operations",
+  "uid": "maritime_ship_ops",
+  "version": 1
+}

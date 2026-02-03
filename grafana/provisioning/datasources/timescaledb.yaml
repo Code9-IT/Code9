@@ -1,0 +1,27 @@
+# =============================================================
+# Grafana – Datasource provisioning
+# Auto-loaded on container start.  No manual setup needed.
+# =============================================================
+# TODO: replace hard-coded password with an env-var substitution
+#       when deploying beyond local development.
+# =============================================================
+
+apiVersion: 1
+
+datasources:
+  - name: TimescaleDB
+    uid:  timescaledb          # referenced in dashboard JSON files
+    type: postgres
+    access: proxy
+    isDefault: true
+
+    jsonData:
+      host:            timescaledb   # Docker service name
+      port:            5432
+      database:        maritime_telemetry
+      user:            postgres
+      sslMode:         disable
+      postgresVersion: 1600         # 16.x
+
+    secureJsonData:
+      password: postgres

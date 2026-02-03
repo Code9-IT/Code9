@@ -1,0 +1,112 @@
+# =============================================================
+# Maritime Agentic Observability – Docker Compose
+# =============================================================
+# Quick start:
+#   cp .env.example .env
+#   docker compose up --build
+#
+# Services:
+#   timescaledb  – time-series database (PostgreSQL + TimescaleDB)
+#   grafana      – dashboards (auto-provisioned)
+#   agent        – FastAPI AI-agent (event analysis)
+#   generator    – synthetic telemetry + anomaly writer
+#   ollama       – local LLM (COMMENTED OUT – enable when ready)
+# =============================================================
+
+version: '3.8'
+
+services:
+  # ─── TIME-SERIES DATABASE ─────────────────────────────────
+  timescaledb:
+    image: timescale/timescaledb-postgis:latest-pg16
+    container_name: maritime_timescaledb
+    environment:
+      POSTGRES_USER:     ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB:       ${DB_NAME:-maritime_telemetry}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - ./db/init:/docker-entrypoint-initdb.d   # 001_init.sql runs on first start
+      - timescaledb_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d maritime_telemetry"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ─── GRAFANA ──────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: maritime_grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER:     ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── AI AGENT SERVICE (FastAPI) ───────────────────────────
+  agent:
+    build:
+      context:    ./services/agent
+      dockerfile: Dockerfile
+    container_name: maritime_agent
+    ports:
+      - "${AGENT_PORT:-8000}:8000"
+    environment:
+      DB_HOST:     timescaledb
+      DB_PORT:     "5432"
+      DB_USER:     ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME:     ${DB_NAME:-maritime_telemetry}
+      OLLAMA_URL:  ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── SYNTHETIC DATA GENERATOR ─────────────────────────────
+  generator:
+    build:
+      context:    ./services/generator
+      dockerfile: Dockerfile
+    container_name: maritime_generator
+    environment:
+      DB_HOST:     timescaledb
+      DB_PORT:     "5432"
+      DB_USER:     ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME:     ${DB_NAME:-maritime_telemetry}
+      GENERATE_INTERVAL_SECONDS: ${GENERATE_INTERVAL_SECONDS:-3}
+      ANOMALY_PROBABILITY:       ${ANOMALY_PROBABILITY:-0.05}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── OLLAMA – local LLM ──────────────────────────────────
+  # Uncomment when you are ready to run a local model.
+  # Needs a machine with enough RAM (8 GB+ recommended).
+  #
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: maritime_ollama
+  #   ports:
+  #     - "${OLLAMA_PORT:-11434}:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   restart: unless-stopped
+
+# ─── VOLUMES ──────────────────────────────────────────────
+volumes:
+  timescaledb_data:
+  # ollama_data:    # uncomment together with the ollama service

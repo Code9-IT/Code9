@@ -1,0 +1,153 @@
+{
+  "annotations": { "list": [] },
+  "description": "Data-integrity and quality monitoring for the maritime telemetry platform.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+
+  "panels": [
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Data Overview",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "time_series",
+          "rawSql":  "SELECT date_trunc('minute', timestamp) as \"time\", COUNT(*) as \"Vessel 001\" FROM telemetry WHERE vessel_id = 'vessel_001' AND $__timeFilter(timestamp) GROUP BY \"time\" ORDER BY \"time\"",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "time_series",
+          "rawSql":  "SELECT date_trunc('minute', timestamp) as \"time\", COUNT(*) as \"Vessel 002\" FROM telemetry WHERE vessel_id = 'vessel_002' AND $__timeFilter(timestamp) GROUP BY \"time\" ORDER BY \"time\"",
+          "refId": "B"
+        }
+      ],
+      "title": "Telemetry Records / Minute",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "id": 2,
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "time_series",
+          "rawSql":  "SELECT date_trunc('minute', timestamp) as \"time\", COUNT(*) as \"Events\" FROM events WHERE $__timeFilter(timestamp) GROUP BY \"time\" ORDER BY \"time\"",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "time_series",
+          "rawSql":  "SELECT date_trunc('minute', timestamp) as \"time\", COUNT(*) as \"Analyses\" FROM ai_analyses WHERE $__timeFilter(timestamp) GROUP BY \"time\" ORDER BY \"time\"",
+          "refId": "B"
+        }
+      ],
+      "title": "Events vs AI Analyses",
+      "type": "timeseries"
+    },
+
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 200,
+      "title": "Event Monitoring",
+      "type": "row"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "id": 3,
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "time_series",
+          "rawSql":  "SELECT date_trunc('minute', timestamp) as \"time\", COUNT(*) FILTER (WHERE event_type = 'HIGH_TEMPERATURE') as \"High Temp\", COUNT(*) FILTER (WHERE event_type = 'HIGH_COOLANT_TEMP') as \"High Coolant\", COUNT(*) FILTER (WHERE event_type = 'LOW_OIL_PRESSURE') as \"Low Oil\", COUNT(*) FILTER (WHERE event_type = 'HIGH_RPM') as \"High RPM\", COUNT(*) FILTER (WHERE event_type = 'HIGH_FUEL_CONSUMPTION') as \"High Fuel\", COUNT(*) FILTER (WHERE event_type = 'HIGH_HULL_TEMP') as \"High Hull\" FROM events WHERE $__timeFilter(timestamp) GROUP BY \"time\" ORDER BY \"time\"",
+          "refId": "A"
+        }
+      ],
+      "title": "Anomalies by Type",
+      "type": "timeseries"
+    },
+
+    {
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "fieldConfig": {
+        "defaults": { "custom": { "displayMode": "auto" } },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "id": 4,
+      "options": { "showHeader": true },
+      "targets": [
+        {
+          "datasource": { "type": "postgres", "uid": "timescaledb" },
+          "format":  "table",
+          "rawSql":  "SELECT id, timestamp, vessel_id, sensor_name, event_type, severity FROM events WHERE acknowledged = FALSE ORDER BY CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 WHEN 'info' THEN 2 ELSE 3 END, timestamp DESC LIMIT 15",
+          "refId": "A"
+        }
+      ],
+      "title": "Unacknowledged Events",
+      "type": "table"
+    }
+
+  ],
+
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["maritime", "data-quality"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Data Quality",
+  "uid": "maritime_data_quality",
+  "version": 1
+}
