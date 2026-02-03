@@ -1,0 +1,15 @@
+# =============================================================
+# Grafana – Dashboard provisioning
+# All JSON files in /var/lib/grafana/dashboards are loaded
+# automatically into the "Maritime" folder.
+# =============================================================
+
+apiVersion: 1
+
+providers:
+  - name: Maritime
+    orgId: 1
+    folder: Maritime
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

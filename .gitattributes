@@ -1,0 +1,3 @@
+# Normalise line endings in the repo to LF.
+# Prevents breakage in Docker / Linux containers when developing on Windows.
+* text=auto eol=lf
