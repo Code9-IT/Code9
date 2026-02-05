@@ -9,7 +9,7 @@ Configuration (all via env vars, see .env.example):
   GENERATE_INTERVAL_SECONDS   – seconds between write cycles (default 3)
   ANOMALY_PROBABILITY         – per-vessel chance of an anomaly  (default 0.05)
 
-TODO: add a "burst" mode that fires several anomalies quickly for live demos.
+Burst mode is controlled by BURST_MODE (default false).
 """
 
 import os
@@ -17,7 +17,7 @@ import time
 
 from db        import get_connection
 from sensors   import generate_telemetry_batch, VESSELS
-from anomalies import maybe_generate_anomaly
+from anomalies import generate_anomalies_for_cycle
 
 # ─── Configuration ───────────────────────────────────────
 INTERVAL      = int(os.getenv("GENERATE_INTERVAL_SECONDS", "3"))
@@ -49,9 +49,9 @@ def main():
                 batch = generate_telemetry_batch()
                 cur.executemany(INSERT_TELEMETRY, batch)
 
-                # 2) Maybe produce an anomaly for each vessel
-                for vessel in VESSELS:
-                    anomaly = maybe_generate_anomaly(vessel, ANOMALY_PROB)
+                # 2) Maybe produce anomalies for this cycle
+                anomalies = generate_anomalies_for_cycle(VESSELS, ANOMALY_PROB)
+                for anomaly in anomalies:
                     if anomaly:
                         # Insert the anomalous reading into telemetry
                         cur.execute(INSERT_TELEMETRY, {

@@ -18,7 +18,7 @@ version: '3.8'
 services:
   # ─── TIME-SERIES DATABASE ─────────────────────────────────
   timescaledb:
-    image: timescale/timescaledb-postgis:latest-pg16
+    image: timescale/timescaledb-ha:pg16
     container_name: maritime_timescaledb
     environment:
       POSTGRES_USER:     ${DB_USER:-postgres}
@@ -74,6 +74,25 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # MCP SERVER (FastAPI)
+  mcp:
+    build:
+      context:    ./services/mcp
+      dockerfile: Dockerfile
+    container_name: maritime_mcp
+    ports:
+      - "8001:8001"
+    environment:
+      DB_HOST:     timescaledb
+      DB_PORT:     "5432"
+      DB_USER:     ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME:     ${DB_NAME:-maritime_telemetry}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
   # ─── SYNTHETIC DATA GENERATOR ─────────────────────────────
   generator:
     build:
@@ -88,6 +107,7 @@ services:
       DB_NAME:     ${DB_NAME:-maritime_telemetry}
       GENERATE_INTERVAL_SECONDS: ${GENERATE_INTERVAL_SECONDS:-3}
       ANOMALY_PROBABILITY:       ${ANOMALY_PROBABILITY:-0.05}
+      BURST_MODE:                ${BURST_MODE:-false}
     depends_on:
       timescaledb:
         condition: service_healthy

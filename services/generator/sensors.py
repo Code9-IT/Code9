@@ -7,7 +7,7 @@ expected noise range, and the thresholds that count as anomalous.
 The sensor list is kept short and generic on purpose
 (see project guidelines – avoid deep tag hierarchies).
 
-TODO: add more sensors as the demo evolves (e.g. rudder_angle, nav_speed).
+TODO: add more sensors as the demo evolves.
 """
 
 import random
@@ -33,6 +33,8 @@ SENSORS: List[SensorConfig] = [
     SensorConfig("coolant_temp",       baseline=45.0,  noise_range=8.0,  unit="°C",  anomaly_high=70.0,  anomaly_low=None),
     SensorConfig("fuel_consumption",   baseline=20.0,  noise_range=5.0,  unit="L/h", anomaly_high=45.0,  anomaly_low=None),
     SensorConfig("hull_temp",          baseline=25.0,  noise_range=5.0,  unit="°C",  anomaly_high=50.0,  anomaly_low=None),
+    SensorConfig("nav_speed",          baseline=12.0,  noise_range=2.5,  unit="kn",  anomaly_high=25.0,  anomaly_low=None),
+    SensorConfig("rudder_angle",       baseline=0.0,   noise_range=5.0,  unit="deg", anomaly_high=20.0,  anomaly_low=-20.0),
 ]
 
 # Two anonymised test vessels
