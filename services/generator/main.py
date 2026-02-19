@@ -7,7 +7,8 @@ the AI agent events to analyse.
 
 Configuration (all via env vars, see .env.example):
   GENERATE_INTERVAL_SECONDS   – seconds between write cycles (default 3)
-  ANOMALY_PROBABILITY         – per-vessel chance of an anomaly  (default 0.05)
+  ANOMALY_PROBABILITY         – per-sensor probability per cycle (default 0.00008,
+                                ~1 event per 8 min with 77 threshold combinations)
 
 TODO: add a "burst" mode that fires several anomalies quickly for live demos.
 """
@@ -21,7 +22,7 @@ from anomalies import maybe_generate_anomaly
 
 # ─── Configuration ───────────────────────────────────────
 INTERVAL      = int(os.getenv("GENERATE_INTERVAL_SECONDS", "3"))
-ANOMALY_PROB  = float(os.getenv("ANOMALY_PROBABILITY",      "0.05"))
+ANOMALY_PROB  = float(os.getenv("ANOMALY_PROBABILITY",      "0.00008"))
 
 # ─── SQL ──────────────────────────────────────────────────
 INSERT_TELEMETRY = """
@@ -83,6 +84,15 @@ def main():
                 conn.rollback()
             except Exception:
                 pass
+            # conn.closed is non-zero when psycopg2 knows the connection is gone
+            # (covers server-side termination, network drop, and explicit close).
+            # Check this regardless of whether rollback succeeded.
+            if conn.closed:
+                print("[generator] Connection lost – reconnecting …")
+                try:
+                    conn = get_connection()
+                except Exception as reconnect_exc:
+                    print(f"[generator] Reconnection failed: {reconnect_exc}")
             time.sleep(INTERVAL)
 
 

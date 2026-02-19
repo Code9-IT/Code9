@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS telemetry (
 -- Turn into a hypertable so TimescaleDB partitions by time
 SELECT create_hypertable('telemetry', 'timestamp',
        chunk_time_interval => INTERVAL '1 hour',
-       migrate_data        => true);
+       migrate_data        => true,
+       if_not_exists       => TRUE);
 
 -- ─── EVENTS ──────────────────────────────────────────────
 -- Threshold breaches / anomalies detected by the generator

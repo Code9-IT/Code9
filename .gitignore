@@ -34,3 +34,10 @@ logs/
 
 # ─── Docker ───────────────────────────────────────────────
 .docker/
+
+# ─── Local / personal folders (not part of the project) ──
+tester/
+KristianEkstraFolder/
+
+# ─── Temporary Claude file-write helpers ──────────────────
+write_*.py

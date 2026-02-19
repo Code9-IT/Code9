@@ -26,13 +26,21 @@ agent layer** on top: when an anomaly is detected the agent explains
                            │  (FastAPI)    │
                            └───┬───────┬───┘
                                │       │
-                     retrieves │       │ sends prompt
+                  tool-calling │       │ sends prompt + tools
+                  loop (async) │       ▼
+                               │  ┌──────────┐
+                               │  │  Ollama  │
+                               │  │  (LLM)   │
+                               │  └──────────┘
+                               │       │ calls tool →
                                ▼       ▼
-                       ┌──────────┐  ┌──────────┐
-                       │ RAG stub │  │  Ollama  │
-                       │ (context)│  │  (LLM)   │
-                       └──────────┘  └──────────┘
-                       (empty today)  (stubbed today)
+                       ┌──────────┐  ┌──────────────┐
+                       │ RAG stub │  │  MCP Server  │
+                       │ (context)│  │  (port 8001) │
+                       └──────────┘  │  get_telemetry│
+                       (empty today) │  get_events   │
+                                     │  get_analysis │
+                                     └──────────────┘
 ```
 
 ### Data flow – step by step
@@ -55,9 +63,10 @@ agent layer** on top: when an anomaly is detected the agent explains
 |---------------|------------------|---------------------------------------------|
 | timescaledb   | TimescaleDB 16   | Time-series storage (all three tables)      |
 | grafana       | Grafana 11       | Visualisation – 2 auto-provisioned dashboards |
-| agent         | Python / FastAPI | Orchestrates RAG → LLM pipeline             |
+| agent         | Python / FastAPI | Orchestrates tool-calling loop → LLM → stores analysis |
 | generator     | Python (script)  | Writes synthetic data + anomaly events      |
-| ollama        | Ollama (optional)| Local LLM inference (commented out in MVP) |
+| mcp           | Python / FastAPI | REST adapter: exposes DB tools to the agent (port 8001) |
+| ollama        | Ollama           | Local LLM inference – llama3.2 or llama3.1  |
 
 ---
 
@@ -70,14 +79,15 @@ agent layer** on top: when an anomaly is detected the agent explains
 
 ---
 
-## Stubs – what is *not* real yet
+## Status – what is done and what remains
 
-| Component | Status | TODO                                                      |
+| Component | Status | Notes / TODO                                              |
 |-----------|---------|------------------------------------------------------------|
-| RAG       | Empty list returned | Implement vector-DB ingestion + retrieval       |
-| Ollama    | Canned text returned | Pull a model, set `STUB_MODE = False`          |
-| Auth      | None | Add JWT / role-based access before production               |
-| Anomaly detection | Rule-based in generator | Move to streaming rule engine     |
+| MCP server | ✅ Running on port 8001 | REST adapter with 3 tools. Not the official MCP wire protocol — see `underveisNotater.md`. |
+| Ollama    | 🔧 In progress | Kristian: enable service, pull `llama3.2`, implement tool-calling loop in agent |
+| RAG       | ⬜ Stub (empty list) | Nidal: implement pgvector + nomic-embed-text + knowledge docs |
+| Auth      | ⬜ None | Add JWT / role-based access before any production use     |
+| Anomaly detection | ✅ Rule-based in generator | Sufficient for prototype          |
 
 ---
 

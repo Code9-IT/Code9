@@ -18,15 +18,13 @@ The goal: no two people edit the same file at the same time, merge conflicts sta
 
 ## What the project still needs (big picture)
 
-The starter kit has a working skeleton — generator writes data, Grafana shows it, the agent
-can be called and stores an analysis. Everything beyond that is stubbed or missing:
-
-1. A **real LLM** that actually analyses events (Ollama, currently stubbed).
-2. **RAG** that retrieves relevant maritime docs to ground the LLM (currently returns empty).
-3. An **MCP server** to let the LLM query data sources via tools (not in the starter at all —
-   the project description calls this "a central architectural component").
-4. **Polished dashboards** with severity colours, vessel filters, and an Analyse trigger.
-5. The full **human-in-the-loop** flow visible end-to-end (event → analysis → operator action).
+| # | What | Status |
+|---|------|--------|
+| 1 | Real LLM (Ollama) with tool-calling loop | ✅ Done – Kristian |
+| 2 | RAG that retrieves maritime docs for the LLM | ⬜ Nidal |
+| 3 | MCP server exposing DB tools to the agent | ✅ Done – Onu |
+| 4 | Polished dashboards with severity colours, filters, Analyse trigger | ⬜ Jonas |
+| 5 | Human-in-the-loop flow visible end-to-end | ⬜ Needs Jonas + testing |
 
 ---
 
@@ -34,35 +32,30 @@ can be called and stores an analysis. Everything beyond that is stubbed or missi
 
 **You own:** `services/agent/llm/ollama_client.py` and `services/agent/routes/analyze.py`
 
-### Priority 1 – get a real LLM responding
+**Decision (18.02.2026):** We are using **Ollama locally** (free, no API key) with a
+model that supports function calling: `llama3.2:3b` (light) or `llama3.1:8b` (better
+quality, needs ~8 GB RAM). See `docs/underveisNotater.md` for full rationale.
 
-- [ ] Make `STUB_MODE` controllable via an env var instead of being hard-coded to `True`
-      in `ollama_client.py`. Add `STUB_MODE=true` to `.env.example` and the `agent`
-      environment block in `docker-compose.yml` (open a PR for those shared files).
-- [ ] Uncomment the real Ollama HTTP call in `ollama_client.py`.
-- [ ] Uncomment and enable the `ollama` service in `docker-compose.yml` (PR).
-- [ ] Pull a model inside the container:
-      `docker exec -it maritime_ollama ollama pull llama3`
-      (or `llama3.2` — smaller, faster on machines without a GPU).
-- [ ] Test end-to-end: run `docker compose up --build`, wait for an event to appear, then
-      `curl -X POST http://localhost:8000/api/v1/analyze -H "Content-Type: application/json" -d '{"event_id": <id>}'`
-      and verify you get a real LLM response instead of the stub text.
+### ✅ Priority 1 – connect real Ollama with tool calling (DONE 18.02.2026)
 
-### Priority 2 – make the response useful
+- [x] Ollama service enabled in `docker-compose.yml` with `ollama_data` volume.
+- [x] `STUB_MODE` reads from env var (default `false`). Real Ollama call active.
+- [x] Tool-calling loop implemented in `analyze.py`: Ollama decides which MCP tools
+      to call, agent executes them, results sent back — loop repeats until final answer.
+- [x] Model: `llama3.2` (pull with `docker exec -it maritime_ollama ollama pull llama3.2`)
 
-- [ ] Improve the prompt in `_build_prompt()` so the LLM returns a **structured** output
-      (e.g. numbered sections: explanation, impact, actions, confidence %).
-- [ ] Parse `suggested_actions` from the LLM text (split on numbered list items or use a
-      structured prompt format) instead of the current placeholder `["Investigate further"]`.
-- [ ] Parse the confidence value the LLM outputs (0–100) and convert it to 0.0–1.0 before
-      storing in `ai_analyses.confidence`.
-- [ ] Add a timeout and error handler: if Ollama does not respond in time, store the
-      analysis with `status = 'failed'` instead of crashing.
+### ✅ Priority 2 – structured output and parsing (DONE 18.02.2026)
+
+- [x] System prompt asks for `**ANALYSIS:**`, `**CONFIDENCE:** N%`, `**SUGGESTED ACTIONS:**`
+- [x] `_parse_confidence()` extracts the percentage → stored as 0.0–1.0 float
+- [x] `_parse_suggested_actions()` extracts numbered list items
+- [x] Failed analyses stored with `status='failed'` instead of crashing
 
 ### Coordinate with
-- Nidal: the RAG context string is inserted into your prompt by `_build_prompt()`. Once
-  Nidal has real docs, test together to make sure they appear and help the LLM.
-- Onu: later, MCP may replace or augment some of the direct data fetching in `analyze.py`.
+- Nidal: RAG context goes directly into the system prompt. Once Nidal's docs are in,
+  the LLM will reference them automatically — no changes needed in `analyze.py`.
+- Jonas: the analyse endpoint is `POST /api/v1/analyze` with `{"event_id": N}`.
+  For a GET-based Grafana link, Jonas can coordinate to add a GET alias.
 
 ---
 
@@ -107,8 +100,9 @@ can be called and stores an analysis. Everything beyond that is stubbed or missi
   pre-computing embeddings at ingest time and only running the query embedding at runtime.
 
 ### Coordinate with
-- Kristian: your output (the context string) is pasted directly into Kristian's prompt.
-  Test together once both Priority 1 tasks are done.
+- Kristian: RAG context drops straight into the system prompt in `analyze.py` — nothing
+  needs to change on Kristian's end. Just make sure `retrieve_context()` returns
+  `RAGDocument` objects with `title` and `content`. Test together when Priority 1 is done.
 
 ---
 
@@ -116,72 +110,228 @@ can be called and stores an analysis. Everything beyond that is stubbed or missi
 
 **You own:** `grafana/dashboards/ship_operations.json` and `grafana/dashboards/data_quality.json`
 
-### Priority 1 – make the dashboards useful and readable
+---
 
-- [ ] **Severity colour-coding** in both Events tables:
-      Use Grafana field overrides or value mappings on the `severity` column so that
-      `critical` → red background, `warning` → yellow/orange, `info` → green.
-- [ ] **Vessel dropdown filter:** add a Grafana variable (`$vessel`) to both dashboards
-      so the user can pick one vessel or see all. Update all panel queries to use it:
-      `WHERE vessel_id = '$vessel'` (with an `ALL` option that removes the filter).
-- [ ] **Missing sensor panels:** the Ship Operations dashboard only shows engine_temp,
-      oil_pressure, and engine_rpm. Add panels for `coolant_temp` and `fuel_consumption`
-      (the generator already produces these — just copy an existing timeseries panel and
-      change the sensor_name in the SQL).
-- [ ] **Units:** make sure oil pressure shows `bar`, temperatures show `°C`,
-      RPM shows `rpm`, fuel shows `L/h`. Grafana `unit` field in `fieldConfig.defaults`.
+### Goal: 2 dashboards, 1 ship, 2 audiences
 
-### Priority 2 – interactive features
+This is the core architectural decision from the Arnt/Knowit meeting (02.02.2026):
 
-- [ ] **"Analyse" trigger in the Events table:** Grafana table panels cannot natively call
-      an API on click, but you can add a **link column** or use an **HTML panel** with a
-      small inline `<script>` that does a `fetch('POST /api/v1/analyze', ...)`.
-      Approach: add an `action` column to the Events table query that generates a link like
-      `'http://localhost:8000/api/v1/analyze?event_id=' || id` and document that clicking
-      it needs to be a POST (or switch the agent to accept GET for simplicity — coordinate
-      with Kristian).
-- [ ] **"Acknowledge" button:** same pattern for the Unacknowledged Events table — a link
-      or HTML button that POSTs to `/api/v1/events/{id}/acknowledge?operator=...`.
-- [ ] **Gap detection panel** on Data Quality dashboard: a query that finds gaps in the
-      telemetry time series (e.g. minutes with zero rows for a given vessel).
+> *"Lag 2 dashboard for 2 forskjellige personer med 2 anvendelsesområder:
+> skipsoperasjon og drift av teknologiplatformen."*
 
-### No coordination needed
-You work entirely in `grafana/dashboards/`. The only shared touch point is if you want
-the agent to accept GET instead of POST for the Analyse trigger — talk to Kristian first.
+| Dashboard | File | Audience | Purpose |
+|-----------|------|----------|---------|
+| **Ship Operations** | `ship_operations.json` | Chief engineer / Captain | Vessel health — is anything broken right now? |
+| **Data Quality** | `data_quality.json` | Telenor Maritime / data platform team | Platform integrity — is the data trustworthy? |
+
+**Each dashboard must have two levels of detail:**
+- **Main view** — the most important panels visible immediately on load.
+  One screen, no scrolling. KPIs and active alarms only.
+- **Detail rows** (collapsed by default, expand on click) — all remaining sensors
+  grouped by subsystem. Useful when investigating a specific issue.
+
+---
+
+### Dashboard 1 – Ship Operations (chief engineer)
+
+#### Main view (always visible)
+
+| Panel | Type | Sensors / query |
+|-------|------|-----------------|
+| DG engine speeds | Time-series | `dg1_engine_speed` … `dg5_engine_speed` (rpm) |
+| DG power output | Time-series | `dg1_power_mw` … `dg5_power_mw` (MW) |
+| DG engine load | Gauge × 5 | `dg1_engine_load` … `dg5_engine_load` (%) — red at 90% |
+| Fuel tanks | Stat / gauge | `hfo_tank_weight` (low alarm 500 t), `mgo_tank_weight` (low alarm 200 t) |
+| Scrubber emissions | Time-series | `scrubber_fwd_so2`, `scrubber_aft_so2` (ppm) — red at 400 ppm |
+| Speed & depth | Time-series | `vessel_speed` (knots), `water_depth` (m) — red at 15 m |
+| Active alarms | Table | `SELECT * FROM events WHERE acknowledged = false ORDER BY timestamp DESC LIMIT 10` |
+
+#### Detail rows (collapsed – expand to investigate)
+
+**Row: Engine details**
+
+| Panel | Sensors |
+|-------|---------|
+| Fuel rack position | `dg1_fuel_rack_pos` … `dg5_fuel_rack_pos` (mm, alarm >55) |
+| Charge air temperature | `dg1_charge_air_temp` … `dg5_charge_air_temp` (°C, alarm >120) |
+| Turbocharger speed | `dg1_tc_speed` … `dg5_tc_speed` (rpm, alarm >22 000) |
+| Cooling water flow | `dg1_cw_in_flow` … `dg5_cw_in_flow` (m³/h, alarm <5) |
+
+**Row: Fuel quality**
+
+| Panel | Sensors |
+|-------|---------|
+| HFO booster flows | `hfo_booster_a_flow`, `hfo_booster_b_flow`, `hfo_booster_c_flow` (m³/h) |
+| MGO booster flows | `mgo_booster_a_flow`, `mgo_booster_b_flow` (m³/h) |
+| HFO temperature | `hfo_fuel_temp`, `hfo_fuel_temp_b`, `hfo_fuel_temp_c` (°C) |
+| HFO viscosity | `hfo_fuel_viscosity`, `hfo_fuel_viscosity_b`, `hfo_fuel_viscosity_c` (cSt) |
+| HFO density | `hfo_density`, `hfo_density_b` (kg/m³) |
+| MGO density | `mgo_density_a`, `mgo_density_b` (kg/m³) |
+| Boiler fuel flow | `boiler_fuel_flow_a`, `boiler_fuel_flow_b` (m³/h) |
+
+**Row: Scrubbers (full)**
+
+| Panel | Sensors |
+|-------|---------|
+| SO₂ | `scrubber_fwd_so2`, `scrubber_aft_so2` (ppm) |
+| CO₂ | `scrubber_fwd_co2`, `scrubber_aft_co2` (%) |
+| Wash water pH | `scrubber_fwd_ph`, `scrubber_aft_ph` (pH, alarm <6.0) |
+| Power | `scrubber_fwd_power`, `scrubber_aft_power` (W) |
+| PAH | `scrubber_fwd_pah`, `scrubber_aft_pah` (µg/l) |
+| Sulphur content | `scrubber_fwd_sulphur`, `scrubber_aft_sulphur` (%, alarm ≥0.10) |
+
+**Row: Lubrication & emergency**
+
+| Panel | Sensors |
+|-------|---------|
+| LO supply flow | `clean_lo_flow` (L/min, alarm <3) |
+| LO return flow | `dirty_lo_flow` (L/min, alarm >20) |
+| EMDG speed | `emdg_speed` (rpm) |
+
+---
+
+### Dashboard 2 – Data Quality (Telenor Maritime)
+
+#### Main view (always visible)
+
+| Panel | Type | Query / purpose |
+|-------|------|-----------------|
+| Sensor coverage | Stat | Count of distinct `sensor_name` values seen in last 5 min |
+| Data freshness | Stat | Time since last row in `telemetry` for this vessel |
+| Event rate | Bar chart | Events per hour over last 24 h |
+| Unacknowledged alarms | Table | `SELECT * FROM events WHERE acknowledged = false` |
+| Latest AI analyses | Table | `SELECT * FROM ai_analyses ORDER BY timestamp DESC LIMIT 5` |
+
+#### Detail rows (collapsed – expand to investigate)
+
+**Row: Per-sensor freshness**
+
+A table showing each sensor name and the timestamp of its most recent reading.
+Highlight any sensor not seen in the last 30 seconds (generator runs every 3 s).
+
+```sql
+SELECT sensor_name,
+       MAX(timestamp) AS last_seen,
+       NOW() - MAX(timestamp) AS staleness
+FROM   telemetry
+WHERE  vessel_id = '$vessel'
+GROUP  BY sensor_name
+ORDER  BY staleness DESC;
+```
+
+**Row: Gap detection**
+
+Identify time windows where fewer than the expected number of sensors reported:
+
+```sql
+SELECT time_bucket('1 minute', timestamp) AS bucket,
+       COUNT(DISTINCT sensor_name)         AS sensors_seen
+FROM   telemetry
+WHERE  vessel_id = '$vessel'
+  AND  timestamp > NOW() - INTERVAL '1 hour'
+GROUP  BY bucket
+ORDER  BY bucket;
+```
+Show as a bar chart — any bar below 73 (total sensors) = a data gap.
+
+**Row: All alarm states**
+
+A table of every event in the last 24 hours with severity colour-coding:
+`critical` → red, `warning` → orange, `info` → green.
+
+---
+
+### Complete sensor list for reference
+
+Use these exact `sensor_name` values in your SQL (`WHERE sensor_name = '...'`).
+
+**DG engines (DG1–DG5, 35 sensors)**
+```
+dg1_engine_speed    dg2_engine_speed    dg3_engine_speed    dg4_engine_speed    dg5_engine_speed
+dg1_power_mw        dg2_power_mw        dg3_power_mw        dg4_power_mw        dg5_power_mw
+dg1_fuel_rack_pos   dg2_fuel_rack_pos   dg3_fuel_rack_pos   dg4_fuel_rack_pos   dg5_fuel_rack_pos
+dg1_charge_air_temp dg2_charge_air_temp dg3_charge_air_temp dg4_charge_air_temp dg5_charge_air_temp
+dg1_tc_speed        dg2_tc_speed        dg3_tc_speed        dg4_tc_speed        dg5_tc_speed
+dg1_cw_in_flow      dg2_cw_in_flow      dg3_cw_in_flow      dg4_cw_in_flow      dg5_cw_in_flow
+dg1_engine_load     dg2_engine_load     dg3_engine_load     dg4_engine_load     dg5_engine_load
+```
+
+**Fuel system (19 sensors)**
+```
+hfo_booster_a_flow  hfo_booster_b_flow  hfo_booster_c_flow
+mgo_booster_a_flow  mgo_booster_b_flow
+hfo_tank_weight     mgo_tank_weight
+hfo_fuel_temp       hfo_fuel_temp_b     hfo_fuel_temp_c
+hfo_fuel_viscosity  hfo_fuel_viscosity_b  hfo_fuel_viscosity_c
+hfo_density         hfo_density_b
+mgo_density_a       mgo_density_b
+boiler_fuel_flow_a  boiler_fuel_flow_b
+```
+
+**Scrubbers FWD + AFT (12 sensors)**
+```
+scrubber_fwd_so2    scrubber_aft_so2
+scrubber_fwd_co2    scrubber_aft_co2
+scrubber_fwd_ph     scrubber_aft_ph
+scrubber_fwd_power  scrubber_aft_power
+scrubber_fwd_pah    scrubber_aft_pah
+scrubber_fwd_sulphur  scrubber_aft_sulphur
+```
+
+**Lubrication & emergency (3 sensors)**
+```
+clean_lo_flow   dirty_lo_flow   emdg_speed
+```
+
+**Navigation (4 sensors)**
+```
+water_depth   vessel_speed   vessel_latitude   vessel_longitude
+```
+
+Total: **73 sensors** — all are in `telemetry`. `vessel_latitude` and `vessel_longitude`
+have no alarm thresholds (informational only).
+
+---
+
+### Implementation checklist
+
+- [ ] **Vessel variable:** Add a `$vessel` Grafana variable to both dashboards.
+      Use `SELECT DISTINCT vessel_id FROM telemetry` as the query.
+      All panels use `WHERE vessel_id = '$vessel'`.
+- [ ] **Severity colours:** In Events tables — `critical` → red, `warning` → orange.
+- [ ] **Units** in `fieldConfig.defaults.unit`: rpm, MW, %, m3/h, tons, ppm, %, pH, m, knots,
+      L/min, kg/m3, cSt, degC, W, µg/l.
+- [ ] **Collapsed rows:** Use Grafana row panels with `collapsed: true` for the Detail rows
+      so the main view loads clean.
+- [ ] **"Analyse" trigger:** The endpoint is `POST http://localhost:8000/api/v1/analyze`
+      with body `{"event_id": N}`. Since Grafana tables can't POST natively, use a
+      **Data links** URL with `method=POST` or coordinate with Kristian to add a GET alias.
+- [ ] **"Acknowledge" button:** POST to `/api/v1/events/{id}/acknowledge?operator=...`.
+      Same approach as Analyse — data link or HTML panel button.
+
+### No coordination needed (mostly)
+You work entirely in `grafana/dashboards/`. Only exception: if you want a GET alias
+for the Analyse trigger, ask Kristian. Everything else is self-contained.
 
 ---
 
 ## Onu – MCP Server & Data Pipeline
 
-**You own:** a new `services/mcp/` directory and `services/generator/`
+**You own:** `services/mcp/` and `services/generator/`
 
-### Priority 1 – build the MCP server
+### Priority 1 – MCP server ✅ DONE (18.02.2026)
 
-MCP (Model Context Protocol) is explicitly called out in the project description as "a
-central architectural component." The starter kit does not include it. This is your main
-deliverable.
+`services/mcp/` is implemented and merged into main. It exposes three tools:
+- `get_telemetry` — last N minutes of sensor readings for a vessel
+- `get_events`    — recent anomaly events (optional vessel/acknowledged filter)
+- `get_analysis`  — latest AI analysis for a given event_id
 
-- [ ] **Research MCP.** Read: https://modelcontextprotocol.io/docs/concepts/server
-      Understand: a server exposes *tools* that an LLM can call. Each tool has a name,
-      a description, and input/output schema.
-- [ ] Create `services/mcp/` with:
-      - `Dockerfile`
-      - `requirements.txt` (start with `fastapi`, `uvicorn`, `asyncpg`, `python-dotenv`)
-      - `main.py` – FastAPI app that exposes the MCP tool definitions as HTTP endpoints
-- [ ] Implement these **three tools** (minimum):
-      1. `get_telemetry` – inputs: `vessel_id`, `sensor_name`, `minutes_back` (default 60).
-         Queries `telemetry` table, returns the last N minutes of readings.
-      2. `get_events`    – inputs: `vessel_id` (optional), `acknowledged` (optional bool).
-         Returns recent events from the `events` table.
-      3. `get_analysis`  – input: `event_id`.
-         Returns the latest `ai_analyses` row for that event, or `null` if none exists.
-- [ ] Add the MCP service to `docker-compose.yml` (open a PR):
-      - Build from `./services/mcp`
-      - Expose port 8001 (or any free port)
-      - Same DB env vars as the agent
-      - Depends on `timescaledb` (healthy)
-- [ ] Test: start everything with `docker compose up --build`, then curl each tool endpoint
-      and verify you get real data back.
+The service runs on port 8001 and is wired into `docker-compose.yml`.
+Kristian's agent can call tools via `POST http://mcp:8001/tools/call`.
+
+**Note on protocol:** The current implementation is a REST adapter (not the official
+MCP wire protocol). This is intentional and sufficient for our architecture since
+Ollama does not natively speak MCP. See `docs/underveisNotater.md` for details.
 
 ### Priority 2 – generator enhancements
 
@@ -196,9 +346,9 @@ deliverable.
 - [ ] Update `docker-compose.yml` generator env block with the new `BURST_MODE` var (PR).
 
 ### Coordinate with
-- Kristian (later): once MCP is working, discuss how the LLM can be taught to *call* the
-  MCP tools instead of having data pre-fetched. This is the "agentic" part of the
-  architecture. It does not need to happen in Priority 1.
+- Kristian: the tool-calling loop is live. The agent already calls your MCP tools
+  automatically when Ollama requests them. No further changes needed on your end
+  unless you want to add more tools (e.g. `get_telemetry_stats`).
 
 ---
 
@@ -220,12 +370,10 @@ deliverable.
 
 ## Suggested group workflow
 
-1. Everyone does their **Priority 1** tasks first — these can happen in parallel.
-2. Once Kristian has Ollama running, do a group test: `docker compose up --build` together
-   and verify the full pipeline (generator → event → manual analyse → analysis in Grafana).
-3. Once Nidal has RAG returning docs, run the pipeline again — the LLM should now have
-   context in its prompt.
-4. Onu presents the MCP server to the group. Discuss how to connect it to the agent in
-   a future iteration.
-5. Jonas demos the polished dashboards.
-6. Group decides on next priorities based on what works and what does not.
+1. ✅ Kristian + Onu: core pipeline done. Pull `llama3.2` and verify end-to-end.
+2. ⬜ **Nidal**: implement RAG (pgvector + docs). Test by checking that `analysis_text`
+   in Grafana references the maritime documents.
+3. ⬜ **Jonas**: polish dashboards. Add severity colours, vessel filter, Analyse trigger.
+4. Group test together: `docker compose up --build` → trigger an event → click Analyse
+   in Grafana → verify the full pipeline (generator → event → LLM analysis → dashboard).
+5. Final: user stories, thesis writeup, demo preparation.

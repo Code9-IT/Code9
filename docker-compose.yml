@@ -4,13 +4,15 @@
 # Quick start:
 #   cp .env.example .env
 #   docker compose up --build
+#   docker exec -it maritime_ollama ollama pull llama3.2
 #
 # Services:
 #   timescaledb  – time-series database (PostgreSQL + TimescaleDB)
 #   grafana      – dashboards (auto-provisioned)
-#   agent        – FastAPI AI-agent (event analysis)
+#   agent        – FastAPI AI-agent (event analysis + tool-calling loop)
 #   generator    – synthetic telemetry + anomaly writer
-#   ollama       – local LLM (COMMENTED OUT – enable when ready)
+#   mcp          – MCP-style REST adapter (exposes DB tools to agent)
+#   ollama       – local LLM (llama3.2 – pull model after first start)
 # =============================================================
 
 version: '3.8'
@@ -67,8 +69,33 @@ services:
       DB_USER:     ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_NAME:     ${DB_NAME:-maritime_telemetry}
-      OLLAMA_URL:  ${OLLAMA_URL:-http://ollama:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3}
+      OLLAMA_URL:   ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      MCP_URL:      ${MCP_URL:-http://mcp:8001}
+      STUB_MODE:    ${STUB_MODE:-false}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      mcp:
+        condition: service_started
+      ollama:
+        condition: service_started
+    restart: unless-stopped
+
+  # ─── MCP SERVER (REST adapter exposing DB tools) ──────────
+  mcp:
+    build:
+      context:    ./services/mcp
+      dockerfile: Dockerfile
+    container_name: maritime_mcp
+    ports:
+      - "${MCP_PORT:-8001}:8001"
+    environment:
+      DB_HOST:     timescaledb
+      DB_PORT:     "5432"
+      DB_USER:     ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME:     ${DB_NAME:-maritime_telemetry}
     depends_on:
       timescaledb:
         condition: service_healthy
@@ -87,26 +114,29 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_NAME:     ${DB_NAME:-maritime_telemetry}
       GENERATE_INTERVAL_SECONDS: ${GENERATE_INTERVAL_SECONDS:-3}
-      ANOMALY_PROBABILITY:       ${ANOMALY_PROBABILITY:-0.05}
+      # With 77 threshold combinations: P(event/cycle) = 1-(1-p)^77.
+      # 0.00008 → P≈0.6% per cycle → ~1 event per 8 minutes at 3s interval.
+      ANOMALY_PROBABILITY:       ${ANOMALY_PROBABILITY:-0.00008}
     depends_on:
       timescaledb:
         condition: service_healthy
     restart: unless-stopped
 
-  # ─── OLLAMA – local LLM ──────────────────────────────────
-  # Uncomment when you are ready to run a local model.
-  # Needs a machine with enough RAM (8 GB+ recommended).
-  #
-  # ollama:
-  #   image: ollama/ollama:latest
-  #   container_name: maritime_ollama
-  #   ports:
-  #     - "${OLLAMA_PORT:-11434}:11434"
-  #   volumes:
-  #     - ollama_data:/root/.ollama
-  #   restart: unless-stopped
+  # ─── OLLAMA – local LLM ───────────────────────────────────
+  # After first start, pull a model:
+  #   docker exec -it maritime_ollama ollama pull llama3.2
+  # For better quality (needs ~8 GB RAM):
+  #   docker exec -it maritime_ollama ollama pull llama3.1
+  ollama:
+    image: ollama/ollama:latest
+    container_name: maritime_ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
 
 # ─── VOLUMES ──────────────────────────────────────────────
 volumes:
   timescaledb_data:
-  # ollama_data:    # uncomment together with the ollama service
+  ollama_data:
