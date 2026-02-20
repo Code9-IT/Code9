@@ -14,14 +14,14 @@ datasources:
     type: postgres
     access: proxy
     isDefault: true
+    url: timescaledb:5432
+    user: postgres
 
     jsonData:
-      host:            timescaledb   # Docker service name
-      port:            5432
       database:        maritime_telemetry
-      user:            postgres
-      sslMode:         disable
+      sslmode:         disable
       postgresVersion: 1600         # 16.x
+      timescaledb:     true
 
     secureJsonData:
       password: postgres
