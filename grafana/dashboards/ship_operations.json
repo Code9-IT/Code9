@@ -379,6 +379,40 @@
                 "value": "suffix:m"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "water_depth"
+            },
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 15
+                    },
+                    {
+                      "color": "green",
+                      "value": 30
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.thresholdsStyle",
+                "value": {
+                  "mode": "line"
+                }
+              }
+            ]
           }
         ]
       },
@@ -453,6 +487,29 @@
                 "value": "color-background"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Analyze",
+                    "url": "http://localhost:8000/api/v1/analyze/${__value.raw}",
+                    "targetBlank": true
+                  },
+                  {
+                    "title": "Acknowledge",
+                    "url": "http://localhost:8000/api/v1/events/${__value.raw}/acknowledge?operator=grafana",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -469,7 +526,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT id, timestamp, vessel_id, sensor_name, event_type, severity, details FROM events WHERE vessel_id = '$vessel' AND acknowledged = FALSE ORDER BY timestamp DESC LIMIT 20",
+          "rawSql": "SELECT id, timestamp, vessel_id, sensor_name, event_type, severity, details FROM events WHERE vessel_id = '$vessel' AND acknowledged = FALSE ORDER BY timestamp DESC LIMIT 10",
           "refId": "A"
         }
       ],
@@ -487,7 +544,20 @@
             "displayMode": "auto"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "analysis_text"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 500
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 6,
@@ -502,7 +572,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT a.id, a.timestamp, a.event_id, e.sensor_name, e.event_type, e.severity, a.status, a.confidence, a.model_used FROM ai_analyses a JOIN events e ON a.event_id = e.id WHERE e.vessel_id = '$vessel' ORDER BY a.timestamp DESC LIMIT 10",
+          "rawSql": "SELECT a.id, a.timestamp, a.event_id, e.sensor_name, e.event_type, e.severity, a.status, a.confidence, a.model_used, a.analysis_text, a.suggested_actions FROM ai_analyses a JOIN events e ON a.event_id = e.id WHERE e.vessel_id = '$vessel' ORDER BY a.timestamp DESC LIMIT 10",
           "refId": "A"
         }
       ],
@@ -535,7 +605,32 @@
               },
               "unit": "short"
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*fuel_rack_pos"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "suffix:mm"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*charge_air_temp"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "celsius"
+                  }
+                ]
+              }
+            ]
           },
           "gridPos": {
             "h": 7,
@@ -579,7 +674,32 @@
               },
               "unit": "short"
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*tc_speed"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "suffix:rpm"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*cw_in_flow"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "suffix:m3/h"
+                  }
+                ]
+              }
+            ]
           },
           "gridPos": {
             "h": 7,
@@ -635,7 +755,7 @@
                 "fillOpacity": 10,
                 "lineWidth": 2
               },
-              "unit": "short"
+              "unit": "suffix:m3/h"
             },
             "overrides": []
           },
@@ -681,7 +801,44 @@
               },
               "unit": "short"
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*temp"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "celsius"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*viscosity"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "suffix:cSt"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*density"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "suffix:kg/m3"
+                  }
+                ]
+              }
+            ]
           },
           "gridPos": {
             "h": 7,
@@ -739,7 +896,56 @@
               },
               "unit": "short"
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*so2"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "suffix:ppm"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*co2"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*_ph"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "suffix:pH"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*sulphur"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percent"
+                  }
+                ]
+              }
+            ]
           },
           "gridPos": {
             "h": 7,
@@ -783,7 +989,32 @@
               },
               "unit": "short"
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*power"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "watt"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*pah"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "suffix:ug/l"
+                  }
+                ]
+              }
+            ]
           },
           "gridPos": {
             "h": 7,
@@ -841,7 +1072,32 @@
               },
               "unit": "short"
             },
-            "overrides": []
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": ".*lo_flow"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "suffix:L/min"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byRegexp",
+                  "options": "emdg_speed"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "suffix:rpm"
+                  }
+                ]
+              }
+            ]
           },
           "gridPos": {
             "h": 7,

@@ -72,7 +72,20 @@ async def acknowledge_event(
     return {"message": "Event acknowledged", "event_id": event_id, "operator": operator}
 
 
-# ─── private helpers ──────────────────────────────────────
+# --- GET /events/{event_id}/acknowledge -------------------------------
+@router.get("/events/{event_id}/acknowledge")
+async def acknowledge_event_get(
+    event_id: int,
+    operator: str = Query(default="unknown"),
+):
+    """
+    GET alias for Grafana data links.
+    Reuses the same acknowledge logic as POST /events/{event_id}/acknowledge.
+    """
+    return await acknowledge_event(event_id=event_id, operator=operator)
+
+
+# --- private helpers ----------------------------------------------------
 async def _fetch(pool, query: str, *args):
     async with pool.acquire() as conn:
         return await conn.fetch(query, *args)

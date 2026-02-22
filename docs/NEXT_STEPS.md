@@ -23,8 +23,8 @@ The goal: no two people edit the same file at the same time, merge conflicts sta
 | 1 | Real LLM (Ollama) with tool-calling loop | ✅ Done – Kristian |
 | 2 | RAG that retrieves maritime docs for the LLM | ⬜ Nidal |
 | 3 | MCP server exposing DB tools to the agent | ✅ Done – Onu |
-| 4 | Polished dashboards with severity colours, filters, Analyse trigger | ⬜ Jonas |
-| 5 | Human-in-the-loop flow visible end-to-end | ⬜ Needs Jonas + testing |
+| 4 | Polished dashboards with severity colours, filters, Analyse trigger | IN_PROGRESS - core done (Jonas), polish ongoing |
+| 5 | Human-in-the-loop flow visible end-to-end | IN_PROGRESS - links+agent done, final group testing remains |
 
 ---
 
@@ -54,8 +54,9 @@ quality, needs ~8 GB RAM). See `docs/underveisNotater.md` for full rationale.
 ### Coordinate with
 - Nidal: RAG context goes directly into the system prompt. Once Nidal's docs are in,
   the LLM will reference them automatically — no changes needed in `analyze.py`.
-- Jonas: the analyse endpoint is `POST /api/v1/analyze` with `{"event_id": N}`.
-  For a GET-based Grafana link, Jonas can coordinate to add a GET alias.
+- Jonas: analyse supports `POST /api/v1/analyze` with `{"event_id": N}` and
+  Grafana-friendly `GET /api/v1/analyze/{event_id}`. Duplicate guard is default;
+  use `force=true` for a fresh re-analysis.
 
 ---
 
@@ -295,23 +296,23 @@ have no alarm thresholds (informational only).
 
 ### Implementation checklist
 
-- [ ] **Vessel variable:** Add a `$vessel` Grafana variable to both dashboards.
+- [x] **Vessel variable:** `$vessel` is used in both dashboards.
       Use `SELECT DISTINCT vessel_id FROM telemetry` as the query.
       All panels use `WHERE vessel_id = '$vessel'`.
-- [ ] **Severity colours:** In Events tables — `critical` → red, `warning` → orange.
-- [ ] **Units** in `fieldConfig.defaults.unit`: rpm, MW, %, m3/h, tons, ppm, %, pH, m, knots,
+- [x] **Severity colours:** Events tables use `critical` -> red, `warning` -> orange.
+- [x] **Units** in `fieldConfig.defaults.unit` / overrides: rpm, MW, %, m3/h, tons, ppm, %, pH, m, knots,
       L/min, kg/m3, cSt, degC, W, µg/l.
-- [ ] **Collapsed rows:** Use Grafana row panels with `collapsed: true` for the Detail rows
+- [x] **Collapsed rows:** Detail rows are configured with `collapsed: true` for the Detail rows
       so the main view loads clean.
-- [ ] **"Analyse" trigger:** The endpoint is `POST http://localhost:8000/api/v1/analyze`
-      with body `{"event_id": N}`. Since Grafana tables can't POST natively, use a
-      **Data links** URL with `method=POST` or coordinate with Kristian to add a GET alias.
-- [ ] **"Acknowledge" button:** POST to `/api/v1/events/{id}/acknowledge?operator=...`.
-      Same approach as Analyse — data link or HTML panel button.
+- [x] **"Analyse" trigger:** Data links are wired to
+      `GET http://localhost:8000/api/v1/analyze/{event_id}`.
+      Use `?force=true` if you need a fresh re-analysis for an already-analysed event.
+- [x] **"Acknowledge" button:** Data links are wired to
+      `GET /api/v1/events/{id}/acknowledge?operator=...` (GET alias to POST endpoint).
 
 ### No coordination needed (mostly)
-You work entirely in `grafana/dashboards/`. Only exception: if you want a GET alias
-for the Analyse trigger, ask Kristian. Everything else is self-contained.
+You work primarily in `grafana/dashboards/`. GET aliases for Analyse/Acknowledge
+are already implemented in agent routes.
 
 ---
 
@@ -340,9 +341,6 @@ Ollama does not natively speak MCP. See `docs/underveisNotater.md` for details.
       sensors/vessels. Useful for live demos.
 - [ ] **Time weighting** in `anomalies.py`: make anomalies slightly more likely during
       certain hours (e.g. simulate higher load during 06:00–14:00 UTC).
-- [ ] **New sensors** in `sensors.py`: add `nav_speed` (knots, baseline ~12, anomaly >25)
-      and `rudder_angle` (degrees, baseline ~0, anomaly > ±20). Add matching event
-      definitions in `anomalies.py`.
 - [ ] Update `docker-compose.yml` generator env block with the new `BURST_MODE` var (PR).
 
 ### Coordinate with
@@ -361,8 +359,8 @@ Ollama does not natively speak MCP. See `docs/underveisNotater.md` for details.
 | `services/agent/requirements.txt`| Nidal               | Branch + PR.                           |
 | `.env.example`                   | Kristian            | Branch + PR. Others pull before adding their own vars. |
 
-1. **Never push directly to `master`.** Always: `git checkout -b feat/<your-name>-<what>`
-2. **Pull before you start.** `git pull origin master` at the beginning of every session.
+1. **Never push directly to `main`.** Always: `git checkout -b feat/<your-name>-<what>`
+2. **Pull before you start.** `git pull origin main` at the beginning of every session.
 3. **Keep PRs small.** One logical change per PR. Easier to review.
 4. **If you need to touch someone else's file,** open an issue or Slack message first.
 
@@ -373,7 +371,7 @@ Ollama does not natively speak MCP. See `docs/underveisNotater.md` for details.
 1. ✅ Kristian + Onu: core pipeline done. Pull `llama3.2` and verify end-to-end.
 2. ⬜ **Nidal**: implement RAG (pgvector + docs). Test by checking that `analysis_text`
    in Grafana references the maritime documents.
-3. ⬜ **Jonas**: polish dashboards. Add severity colours, vessel filter, Analyse trigger.
+3. IN_PROGRESS **Jonas**: continue dashboard polish (UI/readability + demo tweaks). Core triggers are in place.
 4. Group test together: `docker compose up --build` → trigger an event → click Analyse
    in Grafana → verify the full pipeline (generator → event → LLM analysis → dashboard).
 5. Final: user stories, thesis writeup, demo preparation.

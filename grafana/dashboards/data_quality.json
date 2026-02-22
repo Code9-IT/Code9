@@ -227,6 +227,29 @@
                 "value": "color-background"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Analyze",
+                    "url": "http://localhost:8000/api/v1/analyze/${__value.raw}",
+                    "targetBlank": true
+                  },
+                  {
+                    "title": "Acknowledge",
+                    "url": "http://localhost:8000/api/v1/events/${__value.raw}/acknowledge?operator=grafana",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -261,7 +284,20 @@
             "displayMode": "auto"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "analysis_text"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 500
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
@@ -276,7 +312,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT a.id, a.timestamp, a.event_id, e.sensor_name, e.event_type, e.severity, a.status, a.confidence, a.model_used FROM ai_analyses a JOIN events e ON a.event_id = e.id WHERE e.vessel_id = '$vessel' ORDER BY a.timestamp DESC LIMIT 5",
+          "rawSql": "SELECT a.id, a.timestamp, a.event_id, e.sensor_name, e.event_type, e.severity, a.status, a.confidence, a.model_used, a.analysis_text, a.suggested_actions FROM ai_analyses a JOIN events e ON a.event_id = e.id WHERE e.vessel_id = '$vessel' ORDER BY a.timestamp DESC LIMIT 5",
           "refId": "A"
         }
       ],
@@ -495,6 +531,29 @@
                   {
                     "id": "custom.displayMode",
                     "value": "color-background"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "id"
+                },
+                "properties": [
+                  {
+                    "id": "links",
+                    "value": [
+                      {
+                        "title": "Analyze",
+                        "url": "http://localhost:8000/api/v1/analyze/${__value.raw}",
+                        "targetBlank": true
+                      },
+                      {
+                        "title": "Acknowledge",
+                        "url": "http://localhost:8000/api/v1/events/${__value.raw}/acknowledge?operator=grafana",
+                        "targetBlank": true
+                      }
+                    ]
                   }
                 ]
               }
