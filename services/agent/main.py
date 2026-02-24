@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from db import init_pool, close_pool
 from routes.analyze import router as analyze_router
 from routes.events  import router as events_router
+from rag.ingest import ingest_if_empty
 
 
 # --- Lifecycle ------------------------------------------------------------
@@ -25,6 +26,12 @@ from routes.events  import router as events_router
 async def lifespan(app: FastAPI):
     """Initialise the async DB connection pool on startup, close on shutdown."""
     await init_pool()
+    try:
+        from db import get_pool
+
+        await ingest_if_empty(get_pool())
+    except Exception as exc:  # pragma: no cover
+        print(f"[agent] RAG auto-ingest skipped: {exc}")
     yield
     await close_pool()
 

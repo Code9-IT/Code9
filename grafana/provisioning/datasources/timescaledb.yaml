@@ -2,8 +2,7 @@
 # Grafana – Datasource provisioning
 # Auto-loaded on container start.  No manual setup needed.
 # =============================================================
-# TODO: replace hard-coded password with an env-var substitution
-#       when deploying beyond local development.
+# Credentials and database are read from container env vars.
 # =============================================================
 
 apiVersion: 1
@@ -15,13 +14,13 @@ datasources:
     access: proxy
     isDefault: true
     url: timescaledb:5432
-    user: postgres
+    user: ${DB_USER}
 
     jsonData:
-      database:        maritime_telemetry
+      database:        ${DB_NAME}
       sslmode:         disable
       postgresVersion: 1600         # 16.x
       timescaledb:     true
 
     secureJsonData:
-      password: postgres
+      password: ${DB_PASSWORD}

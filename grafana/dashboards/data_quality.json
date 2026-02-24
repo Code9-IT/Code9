@@ -2,7 +2,7 @@
   "annotations": {
     "list": []
   },
-  "description": "Platform integrity dashboard for telemetry quality and alarm handling.",
+  "description": "Platform health view for data engineers and Telenor Maritime. Shows sensor coverage, freshness, silent sensors, and event rates. UDS integration pending.",
   "editable": true,
   "graphTooltip": 1,
   "id": null,
@@ -189,6 +189,103 @@
       },
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 30
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Seconds Silent"
+            },
+            "properties": [
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 30
+                    },
+                    {
+                      "color": "red",
+                      "value": 60
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 6,
+      "options": {
+        "footer": {
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Seconds Silent"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT   sensor_name AS \"Sensor\",   TO_CHAR(MAX(timestamp), 'HH24:MI:SS') AS \"Last Seen\",   ROUND(EXTRACT(EPOCH FROM (NOW() - MAX(timestamp)))) AS \"Seconds Silent\" FROM telemetry WHERE vessel_id = '$vessel' GROUP BY sensor_name HAVING EXTRACT(EPOCH FROM (NOW() - MAX(timestamp))) > 30 ORDER BY 3 DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Sensors Not Reporting (silent > 30 s)",
+      "description": "Any sensor not seen in the last 30 seconds. Empty table = all sensors healthy.",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
           "custom": {
             "displayMode": "auto"
           }
@@ -227,6 +324,29 @@
                 "value": "color-background"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Analyze",
+                    "url": "http://localhost:8000/api/v1/analyze/${__value.raw}",
+                    "targetBlank": true
+                  },
+                  {
+                    "title": "Acknowledge",
+                    "url": "http://localhost:8000/api/v1/events/${__value.raw}/acknowledge?operator=grafana",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -234,7 +354,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 6
+        "y": 11
       },
       "id": 4,
       "options": {
@@ -261,13 +381,26 @@
             "displayMode": "auto"
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "analysis_text"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 500
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 6
+        "y": 11
       },
       "id": 5,
       "options": {
@@ -276,7 +409,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT a.id, a.timestamp, a.event_id, e.sensor_name, e.event_type, e.severity, a.status, a.confidence, a.model_used FROM ai_analyses a JOIN events e ON a.event_id = e.id WHERE e.vessel_id = '$vessel' ORDER BY a.timestamp DESC LIMIT 5",
+          "rawSql": "SELECT a.id, a.timestamp, a.event_id, e.sensor_name, e.event_type, e.severity, a.status, a.confidence, a.model_used, a.analysis_text, a.suggested_actions FROM ai_analyses a JOIN events e ON a.event_id = e.id WHERE e.vessel_id = '$vessel' ORDER BY a.timestamp DESC LIMIT 5",
           "refId": "A"
         }
       ],
@@ -289,7 +422,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 19
       },
       "id": 200,
       "panels": [
@@ -373,7 +506,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
+        "y": 20
       },
       "id": 300,
       "panels": [
@@ -448,7 +581,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 21
       },
       "id": 400,
       "panels": [
@@ -497,6 +630,29 @@
                     "value": "color-background"
                   }
                 ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "id"
+                },
+                "properties": [
+                  {
+                    "id": "links",
+                    "value": [
+                      {
+                        "title": "Analyze",
+                        "url": "http://localhost:8000/api/v1/analyze/${__value.raw}",
+                        "targetBlank": true
+                      },
+                      {
+                        "title": "Acknowledge",
+                        "url": "http://localhost:8000/api/v1/events/${__value.raw}/acknowledge?operator=grafana",
+                        "targetBlank": true
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           },
@@ -523,6 +679,36 @@
       ],
       "title": "Detail: All Alarm States",
       "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "id": 500,
+      "title": "UDS Fleet Data - Integration Pending",
+      "type": "row",
+      "panels": [
+        {
+          "datasource": null,
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 0
+          },
+          "id": 501,
+          "options": {
+            "content": "## UDS Fleet Data\n\nThis section is reserved for data from the Unified Data System (UDS) provided by the maritime data platform team.\n\n**Planned content after pilot review:**\n- Fleet-wide sensor availability per time window\n- Data transmission quality (latency, gaps, retransmits)\n- Raw vs. processed signal comparison\n- Data lineage: source to ingestion to storage\n- Tag metadata completeness (unit, description, owner)\n\n**Status:** Pending data handover from UDS technical lead. Integration scheduled after Thursday pilot session.",
+            "mode": "markdown"
+          },
+          "title": "About this section",
+          "type": "text"
+        }
+      ]
     }
   ],
   "refresh": "10s",
@@ -568,7 +754,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Data Quality",
+  "title": "Data Quality - Platform Integrity",
   "uid": "maritime_data_quality",
   "version": 2
 }

@@ -2,6 +2,7 @@
 
 Personalized task list for the group. Each person owns a set of files.
 The goal: no two people edit the same file at the same time, merge conflicts stay near zero.
+For hardening/deployment backlog and post-RAG roadmap, see `docs/FUTURE_CHECKS.md`.
 
 ---
 
@@ -21,10 +22,10 @@ The goal: no two people edit the same file at the same time, merge conflicts sta
 | # | What | Status |
 |---|------|--------|
 | 1 | Real LLM (Ollama) with tool-calling loop | ✅ Done – Kristian |
-| 2 | RAG that retrieves maritime docs for the LLM | ⬜ Nidal |
+| 2 | RAG that retrieves maritime docs for the LLM | IN_PROGRESS - infra ready, docs curation pending |
 | 3 | MCP server exposing DB tools to the agent | ✅ Done – Onu |
-| 4 | Polished dashboards with severity colours, filters, Analyse trigger | ⬜ Jonas |
-| 5 | Human-in-the-loop flow visible end-to-end | ⬜ Needs Jonas + testing |
+| 4 | Polished dashboards with severity colours, filters, Analyse trigger | IN_PROGRESS - core done (Jonas), polish ongoing |
+| 5 | Human-in-the-loop flow visible end-to-end | IN_PROGRESS - links+agent done, final group testing remains |
 
 ---
 
@@ -54,59 +55,48 @@ quality, needs ~8 GB RAM). See `docs/underveisNotater.md` for full rationale.
 ### Coordinate with
 - Nidal: RAG context goes directly into the system prompt. Once Nidal's docs are in,
   the LLM will reference them automatically — no changes needed in `analyze.py`.
-- Jonas: the analyse endpoint is `POST /api/v1/analyze` with `{"event_id": N}`.
-  For a GET-based Grafana link, Jonas can coordinate to add a GET alias.
+- Jonas: analyse supports `POST /api/v1/analyze` with `{"event_id": N}` and
+  Grafana-friendly `GET /api/v1/analyze/{event_id}`. Duplicate guard is default;
+  use `force=true` for a fresh re-analysis.
 
 ---
 
-## Nidal – RAG & Knowledge Base
+## Nidal - RAG & Knowledge Base
 
-**You own:** `services/agent/rag/client.py` and a new `docs/knowledge/` directory
+**You own:** `services/agent/rag/client.py` and `docs/knowledge/`
 
-### Priority 1 – choose a vector store and wire it up
+### Priority 1 - RAG foundation
 
-- [ ] Decision: use **pgvector** (a PostgreSQL extension — no extra Docker service needed,
-      already have TimescaleDB/Postgres running). Add to `services/agent/requirements.txt`.
-- [ ] Create a new init script **`db/init/002_rag.sql`** (do NOT edit `001_init.sql` —
-      open a PR):
+- [x] Decision: use **pgvector** in the existing TimescaleDB/Postgres service.
+- [x] Added init script **`db/init/002_rag.sql`** with:
       - `CREATE EXTENSION IF NOT EXISTS vector;`
-      - A `knowledge_docs` table with columns: `id`, `title`, `content`, `source`,
-        `embedding` (pgvector vector column), `created_at`.
-- [ ] Create the directory **`docs/knowledge/`** and put 4–6 sample maritime reference
-      documents in it as plain `.txt` or `.md` files. Examples:
-        - `engine_overheating.md` – what causes high engine temp, what to check
-        - `oil_pressure_low.md`   – possible causes, safety implications
-        - `rpm_spike.md`          – reasons, safety risks
-        - `general_safety.md`     – generic maritime safety checklist
-      These can be written from general knowledge — they do not need to be real Knowit docs.
-- [ ] Write an **ingestion script** (e.g. `services/agent/rag/ingest.py`) that:
-      1. Reads every file in `docs/knowledge/`.
-      2. Embeds each document (use a simple sentence-embedding model via a Python lib —
-         `sentence-transformers` is the standard choice, add to `requirements.txt`).
-      3. Inserts the title, content, and embedding into `knowledge_docs`.
-      This script can be run manually with `docker exec` for now — it does not need to be
-      in the main loop.
-- [ ] Update `retrieve_context()` in `rag/client.py`:
-      1. Embed the query string `"{event_type} {sensor_name}"`.
-      2. Run a similarity search against `knowledge_docs.embedding`.
-      3. Return the top-3 results as `RAGDocument` objects.
+      - `knowledge_docs` table (`title`, `content`, `source`, `chunk_index`, `embedding`, `created_at`).
+- [x] Added **`docs/knowledge/`** starter folder with authoring guide.
+- [x] Added ingestion script **`services/agent/rag/ingest.py`** that:
+      1. Reads all `.md` / `.txt` files in `docs/knowledge/`.
+      2. Chunks text.
+      3. Embeds chunks with Ollama (`nomic-embed-text`).
+      4. Upserts rows into `knowledge_docs`.
+- [x] Updated `retrieve_context()` in `rag/client.py`:
+      1. Embeds query text.
+      2. Runs pgvector similarity search.
+      3. Returns top-K `RAGDocument` matches.
+- [x] Agent startup auto-ingests when `knowledge_docs` is empty.
 
-### Priority 2 – tune and test
+### Priority 2 - curate, tune, test
 
-- [ ] Test that the retrieved docs actually show up in the LLM prompt by enabling
-  Kristian's real Ollama call and checking the analysis output.
-- [ ] Try adjusting K (top-K) and the similarity threshold to get better matches.
-- [ ] If the embedding model is too slow to install inside the agent container, consider
-  pre-computing embeddings at ingest time and only running the query embedding at runtime.
+- [ ] Add curated maritime knowledge files to `docs/knowledge/` (source-backed summaries).
+- [ ] Run ingestion after each doc batch: `docker exec maritime_agent python rag/ingest.py`.
+- [ ] Validate retrieval quality for multiple event types.
+- [ ] Tune `RAG_TOP_K` and `RAG_MIN_SIMILARITY` from `.env`.
 
 ### Coordinate with
-- Kristian: RAG context drops straight into the system prompt in `analyze.py` — nothing
-  needs to change on Kristian's end. Just make sure `retrieve_context()` returns
-  `RAGDocument` objects with `title` and `content`. Test together when Priority 1 is done.
+- Kristian: RAG context already plugs into `analyze.py` system prompt.
+- Jonas: verify AI table content quality after knowledge docs are added.
 
 ---
 
-## Jonas – Grafana Dashboards & UI
+## Jonas - Grafana Dashboards & UI
 
 **You own:** `grafana/dashboards/ship_operations.json` and `grafana/dashboards/data_quality.json`
 
@@ -295,23 +285,23 @@ have no alarm thresholds (informational only).
 
 ### Implementation checklist
 
-- [ ] **Vessel variable:** Add a `$vessel` Grafana variable to both dashboards.
+- [x] **Vessel variable:** `$vessel` is used in both dashboards.
       Use `SELECT DISTINCT vessel_id FROM telemetry` as the query.
       All panels use `WHERE vessel_id = '$vessel'`.
-- [ ] **Severity colours:** In Events tables — `critical` → red, `warning` → orange.
-- [ ] **Units** in `fieldConfig.defaults.unit`: rpm, MW, %, m3/h, tons, ppm, %, pH, m, knots,
+- [x] **Severity colours:** Events tables use `critical` -> red, `warning` -> orange.
+- [x] **Units** in `fieldConfig.defaults.unit` / overrides: rpm, MW, %, m3/h, tons, ppm, %, pH, m, knots,
       L/min, kg/m3, cSt, degC, W, µg/l.
-- [ ] **Collapsed rows:** Use Grafana row panels with `collapsed: true` for the Detail rows
+- [x] **Collapsed rows:** Detail rows are configured with `collapsed: true` for the Detail rows
       so the main view loads clean.
-- [ ] **"Analyse" trigger:** The endpoint is `POST http://localhost:8000/api/v1/analyze`
-      with body `{"event_id": N}`. Since Grafana tables can't POST natively, use a
-      **Data links** URL with `method=POST` or coordinate with Kristian to add a GET alias.
-- [ ] **"Acknowledge" button:** POST to `/api/v1/events/{id}/acknowledge?operator=...`.
-      Same approach as Analyse — data link or HTML panel button.
+- [x] **"Analyse" trigger:** Data links are wired to
+      `GET http://localhost:8000/api/v1/analyze/{event_id}`.
+      Use `?force=true` if you need a fresh re-analysis for an already-analysed event.
+- [x] **"Acknowledge" button:** Data links are wired to
+      `GET /api/v1/events/{id}/acknowledge?operator=...` (GET alias to POST endpoint).
 
 ### No coordination needed (mostly)
-You work entirely in `grafana/dashboards/`. Only exception: if you want a GET alias
-for the Analyse trigger, ask Kristian. Everything else is self-contained.
+You work primarily in `grafana/dashboards/`. GET aliases for Analyse/Acknowledge
+are already implemented in agent routes.
 
 ---
 
@@ -340,9 +330,6 @@ Ollama does not natively speak MCP. See `docs/underveisNotater.md` for details.
       sensors/vessels. Useful for live demos.
 - [ ] **Time weighting** in `anomalies.py`: make anomalies slightly more likely during
       certain hours (e.g. simulate higher load during 06:00–14:00 UTC).
-- [ ] **New sensors** in `sensors.py`: add `nav_speed` (knots, baseline ~12, anomaly >25)
-      and `rudder_angle` (degrees, baseline ~0, anomaly > ±20). Add matching event
-      definitions in `anomalies.py`.
 - [ ] Update `docker-compose.yml` generator env block with the new `BURST_MODE` var (PR).
 
 ### Coordinate with
@@ -361,8 +348,8 @@ Ollama does not natively speak MCP. See `docs/underveisNotater.md` for details.
 | `services/agent/requirements.txt`| Nidal               | Branch + PR.                           |
 | `.env.example`                   | Kristian            | Branch + PR. Others pull before adding their own vars. |
 
-1. **Never push directly to `master`.** Always: `git checkout -b feat/<your-name>-<what>`
-2. **Pull before you start.** `git pull origin master` at the beginning of every session.
+1. **Never push directly to `main`.** Always: `git checkout -b feat/<your-name>-<what>`
+2. **Pull before you start.** `git pull origin main` at the beginning of every session.
 3. **Keep PRs small.** One logical change per PR. Easier to review.
 4. **If you need to touch someone else's file,** open an issue or Slack message first.
 
@@ -373,7 +360,9 @@ Ollama does not natively speak MCP. See `docs/underveisNotater.md` for details.
 1. ✅ Kristian + Onu: core pipeline done. Pull `llama3.2` and verify end-to-end.
 2. ⬜ **Nidal**: implement RAG (pgvector + docs). Test by checking that `analysis_text`
    in Grafana references the maritime documents.
-3. ⬜ **Jonas**: polish dashboards. Add severity colours, vessel filter, Analyse trigger.
+3. IN_PROGRESS **Jonas**: continue dashboard polish (UI/readability + demo tweaks). Core triggers are in place.
 4. Group test together: `docker compose up --build` → trigger an event → click Analyse
    in Grafana → verify the full pipeline (generator → event → LLM analysis → dashboard).
 5. Final: user stories, thesis writeup, demo preparation.
+
+

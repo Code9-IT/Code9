@@ -20,7 +20,7 @@ agent layer** on top: when an anomaly is detected the agent explains
 └────────────┘             │  ai_analyses  │             └─────┬──────┘
                            └───────┬───────┘                   │
                                    │  fetch event               │ operator clicks
-                                   ▼                            │ "Analyze" (TODO)
+                                   ▼                            │ "Analyze/Acknowledge" links
                            ┌───────────────┐                   │
                            │  Agent        │ <─────────────────┘
                            │  (FastAPI)    │
@@ -35,10 +35,10 @@ agent layer** on top: when an anomaly is detected the agent explains
                                │       │ calls tool →
                                ▼       ▼
                        ┌──────────┐  ┌──────────────┐
-                       │ RAG stub │  │  MCP Server  │
+                       │ RAG layer │  │  MCP Server  │
                        │ (context)│  │  (port 8001) │
                        └──────────┘  │  get_telemetry│
-                       (empty today) │  get_events   │
+                       (pgvector) │  get_events   │
                                      │  get_analysis │
                                      └──────────────┘
 ```
@@ -48,11 +48,12 @@ agent layer** on top: when an anomaly is detected the agent explains
 1. **Generator** inserts a batch of synthetic telemetry every few seconds.
 2. If a sensor breaches a threshold the generator also inserts a row into `events`.
 3. **Grafana** polls the DB on its own refresh interval and renders live charts.
-4. An operator (or, later, an automated trigger) calls `POST /api/v1/analyze`
-   with the `event_id`.
+4. An operator calls the analysis endpoint via `POST /api/v1/analyze` or
+   Grafana data links (`GET /api/v1/analyze/{event_id}`).
 5. **Agent** fetches the event, asks **RAG** for context docs, builds a prompt.
 6. The prompt is sent to **Ollama** (or the stub); the reply is stored in
-   `ai_analyses`.
+   `ai_analyses`. Repeated calls reuse the latest analysis by default unless
+   `force=true` is provided.
 7. Grafana picks up the new row and shows the analysis on the dashboard.
 
 ---
@@ -84,8 +85,8 @@ agent layer** on top: when an anomaly is detected the agent explains
 | Component | Status | Notes / TODO                                              |
 |-----------|---------|------------------------------------------------------------|
 | MCP server | ✅ Running on port 8001 | REST adapter with 3 tools. Not the official MCP wire protocol — see `underveisNotater.md`. |
-| Ollama    | 🔧 In progress | Kristian: enable service, pull `llama3.2`, implement tool-calling loop in agent |
-| RAG       | ⬜ Stub (empty list) | Nidal: implement pgvector + nomic-embed-text + knowledge docs |
+| Ollama    | DONE | Tool-calling loop active in agent (`llama3.2` default model). |
+| RAG       | IN_PROGRESS | pgvector retrieval + ingest are wired; add curated docs in `docs/knowledge/` |
 | Auth      | ⬜ None | Add JWT / role-based access before any production use     |
 | Anomaly detection | ✅ Rule-based in generator | Sufficient for prototype          |
 
@@ -101,3 +102,5 @@ agent layer** on top: when an anomaly is detected the agent explains
   Swappable for any OpenAI-compatible endpoint later.
 * **Docker Compose** – single command to spin everything up; no
   cloud infra needed.
+
+

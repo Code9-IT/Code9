@@ -12,7 +12,7 @@ This means:
     to get full coverage -- no edits needed here.
 
 Probability is controlled by the ANOMALY_PROBABILITY env var
-(default 0.05 = 5% chance per sensor per cycle)."""
+(default 0.00008 ≈ 0.6% chance per cycle across all threshold checks)."""
 
 import random
 from typing import Optional

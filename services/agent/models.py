@@ -11,6 +11,7 @@ from pydantic import BaseModel
 class AnalyzeRequest(BaseModel):
     """POST /api/v1/analyze"""
     event_id: int
+    force: bool = False
 
 
 class AnalyzeResponse(BaseModel):
