@@ -3,7 +3,7 @@
 This document tracks what is still missing, what should be hardened before any real deployment,
 and what we should build after RAG content is in place.
 
-Last updated: 2026-02-22
+Last updated: 2026-03-01
 
 ---
 
@@ -20,7 +20,9 @@ Last updated: 2026-02-22
 - Core pipeline: running (`generator -> DB -> agent -> Grafana`).
 - Dashboards: major Jonas fixes merged.
 - RAG infrastructure: in place (`pgvector`, retrieval, ingest script, knowledge folder).
-- RAG content: still pending (curated maritime documents).
+- RAG content: ✅ **DONE** – 17 curated maritime knowledge files ingested (76 chunks). Covers Points 1–10 (DG engines, fuel, cooling, electrical, propulsion, ballast, navigation, sensors, alarm types, troubleshooting, stale data, data quality, regulations, incident analysis).
+- RAG retrieval: verified working end-to-end (charge air temp event returned grounded analysis with correct thresholds from `main_engine.md`).
+- Next RAG task: validate retrieval quality across more event types and tune `RAG_TOP_K` / `RAG_MIN_SIMILARITY`.
 
 ---
 
@@ -108,29 +110,33 @@ Last updated: 2026-02-22
 
 ---
 
-## P2 - Complete RAG Content (Next Main Sprint)
+## P2 - RAG Content Quality (Current Sprint)
 
-### Must do
+### Done
 
-- [ ] Add 10-12 focused maritime documents to `docs/knowledge/`.
-- [ ] Each doc should include:
-  - Scope
-  - Causes
-  - How to diagnose
-  - Recommended actions
-  - Limits / regulations
-  - Sources
-- [ ] Ingest after each batch:
-  - `docker exec maritime_agent python rag/ingest.py`
-- [ ] Validate retrieval quality for representative event types.
-- [ ] Tune:
-  - `RAG_TOP_K`
-  - `RAG_MIN_SIMILARITY`
+- [x] 17 curated maritime knowledge files added to `docs/knowledge/` (Points 1–10).
+- [x] All sources are primary IMO/class/OEM (no imorules.com, LISCR mirrors, or register-iri).
+- [x] Factual errors corrected (IAS sensor tags verified against `services/generator/sensors.py`).
+- [x] Auto-ingest on startup works — `knowledge_docs` populated with 76 chunks on first run.
+- [x] End-to-end retrieval verified: `HIGH_DG5_CHARGE_AIR_TEMP` event returned grounded analysis
+      referencing the correct 120°C threshold and two root causes from `main_engine.md`.
+
+### Still to do
+
+- [ ] **Validate retrieval quality** for each major event type:
+  - Run representative events through the agent and check whether `analysis_text` cites domain facts.
+  - Event types to cover: high fuel viscosity, scrubber SO₂, low LO flow, low tank weight, engine overload.
+- [ ] **Tune retrieval parameters** in `.env`:
+  - `RAG_TOP_K` (default 3) — try 4–5 for complex events.
+  - `RAG_MIN_SIMILARITY` (default 0.20) — raise if irrelevant docs are being retrieved.
+- [ ] **Point 7** (Application state / IAS scope): no content yet — awaiting Geir's IAS scripts (meeting 03.03.2026).
+- [ ] **Point 11** (Color Line/Knowit-specific): no content yet — awaiting documents from Color Line.
+- [ ] Add automated retrieval test: for N representative query strings, assert that the expected source file is in the top-K results.
 
 ### Quality target
 
-- For each major sensor/event cluster, at least one relevant source-backed document is retrieved.
-- AI analysis should reference concrete domain context, not generic text.
+- For each major sensor/event cluster, at least one relevant source-backed document is in the top-3 retrieved chunks.
+- AI analysis should reference concrete thresholds, root causes, and regulatory context — not generic text.
 
 ---
 

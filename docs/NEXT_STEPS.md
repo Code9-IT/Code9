@@ -22,7 +22,7 @@ For hardening/deployment backlog and post-RAG roadmap, see `docs/FUTURE_CHECKS.m
 | # | What | Status |
 |---|------|--------|
 | 1 | Real LLM (Ollama) with tool-calling loop | ✅ Done – Kristian |
-| 2 | RAG that retrieves maritime docs for the LLM | IN_PROGRESS - infra ready, docs curation pending |
+| 2 | RAG that retrieves maritime docs for the LLM | ✅ Done – Nidal (17 files, 76 chunks, end-to-end verified) |
 | 3 | MCP server exposing DB tools to the agent | ✅ Done – Onu |
 | 4 | Polished dashboards with severity colours, filters, Analyse trigger | IN_PROGRESS - core done (Jonas), polish ongoing |
 | 5 | Human-in-the-loop flow visible end-to-end | IN_PROGRESS - links+agent done, final group testing remains |
@@ -83,16 +83,34 @@ quality, needs ~8 GB RAM). See `docs/underveisNotater.md` for full rationale.
       3. Returns top-K `RAGDocument` matches.
 - [x] Agent startup auto-ingests when `knowledge_docs` is empty.
 
-### Priority 2 - curate, tune, test
+### ✅ Priority 2 – knowledge base content (DONE 2026-03-01)
 
-- [ ] Add curated maritime knowledge files to `docs/knowledge/` (source-backed summaries).
-- [ ] Run ingestion after each doc batch: `docker exec maritime_agent python rag/ingest.py`.
-- [ ] Validate retrieval quality for multiple event types.
-- [ ] Tune `RAG_TOP_K` and `RAG_MIN_SIMILARITY` from `.env`.
+- [x] 17 curated maritime knowledge files added to `docs/knowledge/` covering Points 1–10:
+  - Point 1 (Ship systems): `main_engine.md`, `auxiliary_engines.md`, `fuel_system.md`,
+    `cooling_system.md`, `electrical_system.md`, `propulsion_system.md`,
+    `ballast_system.md`, `navigation_systems.md`, `p1_event_context.md`
+  - Points 2–10: `p2_sensors_what_they_measure.md`, `p3_normal_values_thresholds.md`,
+    `p4_alarm_types_cascading.md`, `p5_troubleshooting_procedures.md`,
+    `p6_stale_missing_sensor_data.md`, `p8_data_quality_lineage.md`,
+    `p9_maritime_regulations.md`, `p10_incident_analysis_reporting.md`
+- [x] All sources verified as primary (IMO CDN, IACS, OEM). No mirror/aggregator links.
+- [x] All IAS sensor tags cross-checked against `services/generator/sensors.py`.
+- [x] Auto-ingest verified: 76 chunks in `knowledge_docs` on startup.
+- [x] End-to-end test: `HIGH_DG5_CHARGE_AIR_TEMP` event returned grounded analysis
+      with correct threshold (120°C) and root causes from `main_engine.md`.
+- [x] Pushed to `origin/feat/kristian-updates` (commit `e1f6094`).
+
+### Priority 3 – validate and tune (NEXT)
+
+- [ ] Test retrieval quality for 5+ representative event types (fuel viscosity, scrubber SO₂,
+      low LO flow, engine overload, low tank weight).
+- [ ] Tune `RAG_TOP_K` and `RAG_MIN_SIMILARITY` in `.env` based on results.
+- [ ] Point 7 (Application state): awaiting Geir's IAS scripts (meeting 03.03.2026).
+- [ ] Point 11 (Color Line/Knowit-specific): awaiting documents from Color Line.
 
 ### Coordinate with
-- Kristian: RAG context already plugs into `analyze.py` system prompt.
-- Jonas: verify AI table content quality after knowledge docs are added.
+- Kristian: RAG context already plugs into `analyze.py` system prompt — no changes needed.
+- Jonas: AI analysis quality in Grafana table should now show maritime-grounded answers.
 
 ---
 
@@ -358,8 +376,7 @@ Ollama does not natively speak MCP. See `docs/underveisNotater.md` for details.
 ## Suggested group workflow
 
 1. ✅ Kristian + Onu: core pipeline done. Pull `llama3.2` and verify end-to-end.
-2. ⬜ **Nidal**: implement RAG (pgvector + docs). Test by checking that `analysis_text`
-   in Grafana references the maritime documents.
+2. ✅ **Nidal**: RAG complete (17 files, 76 chunks, end-to-end verified). Next: validate retrieval quality across event types and tune `RAG_TOP_K` / `RAG_MIN_SIMILARITY`.
 3. IN_PROGRESS **Jonas**: continue dashboard polish (UI/readability + demo tweaks). Core triggers are in place.
 4. Group test together: `docker compose up --build` → trigger an event → click Analyse
    in Grafana → verify the full pipeline (generator → event → LLM analysis → dashboard).

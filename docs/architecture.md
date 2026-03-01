@@ -86,7 +86,7 @@ agent layer** on top: when an anomaly is detected the agent explains
 |-----------|---------|------------------------------------------------------------|
 | MCP server | ✅ Running on port 8001 | REST adapter with 3 tools. Not the official MCP wire protocol — see `underveisNotater.md`. |
 | Ollama    | DONE | Tool-calling loop active in agent (`llama3.2` default model). |
-| RAG       | IN_PROGRESS | pgvector retrieval + ingest are wired; add curated docs in `docs/knowledge/` |
+| RAG       | ✅ Done | 17 curated maritime knowledge files, 76 chunks in pgvector. Auto-ingests on startup when table is empty. Next: validate retrieval quality and tune `RAG_TOP_K` / `RAG_MIN_SIMILARITY`. |
 | Auth      | ⬜ None | Add JWT / role-based access before any production use     |
 | Anomaly detection | ✅ Rule-based in generator | Sufficient for prototype          |
 
