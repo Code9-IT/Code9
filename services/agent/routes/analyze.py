@@ -1,8 +1,8 @@
 """
-POST /api/v1/analyze              - trigger an AI analysis for one event
-GET  /api/v1/analyze/{event_id}   - dashboard alias (supports ?force=true)
-GET  /api/v1/analyses             - list the most recent analyses
-=====================================================================
+POST /api/v1/analyze            - trigger an AI analysis for one event
+GET  /api/v1/analyze/{event_id} - dashboard alias (supports ?force=true)
+GET  /api/v1/analyses           - list the most recent analyses
+==================================================================
 Agentic pipeline:
   1. Fetch the event row from the DB.
   2. Retrieve context documents via RAG.
@@ -17,38 +17,61 @@ Agentic pipeline:
   7. Return the analysis to the caller.
 """
 
+from dataclasses import dataclass
+import json
 import os
 import re
-import json
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 
-from db     import get_pool
-from models import AnalyzeRequest, AnalyzeResponse
-from rag.client      import retrieve_context, format_context_for_prompt
+from db import get_pool
 from llm.ollama_client import chat
+from models import AnalyzeRequest, AnalyzeResponse
+from rag.client import format_context_for_prompt, retrieve_context
 
-MCP_URL       = os.getenv("MCP_URL", "http://mcp:8001")
-MAX_TOOL_CALLS = 5   # safety cap – prevents infinite loops
+MCP_URL = os.getenv("MCP_URL", "http://mcp:8001")
+MAX_TOOL_CALLS = 5
 
 router = APIRouter(tags=["analyze"])
 
 
-# ─── POST /analyze ────────────────────────────────────────
+@dataclass
+class ToolExecutionTrace:
+    """One MCP tool execution performed during analysis."""
+
+    name: str
+    arguments: dict
+    succeeded: bool
+    response_size_chars: int
+    response_preview: str
+
+
+@dataclass
+class AnalysisPipelineResult:
+    """Internal result shared by the main route and validation routes."""
+
+    analysis_text: str
+    suggested_actions: list[str]
+    confidence: float
+    model_used: str
+    status: str
+    context_docs: list
+    tool_calls: list[ToolExecutionTrace]
+
+
 @router.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_event(request: AnalyzeRequest):
     pool = get_pool()
 
-    # 1) Fetch event ──────────────────────────────────────
     async with pool.acquire() as conn:
         event = await conn.fetchrow(
-            "SELECT * FROM events WHERE id = $1", request.event_id
+            "SELECT * FROM events WHERE id = $1",
+            request.event_id,
         )
     if event is None:
         raise HTTPException(status_code=404, detail=f"Event {request.event_id} not found")
 
-    # Reuse latest analysis by default to avoid duplicate LLM runs on repeated clicks.
     if not request.force:
         async with pool.acquire() as conn:
             latest = await conn.fetchrow(
@@ -72,31 +95,8 @@ async def analyze_event(request: AnalyzeRequest):
                 status=latest["status"] or "completed",
             )
 
-    # 2) RAG context ───────────────────────────────────────
-    context_docs = await retrieve_context(
-        event_type  = event["event_type"],
-        sensor_name = event["sensor_name"],
-        vessel_id   = event["vessel_id"],
-    )
-    context_text = format_context_for_prompt(context_docs)
+    result = await run_analysis_pipeline(dict(event))
 
-    # 3) Fetch MCP tool definitions ────────────────────────
-    tools = await _fetch_mcp_tools()
-
-    # 4) Agentic tool-calling loop ─────────────────────────
-    try:
-        analysis_text = await _run_tool_loop(dict(event), context_text, tools)
-        status = "completed"
-    except Exception as exc:
-        analysis_text = f"Analysis failed: {exc}"
-        status = "failed"
-
-    # 5) Parse structured output ───────────────────────────
-    suggested_actions = _parse_suggested_actions(analysis_text)
-    confidence        = _parse_confidence(analysis_text)
-    model_used        = os.getenv("OLLAMA_MODEL", "llama3.2")
-
-    # 6) Persist ───────────────────────────────────────────
     async with pool.acquire() as conn:
         analysis_id = await conn.fetchval(
             """
@@ -105,36 +105,34 @@ async def analyze_event(request: AnalyzeRequest):
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id
             """,
-            request.event_id, analysis_text, suggested_actions,
-            confidence, model_used, status,
+            request.event_id,
+            result.analysis_text,
+            result.suggested_actions,
+            result.confidence,
+            result.model_used,
+            result.status,
         )
 
-    # 7) Return ────────────────────────────────────────────
     return AnalyzeResponse(
         id=analysis_id,
         event_id=request.event_id,
-        analysis_text=analysis_text,
-        suggested_actions=suggested_actions,
-        confidence=confidence,
-        model_used=model_used,
-        status=status,
+        analysis_text=result.analysis_text,
+        suggested_actions=result.suggested_actions,
+        confidence=result.confidence,
+        model_used=result.model_used,
+        status=result.status,
     )
 
 
-# --- GET /analyze/{event_id} ------------------------------------------
 @router.get("/analyze/{event_id}", response_model=AnalyzeResponse)
 async def analyze_event_get(event_id: int, force: bool = Query(default=False)):
-    """
-    GET alias for Grafana data links.
-    Reuses the same analysis pipeline as POST /analyze.
-    Use force=true to bypass the duplicate-analysis guard.
-    """
+    """GET alias for Grafana data links."""
     return await analyze_event(AnalyzeRequest(event_id=event_id, force=force))
 
 
 @router.get("/analyses")
 async def get_recent_analyses(limit: int = 10):
-    """Return the most recent AI analyses (useful for Grafana or direct API use)."""
+    """Return the most recent AI analyses."""
     pool = get_pool()
     async with pool.acquire() as conn:
         rows = await conn.fetch(
@@ -153,13 +151,47 @@ async def get_recent_analyses(limit: int = 10):
     return [dict(row) for row in rows]
 
 
-# ─── MCP helpers ──────────────────────────────────────────
+async def run_analysis_pipeline(
+    event: dict,
+    rag_top_k: int | None = None,
+    rag_min_similarity: float | None = None,
+) -> AnalysisPipelineResult:
+    """
+    Execute the live analysis pipeline without persisting the result.
+    Validation routes use this to inspect retrieval and tool-call behavior.
+    """
+    context_docs = await retrieve_context(
+        event_type=event["event_type"],
+        sensor_name=event["sensor_name"],
+        vessel_id=event["vessel_id"],
+        top_k=rag_top_k,
+        min_similarity=rag_min_similarity,
+    )
+    context_text = format_context_for_prompt(context_docs)
+    tools = await _fetch_mcp_tools()
+
+    try:
+        analysis_text, tool_calls = await _run_tool_loop(event, context_text, tools)
+        status = "completed"
+    except Exception as exc:
+        error_text = str(exc).strip() or exc.__class__.__name__
+        analysis_text = f"Analysis failed: {error_text}"
+        status = "failed"
+        tool_calls = []
+
+    return AnalysisPipelineResult(
+        analysis_text=analysis_text,
+        suggested_actions=_parse_suggested_actions(analysis_text),
+        confidence=_parse_confidence(analysis_text),
+        model_used=os.getenv("OLLAMA_MODEL", "llama3.2"),
+        status=status,
+        context_docs=context_docs,
+        tool_calls=tool_calls,
+    )
+
+
 async def _fetch_mcp_tools() -> list[dict]:
-    """
-    Fetch tool definitions from the MCP server and convert them to
-    Ollama's tool format (type + function wrapper).
-    Returns an empty list if the MCP server is unreachable.
-    """
+    """Fetch MCP tool definitions and convert them to Ollama's format."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(f"{MCP_URL}/tools")
@@ -169,23 +201,20 @@ async def _fetch_mcp_tools() -> list[dict]:
             {
                 "type": "function",
                 "function": {
-                    "name":        t["name"],
-                    "description": t["description"],
-                    "parameters":  t.get("inputSchema", {}),
+                    "name": tool["name"],
+                    "description": tool["description"],
+                    "parameters": tool.get("inputSchema", {}),
                 },
             }
-            for t in mcp_tools
+            for tool in mcp_tools
         ]
     except Exception as exc:
         print(f"[agent] Could not fetch MCP tools: {exc}")
-        return []   # degrade gracefully – analysis continues without tools
+        return []
 
 
-async def _call_mcp_tool(name: str, arguments: dict) -> str:
-    """
-    Execute one tool call against the MCP REST server.
-    Returns the result as a JSON string (to be sent back to the model).
-    """
+async def _call_mcp_tool(name: str, arguments: dict) -> tuple[str, bool]:
+    """Execute one tool call against the MCP REST server."""
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(
@@ -193,51 +222,43 @@ async def _call_mcp_tool(name: str, arguments: dict) -> str:
                 json={"name": name, "arguments": arguments},
             )
             resp.raise_for_status()
-            return json.dumps(resp.json())
+            return json.dumps(resp.json()), True
     except Exception as exc:
-        return json.dumps({"error": str(exc)})
+        return json.dumps({"error": str(exc)}), False
 
 
-# ─── agentic loop ─────────────────────────────────────────
 async def _run_tool_loop(
-    event:   dict,
+    event: dict,
     context: str,
-    tools:   list[dict],
-) -> str:
+    tools: list[dict],
+) -> tuple[str, list[ToolExecutionTrace]]:
     """
-    Core agentic loop – the LLM decides which tools to call.
-
-    Conversation flow:
-      user:      "An anomaly was detected on vessel X …"
-      assistant: [tool_call: get_telemetry(vessel_001, engine_temp, 30)]
-      tool:      {"readings": [...]}
-      assistant: [tool_call: get_events(vessel_001)]   ← optional second call
-      tool:      {"events": [...]}
-      assistant: "**ANALYSIS:** The temperature exceeded …"  ← final answer
+    Core agentic loop where the LLM decides whether to call tools.
+    Returns final text plus the tool-call trace used to reach it.
     """
     messages: list[dict] = [
         {"role": "system", "content": _system_prompt(context)},
-        {"role": "user",   "content": _user_message(event)},
+        {"role": "user", "content": _user_message(event)},
     ]
+    tool_traces: list[ToolExecutionTrace] = []
 
     for _ in range(MAX_TOOL_CALLS + 1):
         response = await chat(messages, tools=tools or None)
 
         tool_calls = response.get("tool_calls")
         if not tool_calls:
-            # Model produced its final text answer
-            return response.get("content", "No analysis generated.")
+            return response.get("content", "No analysis generated."), tool_traces
 
-        # Append the assistant's (tool-calling) turn to the conversation
-        messages.append({
-            "role":       "assistant",
-            "content":    response.get("content", ""),
-            "tool_calls": tool_calls,
-        })
+        messages.append(
+            {
+                "role": "assistant",
+                "content": response.get("content", ""),
+                "tool_calls": tool_calls,
+            }
+        )
 
-        # Execute every tool the model requested and add results
-        for tc in tool_calls:
-            fn   = tc.get("function", {})
+        for tool_call in tool_calls:
+            fn = tool_call.get("function", {})
             name = fn.get("name", "")
             args = fn.get("arguments", {})
             if isinstance(args, str):
@@ -245,14 +266,27 @@ async def _run_tool_loop(
                     args = json.loads(args)
                 except json.JSONDecodeError:
                     args = {}
+            if not isinstance(args, dict):
+                args = {}
 
-            result = await _call_mcp_tool(name, args)
+            result, succeeded = await _call_mcp_tool(name, args)
+            tool_traces.append(
+                ToolExecutionTrace(
+                    name=name,
+                    arguments=args,
+                    succeeded=succeeded,
+                    response_size_chars=len(result),
+                    response_preview=_preview_text(result),
+                )
+            )
             messages.append({"role": "tool", "name": name, "content": result})
 
-    return "Analysis incomplete: maximum tool calls reached without a final answer."
+    return (
+        "Analysis incomplete: maximum tool calls reached without a final answer.",
+        tool_traces,
+    )
 
 
-# ─── prompt builders ──────────────────────────────────────
 def _system_prompt(context: str) -> str:
     rag_section = ""
     if context and "not yet implemented" not in context:
@@ -290,30 +324,37 @@ def _user_message(event: dict) -> str:
     )
 
 
-# ─── output parsers ───────────────────────────────────────
+def _preview_text(text: str, max_chars: int = 400) -> str:
+    """Trim verbose tool responses to a compact preview for diagnostics."""
+    compact = " ".join(text.split())
+    if len(compact) <= max_chars:
+        return compact
+    return compact[: max_chars - 3] + "..."
+
+
 def _parse_confidence(text: str) -> float:
     """
     Extract the confidence percentage from the model's structured output.
-    Matches patterns like: **CONFIDENCE:** 75%  or  CONFIDENCE: 80
-    Returns a float in the range 0.0–1.0.
+    Returns a float in the range 0.0-1.0.
     """
-    m = re.search(r'\*{0,2}CONFIDENCE\*{0,2}[:\s*]+(\d+)', text, re.IGNORECASE)
-    if m:
-        return min(float(m.group(1)), 100.0) / 100.0
+    match = re.search(r"\*{0,2}CONFIDENCE\*{0,2}[:\s*]+(\d+)", text, re.IGNORECASE)
+    if match:
+        return min(float(match.group(1)), 100.0) / 100.0
     return 0.0
 
 
 def _parse_suggested_actions(text: str) -> list[str]:
     """
-    Extract the numbered action items from the SUGGESTED ACTIONS section.
+    Extract numbered action items from the SUGGESTED ACTIONS section.
     Falls back to a generic placeholder if none are found.
     """
     section = re.search(
-        r'\*{0,2}SUGGESTED ACTIONS\*{0,2}[:\s]+(.*?)(?=\*{0,2}[A-Z]{3}|\Z)',
-        text, re.IGNORECASE | re.DOTALL,
+        r"\*{0,2}SUGGESTED ACTIONS\*{0,2}[:\s]+(.*?)(?=\*{0,2}[A-Z]{3}|\Z)",
+        text,
+        re.IGNORECASE | re.DOTALL,
     )
     if section:
-        actions = re.findall(r'^\d+\.\s+(.+)', section.group(1), re.MULTILINE)
+        actions = re.findall(r"^\d+\.\s+(.+)", section.group(1), re.MULTILINE)
         if actions:
-            return [a.strip() for a in actions]
+            return [action.strip() for action in actions]
     return ["Investigate further"]
