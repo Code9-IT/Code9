@@ -113,7 +113,7 @@ docker compose up --build
 │
 ├── grafana/
 │   ├── provisioning/           ← datasource + dashboard auto-config
-│   └── dashboards/             ← JSON for "Ship Ops" + "Data Quality"
+│   └── dashboards/             ← JSON for "Ship Ops" + "UDS App Health" (old Data Quality archived)
 │
 ├── services/
 │   ├── agent/                  ← FastAPI AI-agent
@@ -154,7 +154,7 @@ docker compose up --build
 | Component | Behaviour today | Next step |
 |-----------|-----------------|-----------|
 | **RAG** | pgvector retrieval + ingest ready | add curated docs in `docs/knowledge/` and ingest |
-| **Grafana dashboards** | provisioned, core panels + links live | Ship Ops + Data Quality polish/testing (Jonas) |
+| **Grafana dashboards** | provisioned, core panels + links live | Ship Ops + UDS App Health polish/testing (Jonas) |
 | **Auth** | none | add JWT before any real deploy |
 | **Analyse trigger** | manual `curl` + Grafana data links (`GET` aliases) | later hardening: POST-only UI + auth |
 

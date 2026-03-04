@@ -98,7 +98,7 @@ quality, needs ~8 GB RAM). See `docs/underveisNotater.md` for full rationale.
 
 ## Jonas - Grafana Dashboards & UI
 
-**You own:** `grafana/dashboards/ship_operations.json` and `grafana/dashboards/data_quality.json`
+**You own:** `grafana/dashboards/ship_operations.json` and `grafana/dashboards/uds_app_health.json` (old `data_quality.json` archived)
 
 ---
 
@@ -112,7 +112,7 @@ This is the core architectural decision from the Arnt/Knowit meeting (02.02.2026
 | Dashboard | File | Audience | Purpose |
 |-----------|------|----------|---------|
 | **Ship Operations** | `ship_operations.json` | Chief engineer / Captain | Vessel health — is anything broken right now? |
-| **Data Quality** | `data_quality.json` | Telenor Maritime / data platform team | Platform integrity — is the data trustworthy? |
+| **UDS App Health** | `uds_app_health.json` | Platform engineers / operators | App-level observability (AI pipeline, events, ingestion) |
 
 **Each dashboard must have two levels of detail:**
 - **Main view** — the most important panels visible immediately on load.
