@@ -336,7 +336,7 @@
                 "value": [
                   {
                     "title": "Analyze",
-                    "url": "http://localhost:8000/api/v1/analyze/${__value.raw}",
+                    "url": "http://localhost:8000/api/v1/analyze/${__value.raw}/view?refresh=true",
                     "targetBlank": true
                   },
                   {
@@ -642,7 +642,7 @@
                     "value": [
                       {
                         "title": "Analyze",
-                        "url": "http://localhost:8000/api/v1/analyze/${__value.raw}",
+                        "url": "http://localhost:8000/api/v1/analyze/${__value.raw}/view?refresh=true",
                         "targetBlank": true
                       },
                       {

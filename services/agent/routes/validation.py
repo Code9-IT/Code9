@@ -277,6 +277,37 @@ def _dashboard_html() -> str:
       line-height: 1.6;
     }
 
+    .hero-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    a.nav-btn {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 700;
+      text-decoration: none;
+      color: var(--ink);
+      background: rgba(16, 35, 58, 0.08);
+      transition: transform 0.15s ease;
+    }
+
+    a.nav-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    a.nav-btn.primary {
+      color: #fff9f3;
+      border: none;
+      background: linear-gradient(135deg, #c26b2f, #8d3f18);
+    }
+
     .grid {
       display: grid;
       grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -492,6 +523,10 @@ def _dashboard_html() -> str:
         Use the same live agent pipeline to benchmark retrieval, compare top-K and similarity
         settings, and inspect which documents and tool calls shaped a single analysis run.
       </p>
+      <div class="hero-nav">
+        <a class="nav-btn primary" href="http://localhost:3000">Back to Grafana</a>
+        <a class="nav-btn" href="#" id="openAnalyzeView">Open Analyze Page</a>
+      </div>
     </section>
 
     <div class="grid">
@@ -685,6 +720,16 @@ def _dashboard_html() -> str:
       throw new Error("Unexpected events response.");
     }
 
+    async function resolveEventIdForAnalyze() {
+      const current = parseOptionalNumber(document.getElementById("analysisEventId").value);
+      if (current !== null) {
+        return current;
+      }
+      const latest = await loadLatestEvent();
+      document.getElementById("analysisEventId").value = latest.id;
+      return latest.id;
+    }
+
     function renderRetrieval(data) {
       const tbody = document.querySelector("#retrievalTable tbody");
       tbody.innerHTML = "";
@@ -789,6 +834,18 @@ def _dashboard_html() -> str:
         setStatus(statusEl, `Loaded latest event ${latest.id} (${latest.event_type}).`, "good");
       } catch (error) {
         setStatus(statusEl, `Could not fetch latest event: ${error.message}`, "bad");
+      }
+    });
+
+    document.getElementById("openAnalyzeView").addEventListener("click", async (event) => {
+      event.preventDefault();
+      const statusEl = document.getElementById("analysisStatus");
+      try {
+        setStatus(statusEl, "Opening analyze page...", "warn");
+        const eventId = await resolveEventIdForAnalyze();
+        window.location.href = `/api/v1/analyze/${eventId}/view`;
+      } catch (error) {
+        setStatus(statusEl, `Could not open analyze page: ${error.message}`, "bad");
       }
     });
 
