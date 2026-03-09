@@ -76,8 +76,15 @@ services:
       DB_NAME:     ${DB_NAME:-maritime_telemetry}
       OLLAMA_URL:   ${OLLAMA_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      OLLAMA_QUICK_MODEL: ${OLLAMA_QUICK_MODEL:-}
+      OLLAMA_VALIDATION_MODEL: ${OLLAMA_VALIDATION_MODEL:-}
       OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-300}
+      QUICK_ANALYSIS_TOP_K: ${QUICK_ANALYSIS_TOP_K:-1}
+      QUICK_ANALYSIS_MAX_CONTEXT_CHARS: ${QUICK_ANALYSIS_MAX_CONTEXT_CHARS:-900}
+      QUICK_ANALYSIS_NUM_PREDICT: ${QUICK_ANALYSIS_NUM_PREDICT:-180}
       MCP_URL:      ${MCP_URL:-http://mcp:8001}
+      MCP_API_KEY:  ${MCP_API_KEY:-dev-mcp-key}
       STUB_MODE:    ${STUB_MODE:-false}
       RAG_TOP_K:    ${RAG_TOP_K:-5}
       RAG_MIN_SIMILARITY: ${RAG_MIN_SIMILARITY:-0.60}
@@ -107,6 +114,7 @@ services:
       DB_USER:     ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_NAME:     ${DB_NAME:-maritime_telemetry}
+      MCP_API_KEY: ${MCP_API_KEY:-dev-mcp-key}
     depends_on:
       timescaledb:
         condition: service_healthy
