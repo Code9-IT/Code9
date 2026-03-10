@@ -22,6 +22,26 @@ from routes.validation import router as validation_router
 from rag.ingest import ingest_if_empty
 
 
+async def ensure_agent_schema():
+    """Apply lightweight runtime schema updates needed by newer routes."""
+    from db import get_pool
+
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            ALTER TABLE ai_analyses
+            ADD COLUMN IF NOT EXISTS analysis_mode TEXT NOT NULL DEFAULT 'full'
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_analyses_event_mode
+            ON ai_analyses(event_id, analysis_mode, timestamp DESC)
+            """
+        )
+
+
 # --- Lifecycle ------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,6 +50,7 @@ async def lifespan(app: FastAPI):
     try:
         from db import get_pool
 
+        await ensure_agent_schema()
         await ingest_if_empty(get_pool())
     except Exception as exc:  # pragma: no cover
         print(f"[agent] RAG auto-ingest skipped: {exc}")
