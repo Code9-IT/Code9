@@ -811,7 +811,7 @@
                 "value": [
                   {
                     "title": "Analyze",
-                    "url": "http://localhost:8000/api/v1/analyze/${__value.raw}",
+                    "url": "http://localhost:8000/api/v1/analyze/${__value.raw}/view?refresh=true",
                     "targetBlank": true
                   },
                   {
@@ -838,7 +838,7 @@
       "targets": [
         {
           "format": "table",
-          "rawSql": "SELECT id, timestamp, vessel_id, sensor_name, event_type, severity, details FROM events WHERE vessel_id = '$vessel' AND acknowledged = FALSE ORDER BY timestamp DESC LIMIT 10",
+          "rawSql": "SELECT id, timestamp, vessel_id, sensor_name, event_type, severity, details FROM events WHERE vessel_id = '$vessel' AND acknowledged = FALSE ORDER BY id ASC",
           "refId": "A"
         }
       ],

@@ -52,11 +52,12 @@ CREATE TABLE IF NOT EXISTS ai_analyses (
     id                  SERIAL      PRIMARY KEY,
     event_id            INTEGER     REFERENCES events(id),
     timestamp           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    analysis_mode       TEXT        NOT NULL DEFAULT 'full',    -- 'quick' | 'full'
     analysis_text       TEXT,                   -- LLM-generated explanation
     suggested_actions   TEXT[],                 -- array of action strings
     confidence          FLOAT,                  -- 0.0 – 1.0
     model_used          TEXT,                   -- e.g. 'ollama/llama3' or 'stub'
-    status              TEXT        NOT NULL DEFAULT 'pending'  -- pending | completed | failed
+    status              TEXT        NOT NULL DEFAULT 'pending'  -- pending | running | completed | failed
 );
 
 -- ─── INDEXES ─────────────────────────────────────────────

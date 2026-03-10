@@ -3,12 +3,14 @@ Analysis routes for quick and full event analysis.
 """
 
 from dataclasses import dataclass
+import html
 import json
 import os
 import re
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi.responses import HTMLResponse
 
 from db import get_pool
 from llm.ollama_client import chat
@@ -29,6 +31,7 @@ QUICK_ANALYSIS_NUM_PREDICT = max(
     64,
 )
 MAX_TOOL_CALLS = 5
+IN_FLIGHT_ANALYSES: set[int] = set()
 
 router = APIRouter(tags=["analyze"])
 
@@ -148,6 +151,198 @@ async def get_analysis_status(analysis_id: int):
     return _serialize_analysis_row(row)
 
 
+async def _run_analysis_background(event_id: int) -> None:
+    """Run a quick analysis in the background; guard against duplicate jobs."""
+    if event_id in IN_FLIGHT_ANALYSES:
+        return
+    IN_FLIGHT_ANALYSES.add(event_id)
+    try:
+        await analyze_event(AnalyzeRequest(event_id=event_id, force=True))
+    except Exception as exc:
+        print(f"[agent] Background analysis failed for event {event_id}: {exc}")
+    finally:
+        IN_FLIGHT_ANALYSES.discard(event_id)
+
+
+@router.get("/analyze/{event_id}/view", response_class=HTMLResponse)
+async def analyze_event_view(
+    event_id: int,
+    background_tasks: BackgroundTasks,
+    refresh: bool = Query(default=False),
+):
+    """Browser-friendly analysis page for Grafana data links."""
+    event = await _fetch_event_or_404(event_id)
+    _ = event  # used for 404 check only
+
+    refresh_started = False
+    refresh_in_progress = event_id in IN_FLIGHT_ANALYSES
+
+    if refresh and not refresh_in_progress:
+        background_tasks.add_task(_run_analysis_background, event_id)
+        refresh_started = True
+        refresh_in_progress = True
+
+    latest = await _fetch_latest_analysis(event_id, analysis_mode="quick", statuses=("completed", "failed"))
+    if latest is None:
+        latest = await _fetch_latest_analysis(event_id, analysis_mode="full", statuses=("completed", "failed"))
+
+    if latest is None:
+        if not refresh_in_progress:
+            background_tasks.add_task(_run_analysis_background, event_id)
+            refresh_started = True
+            refresh_in_progress = True
+        pending = AnalyzeResponse(
+            id=0,
+            event_id=event_id,
+            analysis_mode="quick",
+            analysis_text="No analysis yet. A background analysis has started. Refresh this page in 30-60 seconds.",
+            suggested_actions=[],
+            confidence=0.0,
+            model_used=os.getenv("OLLAMA_MODEL", "llama3.2"),
+            status="running",
+        )
+        details = await _get_event_details(event_id)
+        return HTMLResponse(_render_analysis_html(pending, details, refresh_started, refresh_in_progress))
+
+    result = _serialize_analysis_row(latest)
+    details = await _get_event_details(event_id)
+    return HTMLResponse(_render_analysis_html(result, details, refresh_started, refresh_in_progress))
+
+
+async def _get_event_details(event_id: int) -> dict | None:
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT id AS event_id, vessel_id, sensor_name, event_type, severity
+            FROM events WHERE id = $1
+            """,
+            event_id,
+        )
+    return dict(row) if row is not None else None
+
+
+def _render_analysis_html(
+    result: AnalyzeResponse,
+    details: dict | None = None,
+    refresh_started: bool = False,
+    refresh_in_progress: bool = False,
+) -> str:
+    """Render analysis response as a readable HTML page."""
+    status_norm = (result.status or "").lower()
+    confidence_pct = int(round((result.confidence or 0.0) * 100))
+    if status_norm == "completed":
+        confidence_text = f"{confidence_pct}%"
+    elif status_norm in ("running", "pending"):
+        confidence_text = "PENDING"
+    else:
+        confidence_text = "N/A"
+
+    status_label = html.escape((result.status or "unknown").upper())
+    status_class = "ok" if status_norm == "completed" else "warn"
+    model = html.escape(result.model_used or "unknown")
+    analysis = html.escape(result.analysis_text or "").replace("\n", "<br>")
+    actions = list(result.suggested_actions or [])
+    if status_norm in ("running", "pending"):
+        actions = ["Wait 30-60 seconds, then refresh this page to see the completed analysis."]
+    elif status_norm == "failed" and _is_placeholder_actions(actions):
+        actions = _failure_actions(result.analysis_text or "")
+    if not actions:
+        actions = ["Investigate further"]
+    actions_html = "".join(f"<li>{html.escape(a)}</li>" for a in actions)
+
+    vessel_id = html.escape(str(details.get("vessel_id", "-"))) if details else "-"
+    sensor_name = html.escape(str(details.get("sensor_name", "-"))) if details else "-"
+    event_type = html.escape(str(details.get("event_type", "-"))) if details else "-"
+    severity = html.escape(str(details.get("severity", "-"))) if details else "-"
+
+    view_url = f"http://localhost:8000/api/v1/analyze/{result.event_id}/view"
+    refresh_url = f"http://localhost:8000/api/v1/analyze/{result.event_id}/view?refresh=true"
+    rag_tuning_url = "http://localhost:8000/api/v1/validate/dashboard"
+
+    notice = ""
+    if refresh_started:
+        notice = (
+            "<div class=\"card\"><div class=\"label\">Background Analysis</div>"
+            "<div class=\"value\">New analysis started. Refresh in 30-60 seconds.</div></div>"
+        )
+    elif refresh_in_progress:
+        notice = (
+            "<div class=\"card\"><div class=\"label\">Background Analysis</div>"
+            "<div class=\"value\">Analysis is already running. Refresh in 30-60 seconds.</div></div>"
+        )
+
+    auto_refresh = ""
+    if refresh_started or refresh_in_progress or status_norm in ("running", "pending"):
+        auto_refresh = (
+            f"<script>setTimeout(function(){{window.location.href='{view_url}';}},8000);</script>"
+        )
+
+    event_info = f"""
+    <div class="card">
+      <div class="label">Event Details</div>
+      <div class="meta" style="margin-top:10px;">
+        <div><div class="label">Vessel</div><div class="value">{vessel_id}</div></div>
+        <div><div class="label">Sensor</div><div class="value">{sensor_name}</div></div>
+        <div><div class="label">Event Type</div><div class="value">{event_type}</div></div>
+        <div><div class="label">Severity</div><div class="value">{severity}</div></div>
+      </div>
+    </div>
+    """
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Analysis #{result.id}</title>
+  <style>
+    :root {{ --bg:#0b1220; --card:#131e33; --ink:#e9eef8; --muted:#9fb0cf; --ok:#1fbf75; --warn:#f0ad4e; --line:#24314f; }}
+    body {{ margin:0; font-family:Segoe UI, Arial, sans-serif; background:linear-gradient(180deg,#0b1220,#0d1729); color:var(--ink); }}
+    .wrap {{ max-width:900px; margin:24px auto; padding:0 16px; }}
+    .card {{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px; }}
+    .meta {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }}
+    .label {{ color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }}
+    .value {{ margin-top:4px; font-size:15px; }}
+    .status.ok {{ color:var(--ok); }}
+    .status.warn {{ color:var(--warn); }}
+    a.btn {{ display:inline-block; margin-top:10px; color:#fff; text-decoration:none; background:#2f6fed; padding:10px 12px; border-radius:8px; }}
+    a.btn.secondary {{ background:#38536f; margin-left:8px; }}
+    a.btn.tertiary {{ background:#1f8a6d; margin-left:8px; }}
+    ul {{ margin-top:8px; }}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2 style="margin:0 0 10px 0;">AI Analysis</h2>
+      <div class="meta">
+        <div><div class="label">Analysis ID</div><div class="value">{result.id}</div></div>
+        <div><div class="label">Event ID</div><div class="value">{result.event_id}</div></div>
+        <div><div class="label">Confidence</div><div class="value">{confidence_text}</div></div>
+        <div><div class="label">Status</div><div class="value status {status_class}">{status_label}</div></div>
+      </div>
+      <div style="margin-top:10px;"><span class="label">Model</span><div class="value">{model}</div></div>
+      <a class="btn" href="http://localhost:3000">Back to Grafana</a>
+      <a class="btn secondary" href="{refresh_url}">Run Fresh Analysis</a>
+      <a class="btn tertiary" href="{rag_tuning_url}">Open RAG Tuning</a>
+    </div>
+    {notice}
+    {event_info}
+    <div class="card">
+      <div class="label">Analysis Text</div>
+      <div class="value" style="line-height:1.45;">{analysis}</div>
+    </div>
+    <div class="card">
+      <div class="label">Suggested Actions</div>
+      <ul>{actions_html}</ul>
+    </div>
+  </div>
+  {auto_refresh}
+</body>
+</html>"""
+
+
 async def run_quick_analysis_pipeline(
     event: dict,
     rag_top_k: int | None = None,
@@ -218,16 +413,20 @@ async def run_analysis_pipeline(
             model_name=resolved_model,
         )
         status = "completed"
+        suggested_actions = _parse_suggested_actions(analysis_text)
+        confidence = _parse_confidence(analysis_text)
     except Exception as exc:
         error_text = str(exc).strip() or exc.__class__.__name__
         analysis_text = f"Analysis failed: {error_text}"
         status = "failed"
         tool_calls = []
+        suggested_actions = _failure_actions(error_text)
+        confidence = 0.0
 
     return AnalysisPipelineResult(
         analysis_text=analysis_text,
-        suggested_actions=_parse_suggested_actions(analysis_text),
-        confidence=_parse_confidence(analysis_text),
+        suggested_actions=suggested_actions,
+        confidence=confidence,
         model_used=resolved_model,
         status=status,
         context_docs=context_docs,
@@ -643,3 +842,46 @@ def _parse_suggested_actions(text: str) -> list[str]:
         if actions:
             return [action.strip() for action in actions]
     return ["Investigate further"]
+
+
+def _is_placeholder_actions(actions: list[str]) -> bool:
+    normalized = [a.strip().lower() for a in actions if a.strip()]
+    if not normalized:
+        return True
+    return all(a == "investigate further" for a in normalized)
+
+
+def _failure_actions(error_text: str) -> list[str]:
+    text = (error_text or "").lower()
+
+    if "readtimeout" in text or "timed out" in text or "timeout" in text:
+        return [
+            "Retry analysis now (the local model likely exceeded the response timeout).",
+            "Check Ollama health and load: docker compose logs --tail 100 ollama.",
+            "Keep one analysis running at a time to avoid overload, then try again.",
+        ]
+
+    if "404" in text and "/api/chat" in text:
+        return [
+            "Verify OLLAMA_URL points to the Ollama host (normally http://ollama:11434).",
+            "Restart the agent container: docker compose up -d --build agent.",
+            "Run a fresh analysis from Grafana after restart.",
+        ]
+
+    if (
+        "connecterror" in text
+        or "connection refused" in text
+        or "name or service not known" in text
+        or "nodename nor servname provided" in text
+    ):
+        return [
+            "Start or restart Ollama and agent: docker compose up -d ollama agent.",
+            "Confirm Ollama is reachable on port 11434 from the agent container.",
+            "Run fresh analysis again once connectivity is restored.",
+        ]
+
+    return [
+        "Run fresh analysis again and check the latest error text for details.",
+        "Review agent logs: docker compose logs --tail 120 agent.",
+        "Review Ollama logs: docker compose logs --tail 120 ollama.",
+    ]

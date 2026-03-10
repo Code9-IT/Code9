@@ -12,17 +12,20 @@ class AnalyzeRequest(BaseModel):
     """POST /api/v1/analyze"""
     event_id: int
     force: bool = False
+    top_k: Optional[int] = Field(default=None, ge=1, le=20)
+    min_similarity: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 class AnalyzeResponse(BaseModel):
     """Response returned after a successful analysis."""
     id:                int
     event_id:          int
+    analysis_mode:     str = "full"   # 'quick' | 'full'
     analysis_text:     str
     suggested_actions: List[str]
     confidence:        float          # 0.0 – 1.0
     model_used:        str            # e.g. 'stub', 'ollama/llama3'
-    status:            str            # 'completed' | 'failed'
+    status:            str            # 'pending' | 'running' | 'completed' | 'failed'
 
 
 class RetrievedDocument(BaseModel):
