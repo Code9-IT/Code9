@@ -11,6 +11,7 @@ Start locally (outside Docker):
 """
 
 from contextlib import asynccontextmanager
+import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +21,14 @@ from routes.analyze import router as analyze_router
 from routes.events  import router as events_router
 from routes.validation import router as validation_router
 from rag.ingest import ingest_if_empty
+
+
+def _cors_allow_origins() -> list[str]:
+    raw = os.getenv(
+        "CORS_ALLOW_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000",
+    )
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 # --- Lifecycle ------------------------------------------------------------
@@ -45,11 +54,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Allow Grafana (and a local browser) to call the API.
-# TODO: restrict allow_origins to Grafana host in production.
+# Allow Grafana (and local dev URLs) to call the API.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_allow_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
