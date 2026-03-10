@@ -116,7 +116,7 @@ quality, needs ~8 GB RAM). See `docs/underveisNotater.md` for full rationale.
 
 ## Jonas - Grafana Dashboards & UI
 
-**You own:** `grafana/dashboards/ship_operations.json` and `grafana/dashboards/data_quality.json`
+**You own:** `grafana/dashboards/ship_operations.json` and `grafana/dashboards/uds_monitoring.json`
 
 ---
 
@@ -130,7 +130,7 @@ This is the core architectural decision from the Arnt/Knowit meeting (02.02.2026
 | Dashboard | File | Audience | Purpose |
 |-----------|------|----------|---------|
 | **Ship Operations** | `ship_operations.json` | Chief engineer / Captain | Vessel health — is anything broken right now? |
-| **Data Quality** | `data_quality.json` | Telenor Maritime / data platform team | Platform integrity — is the data trustworthy? |
+| **UDS Monitoring** | `uds_monitoring.json` | Knowit / land-operatører | UDS app health — which applications need attention right now? |
 
 **Each dashboard must have two levels of detail:**
 - **Main view** — the most important panels visible immediately on load.
@@ -154,98 +154,51 @@ This is the core architectural decision from the Arnt/Knowit meeting (02.02.2026
 | Speed & depth | Time-series | `vessel_speed` (knots), `water_depth` (m) — red at 15 m |
 | Active alarms | Table | `SELECT * FROM events WHERE acknowledged = false ORDER BY timestamp DESC LIMIT 10` |
 
-#### Detail rows (collapsed – expand to investigate)
+#### Detail rows (collapsed - expand to investigate)
 
-**Row: Engine details**
+For Scope 1, the replacement dashboard is grouped by UDS application health:
+- Availability
+- Resources
+- HTTP and exceptions
+- Database
+- Active alerts
 
-| Panel | Sensors |
-|-------|---------|
-| Fuel rack position | `dg1_fuel_rack_pos` … `dg5_fuel_rack_pos` (mm, alarm >55) |
-| Charge air temperature | `dg1_charge_air_temp` … `dg5_charge_air_temp` (°C, alarm >120) |
-| Turbocharger speed | `dg1_tc_speed` … `dg5_tc_speed` (rpm, alarm >22 000) |
-| Cooling water flow | `dg1_cw_in_flow` … `dg5_cw_in_flow` (m³/h, alarm <5) |
+Each detail row is a table over the Geir schema tables `metric_samples`,
+`alerts`, `udslocations`, `applications`, and
+`uds_location_application_instances` for one selected vessel.
 
-**Row: Fuel quality**
-
-| Panel | Sensors |
-|-------|---------|
-| HFO booster flows | `hfo_booster_a_flow`, `hfo_booster_b_flow`, `hfo_booster_c_flow` (m³/h) |
-| MGO booster flows | `mgo_booster_a_flow`, `mgo_booster_b_flow` (m³/h) |
-| HFO temperature | `hfo_fuel_temp`, `hfo_fuel_temp_b`, `hfo_fuel_temp_c` (°C) |
-| HFO viscosity | `hfo_fuel_viscosity`, `hfo_fuel_viscosity_b`, `hfo_fuel_viscosity_c` (cSt) |
-| HFO density | `hfo_density`, `hfo_density_b` (kg/m³) |
-| MGO density | `mgo_density_a`, `mgo_density_b` (kg/m³) |
-| Boiler fuel flow | `boiler_fuel_flow_a`, `boiler_fuel_flow_b` (m³/h) |
-
-**Row: Scrubbers (full)**
-
-| Panel | Sensors |
-|-------|---------|
-| SO₂ | `scrubber_fwd_so2`, `scrubber_aft_so2` (ppm) |
-| CO₂ | `scrubber_fwd_co2`, `scrubber_aft_co2` (%) |
-| Wash water pH | `scrubber_fwd_ph`, `scrubber_aft_ph` (pH, alarm <6.0) |
-| Power | `scrubber_fwd_power`, `scrubber_aft_power` (W) |
-| PAH | `scrubber_fwd_pah`, `scrubber_aft_pah` (µg/l) |
-| Sulphur content | `scrubber_fwd_sulphur`, `scrubber_aft_sulphur` (%, alarm ≥0.10) |
-
-**Row: Lubrication & emergency**
-
-| Panel | Sensors |
-|-------|---------|
-| LO supply flow | `clean_lo_flow` (L/min, alarm <3) |
-| LO return flow | `dirty_lo_flow` (L/min, alarm >20) |
-| EMDG speed | `emdg_speed` (rpm) |
+See `docs/UDS_dashboard_spec.md` and `grafana/queries/uds_queries.sql` for the
+actual dashboard structure and SQL used in the implementation.
 
 ---
 
-### Dashboard 2 – Data Quality (Telenor Maritime)
+### Dashboard 2 – UDS Monitoring (Knowit / land-operasjon)
 
 #### Main view (always visible)
 
 | Panel | Type | Query / purpose |
 |-------|------|-----------------|
-| Sensor coverage | Stat | Count of distinct `sensor_name` values seen in last 5 min |
-| Data freshness | Stat | Time since last row in `telemetry` for this vessel |
-| Event rate | Bar chart | Events per hour over last 24 h |
-| Unacknowledged alarms | Table | `SELECT * FROM events WHERE acknowledged = false` |
-| Latest AI analyses | Table | `SELECT * FROM ai_analyses ORDER BY timestamp DESC LIMIT 5` |
+| Active alerts | Stat | Count of unresolved rows in `alerts` for selected `imo_nr` |
+| Apps with issues | Stat | Derived from latest `service_up`, `health_check_status`, and alert count |
+| Apps reporting | Stat | Distinct `application_instance_id` seen in `metric_samples` over last 35 min |
+| Latest metric age | Stat | Time since newest `metric_samples.time` for selected `imo_nr` |
+| Application status summary | Table | Latest per-app status, CPU, memory, error rate, DB errors |
 
-#### Detail rows (collapsed – expand to investigate)
+#### Detail rows (collapsed - expand to investigate)
 
-**Row: Per-sensor freshness**
+For Scope 1, the replacement dashboard is grouped by UDS application health:
+- Availability
+- Resources
+- HTTP and exceptions
+- Database
+- Active alerts
 
-A table showing each sensor name and the timestamp of its most recent reading.
-Highlight any sensor not seen in the last 30 seconds (generator runs every 3 s).
+Each detail row is a table over the Geir schema tables `metric_samples`,
+`alerts`, `udslocations`, `applications`, and
+`uds_location_application_instances` for one selected vessel.
 
-```sql
-SELECT sensor_name,
-       MAX(timestamp) AS last_seen,
-       NOW() - MAX(timestamp) AS staleness
-FROM   telemetry
-WHERE  vessel_id = '$vessel'
-GROUP  BY sensor_name
-ORDER  BY staleness DESC;
-```
-
-**Row: Gap detection**
-
-Identify time windows where fewer than the expected number of sensors reported:
-
-```sql
-SELECT time_bucket('1 minute', timestamp) AS bucket,
-       COUNT(DISTINCT sensor_name)         AS sensors_seen
-FROM   telemetry
-WHERE  vessel_id = '$vessel'
-  AND  timestamp > NOW() - INTERVAL '1 hour'
-GROUP  BY bucket
-ORDER  BY bucket;
-```
-Show as a bar chart — any bar below 73 (total sensors) = a data gap.
-
-**Row: All alarm states**
-
-A table of every event in the last 24 hours with severity colour-coding:
-`critical` → red, `warning` → orange, `info` → green.
+See `docs/UDS_dashboard_spec.md` and `grafana/queries/uds_queries.sql` for the
+actual dashboard structure and SQL used in the implementation.
 
 ---
 
@@ -381,5 +334,6 @@ Ollama does not natively speak MCP. See `docs/underveisNotater.md` for details.
 4. Group test together: `docker compose up --build` → trigger an event → click Analyse
    in Grafana → verify the full pipeline (generator → event → LLM analysis → dashboard).
 5. Final: user stories, thesis writeup, demo preparation.
+
 
 

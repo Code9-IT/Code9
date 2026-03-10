@@ -76,7 +76,7 @@ agent layer** on top: when an anomaly is detected the agent explains
 | Dashboard        | Audience                        | Key panels                                    |
 |------------------|---------------------------------|-----------------------------------------------|
 | Ship Operations  | Kaptein / operativt personell   | Engine temp, oil pressure, RPM, events, AI    |
-| Data Quality     | Data-trust / overvåkning        | Records/min, events vs analyses, unacked list |
+| UDS Monitoring   | Land-operasjon / app-overvåkning | UDS app status, latest metrics, active alerts |
 
 ---
 
@@ -102,5 +102,4 @@ agent layer** on top: when an anomaly is detected the agent explains
   Swappable for any OpenAI-compatible endpoint later.
 * **Docker Compose** – single command to spin everything up; no
   cloud infra needed.
-
 

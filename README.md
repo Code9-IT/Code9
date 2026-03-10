@@ -118,7 +118,7 @@ docker compose up --build
 │
 ├── grafana/
 │   ├── provisioning/           ← datasource + dashboard auto-config
-│   └── dashboards/             ← JSON for "Ship Ops" + "Data Quality"
+│   └── dashboards/             ← JSON for "Ship Ops" + "UDS Monitoring"
 │
 ├── services/
 │   ├── agent/                  ← FastAPI AI-agent
@@ -162,7 +162,7 @@ docker compose up --build
 |-----------|--------|-------|
 | **RAG** | ✅ Live | 17 curated maritime knowledge files, 76 chunks in pgvector. Auto-ingests on first startup. |
 | **LLM analysis** | ✅ Live | Ollama `llama3.2` with tool-calling loop. Analyses stored in `ai_analyses`. |
-| **Grafana dashboards** | IN_PROGRESS | Provisioned; Ship Ops + Data Quality panels live. Polish ongoing (Jonas). |
+| **Grafana dashboards** | IN_PROGRESS | Provisioned; Ship Ops is live, and the old Data Quality view is being replaced by UDS Monitoring for Scope 1. |
 | **Auto-analysis** | ❌ Manual only | Events must be analysed via `POST /api/v1/analyze` or Grafana data link. No background worker yet. |
 | **Auth** | ❌ None | Add JWT before any real deployment. |
 
