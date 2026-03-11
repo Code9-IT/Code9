@@ -181,6 +181,36 @@ Search the codebase for `TODO` to find every pre-marked task.
 
 ---
 
+## Scope 1 acceptance flow (Student 4)
+
+Run this only after Student 1-3 feature merges are in `feat/code9-scope1-team-base`.
+
+1. Start from a fresh DB:
+   - `docker compose down -v`
+   - `docker compose up --build`
+2. Validate DB initialization:
+   - UDS schema tables exist
+   - UDS reference data exists
+3. Validate seeding:
+   - `metric_samples` and `alerts` receive new rows
+   - scenario mix includes more than only ServiceDown/critical-down
+4. Validate Grafana:
+   - vessel selector works
+   - incident flow links alert -> app -> recent historical metrics
+   - logs/log-like context is visible (or explicitly documented if deferred)
+5. Validate MCP tools:
+   - `get_vessel_app_status`
+   - `get_vessel_alerts`
+   - `get_app_metric_history`
+   - log/log-like retrieval tool from Scope 1 merge
+6. Sync docs:
+   - update `README.md`, `docs/NEXT_STEPS.md`, `docs/SCOPE1_REVIEW_FINDINGS.md`,
+     and `docs/SCOPE1_HANDOFF_NOTES.md` so they match the merged behavior.
+
+See `docs/SCOPE1_HANDOFF_NOTES.md` for the merge-support checklist.
+
+---
+
 ## Contributing (group workflow)
 
 1. Pull latest `main`.

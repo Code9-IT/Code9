@@ -302,13 +302,28 @@ The current codebase is a reasonable shared baseline for the group.
 
 ## What should be fixed next
 
-Recommended order:
+Execution order for the current 4-student split:
 
-1. Run a full fresh-DB end-to-end test.
-2. Fix any runtime mismatches found there.
-3. Improve historical metric visibility in the UDS dashboard.
-4. Decide how to handle the "logs" part of User Story 1.
-5. Broaden seeded scenarios.
+1. Student 2 finalizes the UDS log/log-like schema + MCP tool contract.
+2. Student 3 expands seeded scenarios, including stale/delayed connectivity
+   behavior.
+3. Student 1 implements incident-first dashboard flow with historical metric
+   drilldown.
+4. Student 4 runs full fresh-DB acceptance and updates docs to final behavior.
+
+## Scope 1 acceptance criteria (Student 4 gate)
+
+Scope 1 should not be marked done until all items below are verified after
+Student 1-3 merges:
+
+1. Fresh DB run starts cleanly with the integrated schema and reference data.
+2. Seeder inserts UDS metrics and alerts, including expanded scenarios.
+3. Grafana vessel selector works and incident flow includes current + historical
+   context.
+4. Dashboard includes logs/log-like context, or an explicit written scope
+   decision if deferred.
+5. MCP tools return expected incident data for vessel/app/time windows.
+6. README + handoff docs reflect the real merged behavior with no stale claims.
 
 ## Files most important for the next AI to read
 
