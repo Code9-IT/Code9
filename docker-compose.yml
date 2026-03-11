@@ -16,8 +16,6 @@
 #   ollama       – local LLM (llama3.2 – pull model after first start)
 # =============================================================
 
-version: '3.8'
-
 services:
   # ─── TIME-SERIES DATABASE ─────────────────────────────────
   timescaledb:

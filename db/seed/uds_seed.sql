@@ -6,14 +6,11 @@ sync_run AS (
   SELECT
     gen_random_uuid() AS sync_id,
     date_trunc('minute', timezone('UTC', now())) AS sync_time_utc
-),
-ships AS (
-  SELECT imo_nr
-  FROM udslocations
-  WHERE imo_nr IN ('IMO9300001', 'IMO9300002', 'IMO9300003')
-),
-apps AS (
+  ),
+app_instances AS (
   SELECT
+    u.imo_nr,
+    u.id AS uds_location_id,
     a.id AS application_instance_id,
     a.external_id AS app_id,
     a.name AS app_name,
@@ -26,8 +23,11 @@ apps AS (
       WHEN 'uds-edge-parquet-sync' THEN 'uds-edge-parquet-sync'
       ELSE a.external_id
     END AS job_name
-  FROM applications a
-  WHERE a.external_id IN (
+  FROM uds_location_application_instances uai
+  JOIN udslocations u ON u.id = uai.uds_location_id
+  JOIN applications a ON a.id = uai.application_instance_id
+  WHERE u.imo_nr IN ('IMO9300001', 'IMO9300002', 'IMO9300003')
+    AND a.external_id IN (
     'time-series-processor',
     'data-quality-processor',
     'uds-topic-handler-edge',
@@ -57,21 +57,21 @@ metric_defs AS (
 ),
 down_flags AS (
   SELECT
-    s.imo_nr,
-    a.app_id,
+    ai.imo_nr,
+    ai.application_instance_id,
+    ai.app_id,
     (random() < 0.03) AS is_down
-  FROM ships s
-  CROSS JOIN apps a
+  FROM app_instances ai
 ),
 expanded AS (
   SELECT
     sr.sync_id,
     sr.sync_time_utc,
-    s.imo_nr,
-    a.app_id,
-    a.app_name,
-    a.job_name,
-    a.application_instance_id,
+    ai.imo_nr,
+    ai.app_id,
+    ai.app_name,
+    ai.job_name,
+    ai.application_instance_id,
     df.is_down,
     md.metric_name,
     md.metric_type,
@@ -82,9 +82,10 @@ expanded AS (
       ELSE t.sample_time
     END AS sample_time
   FROM sync_run sr
-  CROSS JOIN ships s
-  CROSS JOIN apps a
-  JOIN down_flags df ON df.imo_nr = s.imo_nr AND df.app_id = a.app_id
+  JOIN app_instances ai ON true
+  JOIN down_flags df
+    ON df.imo_nr = ai.imo_nr
+   AND df.application_instance_id = ai.application_instance_id
   CROSS JOIN metric_defs md
   LEFT JOIN LATERAL (
     SELECT (sr.sync_time_utc - interval '20 minutes') AS sample_time
@@ -189,30 +190,33 @@ WITH
 sync_run AS (
   SELECT date_trunc('minute', timezone('UTC', now())) AS sync_time_utc
 ),
-ships AS (
-  SELECT id AS uds_location_id, imo_nr
-  FROM udslocations
-  WHERE imo_nr IN ('IMO9300001', 'IMO9300002', 'IMO9300003')
-),
-apps AS (
-  SELECT id AS application_id, external_id AS app_id
-  FROM applications
-  WHERE external_id IN (
-    'time-series-processor',
-    'data-quality-processor',
-    'uds-topic-handler-edge',
-    'uds-edge-data-api',
-    'uds-edge-ingest-source-admin',
-    'uds-edge-parquet-sync'
-  )
+app_instances AS (
+  SELECT
+    u.id AS uds_location_id,
+    u.imo_nr,
+    a.id AS application_id,
+    a.external_id AS app_id
+  FROM uds_location_application_instances uai
+  JOIN udslocations u ON u.id = uai.uds_location_id
+  JOIN applications a ON a.id = uai.application_instance_id
+  WHERE u.imo_nr IN ('IMO9300001', 'IMO9300002', 'IMO9300003')
+    AND a.external_id IN (
+      'time-series-processor',
+      'data-quality-processor',
+      'uds-topic-handler-edge',
+      'uds-edge-data-api',
+      'uds-edge-ingest-source-admin',
+      'uds-edge-parquet-sync'
+    )
 ),
 down_flags AS (
   SELECT
-    s.imo_nr,
-    a.app_id,
+    ai.uds_location_id,
+    ai.imo_nr,
+    ai.application_id,
+    ai.app_id,
     (random() < 0.03) AS is_down
-  FROM ships s
-  CROSS JOIN apps a
+  FROM app_instances ai
 )
 INSERT INTO alerts (
   id,
@@ -231,8 +235,8 @@ INSERT INTO alerts (
 )
 SELECT
   gen_random_uuid(),
-  sh.uds_location_id,
-  ap.application_id,
+  df.uds_location_id,
+  df.application_id,
   'ServiceDown',
   'critical',
   'firing',
@@ -244,8 +248,6 @@ SELECT
   NULL,
   (SELECT sync_time_utc FROM sync_run) + interval '1 minute'
 FROM down_flags df
-JOIN ships sh ON sh.imo_nr = df.imo_nr
-JOIN apps ap ON ap.app_id = df.app_id
 WHERE df.is_down
 ON CONFLICT DO NOTHING;
 

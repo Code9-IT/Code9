@@ -30,7 +30,7 @@ schema_ready() {
 }
 
 reference_data_ready() {
-  [ "$(run_sql_scalar "SELECT CASE WHEN (SELECT COUNT(*) FROM udslocations WHERE imo_nr IN ('IMO9300001','IMO9300002','IMO9300003')) >= 3 AND (SELECT COUNT(*) FROM applications WHERE external_id IN ('time-series-processor','data-quality-processor','uds-topic-handler-edge','uds-edge-data-api','uds-edge-ingest-source-admin','uds-edge-parquet-sync')) >= 6 THEN 1 ELSE 0 END;")" = "1" ]
+  [ "$(run_sql_scalar "SELECT CASE WHEN (SELECT COUNT(*) FROM udslocations WHERE imo_nr IN ('IMO9300001','IMO9300002','IMO9300003')) >= 3 AND (SELECT COUNT(*) FROM applications WHERE external_id IN ('time-series-processor','data-quality-processor','uds-topic-handler-edge','uds-edge-data-api','uds-edge-ingest-source-admin','uds-edge-parquet-sync')) >= 6 AND (SELECT COUNT(*) FROM uds_location_application_instances uai JOIN udslocations u ON u.id = uai.uds_location_id JOIN applications a ON a.id = uai.application_instance_id WHERE u.imo_nr IN ('IMO9300001','IMO9300002','IMO9300003') AND a.external_id IN ('time-series-processor','data-quality-processor','uds-topic-handler-edge','uds-edge-data-api','uds-edge-ingest-source-admin','uds-edge-parquet-sync')) >= 18 THEN 1 ELSE 0 END;")" = "1" ]
 }
 
 if [ ! -f "$UDS_SEED_FILE" ]; then
@@ -52,7 +52,7 @@ while true; do
   fi
 
   if ! reference_data_ready; then
-    log "UDS reference data is not ready yet; waiting for vessels/apps"
+    log "UDS reference data is not ready yet; waiting for vessels/apps/app-links"
     sleep "$UDS_SCHEMA_RETRY_SECONDS"
     continue
   fi

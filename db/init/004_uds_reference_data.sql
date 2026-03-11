@@ -40,7 +40,7 @@ VALUES
   (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1'::uuid,
     'SHIP-EXT-001',
-    'MV Egde Aurora',
+    'MV Edge Aurora',
     'IMO9300001',
     '11111111-1111-1111-1111-111111111111'::uuid,
     timezone('UTC', now()) - interval '180 days',
@@ -50,7 +50,7 @@ VALUES
   (
     'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2'::uuid,
     'SHIP-EXT-002',
-    'MV Egde Borealis',
+    'MV Edge Borealis',
     'IMO9300002',
     '11111111-1111-1111-1111-111111111111'::uuid,
     timezone('UTC', now()) - interval '180 days',
