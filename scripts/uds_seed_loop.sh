@@ -69,7 +69,9 @@ while true; do
   metric_count="$(run_sql_scalar "SELECT COUNT(*) FROM metric_samples;")"
   alert_count="$(run_sql_scalar "SELECT COUNT(*) FROM alerts;")"
   latest_metric="$(run_sql_scalar "SELECT COALESCE(to_char(MAX(time) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), 'NULL') FROM metric_samples;")"
-  log "UDS seed complete: metric_samples=$metric_count alerts=$alert_count latest_metric=$latest_metric"
+  recent_alert_mix="$(run_sql_scalar "SELECT COALESCE(string_agg(alert_type || ':' || cnt, ', ' ORDER BY alert_type), 'none') FROM (SELECT alert_type, COUNT(*)::int AS cnt FROM alerts WHERE received_at >= NOW() - INTERVAL '1 hour' GROUP BY alert_type) t;")"
+  recent_connectivity_mix="$(run_sql_scalar "SELECT COALESCE(string_agg(metric_name || ':' || affected, ', ' ORDER BY metric_name), 'none') FROM (SELECT metric_name, COUNT(DISTINCT application_instance_id)::int AS affected FROM metric_samples WHERE time >= NOW() - INTERVAL '1 hour' AND metric_name IN ('reporting_stale', 'sync_delayed') AND value > 0 GROUP BY metric_name) t;")"
+  log "UDS seed complete: metric_samples=$metric_count alerts=$alert_count latest_metric=$latest_metric recent_alert_mix=$recent_alert_mix connectivity=$recent_connectivity_mix"
 
   sleep "$UDS_SEED_INTERVAL_SECONDS"
 done
