@@ -118,9 +118,16 @@ async def analyze_event_full(request: AnalyzeRequest, background_tasks: Backgrou
 
 
 @router.get("/analyze/{event_id}", response_model=AnalyzeResponse)
-async def analyze_event_get(event_id: int, force: bool = Query(default=False)):
-    """GET alias for Grafana data links. Uses quick analysis."""
-    return await analyze_event(AnalyzeRequest(event_id=event_id, force=force))
+async def analyze_event_get(
+    event_id: int,
+    background_tasks: BackgroundTasks,
+    force: bool = Query(default=False),
+):
+    """Legacy GET alias. Queue the full analysis path for consistency."""
+    return await analyze_event_full(
+        AnalyzeRequest(event_id=event_id, force=force),
+        background_tasks,
+    )
 
 
 @router.get("/analyses")
@@ -152,14 +159,48 @@ async def get_analysis_status(analysis_id: int):
 
 
 async def _run_analysis_background(event_id: int) -> None:
-    """Run a quick analysis in the background; guard against duplicate jobs."""
+    """Run a full analysis in the background; guard against duplicate jobs."""
     if event_id in IN_FLIGHT_ANALYSES:
         return
     IN_FLIGHT_ANALYSES.add(event_id)
+    analysis_id: int | None = None
     try:
-        await analyze_event(AnalyzeRequest(event_id=event_id, force=True))
+        latest = await _fetch_latest_analysis(
+            event_id,
+            analysis_mode="full",
+            statuses=("pending", "running"),
+        )
+        if latest is not None:
+            return
+
+        event = await _fetch_event_or_404(event_id)
+        analysis_id = await _create_pending_analysis_row(
+            event_id=event_id,
+            analysis_mode="full",
+            model_used=FULL_MODEL,
+        )
+        await _update_analysis_status(analysis_id, "running")
+        result = await run_analysis_pipeline(
+            dict(event),
+            model_name=FULL_MODEL,
+        )
+        await _update_analysis_result(analysis_id, result)
     except Exception as exc:
         print(f"[agent] Background analysis failed for event {event_id}: {exc}")
+        if analysis_id is not None:
+            error_text = str(exc).strip() or exc.__class__.__name__
+            await _update_analysis_result(
+                analysis_id,
+                AnalysisPipelineResult(
+                    analysis_text=f"Analysis failed: {error_text}",
+                    suggested_actions=_failure_actions(error_text),
+                    confidence=0.0,
+                    model_used=FULL_MODEL,
+                    status="failed",
+                    context_docs=[],
+                    tool_calls=[],
+                ),
+            )
     finally:
         IN_FLIGHT_ANALYSES.discard(event_id)
 
@@ -175,16 +216,31 @@ async def analyze_event_view(
     _ = event  # used for 404 check only
 
     refresh_started = False
-    refresh_in_progress = event_id in IN_FLIGHT_ANALYSES
+    active_full = await _fetch_latest_analysis(
+        event_id,
+        analysis_mode="full",
+        statuses=("pending", "running"),
+    )
+    refresh_in_progress = event_id in IN_FLIGHT_ANALYSES or active_full is not None
 
     if refresh and not refresh_in_progress:
         background_tasks.add_task(_run_analysis_background, event_id)
         refresh_started = True
         refresh_in_progress = True
 
-    latest = await _fetch_latest_analysis(event_id, analysis_mode="quick", statuses=("completed", "failed"))
+    latest = active_full
     if latest is None:
-        latest = await _fetch_latest_analysis(event_id, analysis_mode="full", statuses=("completed", "failed"))
+        latest = await _fetch_latest_analysis(
+            event_id,
+            analysis_mode="full",
+            statuses=("completed", "failed"),
+        )
+    if latest is None:
+        latest = await _fetch_latest_analysis(
+            event_id,
+            analysis_mode="quick",
+            statuses=("completed", "failed"),
+        )
 
     if latest is None:
         if not refresh_in_progress:
@@ -194,11 +250,11 @@ async def analyze_event_view(
         pending = AnalyzeResponse(
             id=0,
             event_id=event_id,
-            analysis_mode="quick",
+            analysis_mode="full",
             analysis_text="No analysis yet. A background analysis has started. Refresh this page in 30-60 seconds.",
             suggested_actions=[],
             confidence=0.0,
-            model_used=os.getenv("OLLAMA_MODEL", "llama3.2"),
+            model_used=FULL_MODEL,
             status="running",
         )
         details = await _get_event_details(event_id)

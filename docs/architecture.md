@@ -1,106 +1,144 @@
-# Architecture – Maritime Agentic Observability
+# Architecture - Maritime Agentic Observability
 
-## What this prototype does
+## Purpose
 
-Traditional maritime dashboards show raw sensor data.  Operators must
-manually decide what every blip means.  This prototype adds an **AI
-agent layer** on top: when an anomaly is detected the agent explains
-*why* it happened and *what to do* – the core idea behind
-**agentic observability**.
+This prototype now contains two related monitoring paths:
 
----
+1. The original ship telemetry path
+   - synthetic sensors
+   - anomaly events
+   - AI analysis on those events
+2. The Scope 1 UDS path
+   - application health per vessel
+   - UDS metrics and alerts
+   - dashboard and MCP access for one-vessel incident handling
 
-## Component diagram
+The Scope 1 goal is User Story 1:
 
+- one vessel
+- all hosted applications on that vessel
+- relevant operational context when something goes wrong
+
+## High-level component view
+
+```text
+generator ------------------------> telemetry / events ----------+
+                                                                  |
+                                                                  v
+                                                         ship_operations.json
+                                                                  |
+                                                                  v
+                                                           agent analyze flow
+                                                                  |
+                                                          +-------+-------+
+                                                          |               |
+                                                          v               v
+                                                      RAG context       MCP tools
+
+004_uds_reference_data.sql ---> UDS reference tables ----+
+                                                         |
+uds-seeder --------------------------------------------> metric_samples / alerts
+                                                         |
+                                                         v
+                                                 uds_monitoring.json
+                                                         |
+                                                         v
+                                                     MCP UDS tools
 ```
-┌────────────┐   writes    ┌───────────────┐   queries   ┌────────────┐
-│ Generator  │ ──────────> │  TimescaleDB  │ <────────── │  Grafana   │
-│ (synth data│             │  telemetry    │             │  dashboards│
-│  + events) │             │  events       │             │  (live)    │
-└────────────┘             │  ai_analyses  │             └─────┬──────┘
-                           └───────┬───────┘                   │
-                                   │  fetch event               │ operator clicks
-                                   ▼                            │ "Analyze/Acknowledge" links
-                           ┌───────────────┐                   │
-                           │  Agent        │ <─────────────────┘
-                           │  (FastAPI)    │
-                           └───┬───────┬───┘
-                               │       │
-                  tool-calling │       │ sends prompt + tools
-                  loop (async) │       ▼
-                               │  ┌──────────┐
-                               │  │  Ollama  │
-                               │  │  (LLM)   │
-                               │  └──────────┘
-                               │       │ calls tool →
-                               ▼       ▼
-                       ┌──────────┐  ┌──────────────┐
-                       │ RAG layer │  │  MCP Server  │
-                       │ (context)│  │  (port 8001) │
-                       └──────────┘  │  get_telemetry│
-                       (pgvector) │  get_events   │
-                                     │  get_analysis │
-                                     └──────────────┘
-```
 
-### Data flow – step by step
+## Main services
 
-1. **Generator** inserts a batch of synthetic telemetry every few seconds.
-2. If a sensor breaches a threshold the generator also inserts a row into `events`.
-3. **Grafana** polls the DB on its own refresh interval and renders live charts.
-4. An operator calls the analysis endpoint via `POST /api/v1/analyze` or
-   Grafana data links (`GET /api/v1/analyze/{event_id}`).
-5. **Agent** fetches the event, asks **RAG** for context docs, builds a prompt.
-6. The prompt is sent to **Ollama** (or the stub); the reply is stored in
-   `ai_analyses`. Repeated calls reuse the latest analysis by default unless
-   `force=true` is provided.
-7. Grafana picks up the new row and shows the analysis on the dashboard.
+| Service | Responsibility |
+|---------|----------------|
+| `timescaledb` | Stores legacy telemetry/events plus UDS tables |
+| `generator` | Produces legacy synthetic ship telemetry and anomaly events |
+| `uds-seeder` | Produces periodic UDS mock metrics and alerts |
+| `grafana` | Shows Ship Operations and UDS Monitoring dashboards |
+| `agent` | Runs AI analysis for legacy anomaly events |
+| `mcp` | Exposes both legacy and UDS database tools |
+| `ollama` | Local LLM inference for agent and embeddings |
 
----
+## Data model split
 
-## Services
+### Legacy path
 
-| Service       | Image / language | Responsibility                              |
-|---------------|------------------|---------------------------------------------|
-| timescaledb   | TimescaleDB 16   | Time-series storage (all three tables)      |
-| grafana       | Grafana 11       | Visualisation – 2 auto-provisioned dashboards |
-| agent         | Python / FastAPI | Orchestrates tool-calling loop → LLM → stores analysis |
-| generator     | Python (script)  | Writes synthetic data + anomaly events      |
-| mcp           | Python / FastAPI | REST adapter: exposes DB tools to the agent (port 8001) |
-| ollama        | Ollama           | Local LLM inference – llama3.2 or llama3.1  |
+Defined in:
 
----
+- `db/init/001_init.sql`
 
-## Dashboards
+Tables:
 
-| Dashboard        | Audience                        | Key panels                                    |
-|------------------|---------------------------------|-----------------------------------------------|
-| Ship Operations  | Kaptein / operativt personell   | Engine temp, oil pressure, RPM, events, AI    |
-| Data Quality     | Data-trust / overvåkning        | Records/min, events vs analyses, unacked list |
+- `telemetry`
+- `events`
+- `ai_analyses`
 
----
+Used by:
 
-## Status – what is done and what remains
+- `services/generator/`
+- `grafana/dashboards/ship_operations.json`
+- `services/agent/routes/analyze.py`
 
-| Component | Status | Notes / TODO                                              |
-|-----------|---------|------------------------------------------------------------|
-| MCP server | ✅ Running on port 8001 | REST adapter with 3 tools. Not the official MCP wire protocol — see `underveisNotater.md`. |
-| Ollama    | DONE | Tool-calling loop active in agent (`llama3.2` default model). |
-| RAG       | ✅ Done | 17 curated maritime knowledge files, 76 chunks in pgvector. Auto-ingests on startup when table is empty. Next: validate retrieval quality and tune `RAG_TOP_K` / `RAG_MIN_SIMILARITY`. |
-| Auth      | ⬜ None | Add JWT / role-based access before any production use     |
-| Anomaly detection | ✅ Rule-based in generator | Sufficient for prototype          |
+### UDS Scope 1 path
 
----
+Defined in:
 
-## Tech choices & rationale
+- `db/init/003_uds.sql`
+- `db/init/004_uds_reference_data.sql`
 
-* **TimescaleDB** – drop-in Postgres extension; great tooling ecosystem,
-  native hypertables for time-series compression and fast range scans.
-* **FastAPI** – async, Pydantic-first, fast to iterate.  Ideal for the
-  agent micro-service.
-* **Ollama** – runs locally, no cloud GPU needed for early demos.
-  Swappable for any OpenAI-compatible endpoint later.
-* **Docker Compose** – single command to spin everything up; no
-  cloud infra needed.
+Seeded by:
 
+- `db/seed/uds_seed.sql`
+- `scripts/uds_seed_loop.sh`
 
+Core tables:
+
+- `owners`
+- `udslocations`
+- `applications`
+- `uds_location_application_instances`
+- `metric_samples`
+- `alerts`
+- `uds_location_owner_history`
+- `monitoring_configs` as a compatibility shim
+
+Used by:
+
+- `grafana/dashboards/uds_monitoring.json`
+- `services/mcp/main.py`
+
+## Scope 1 architecture status
+
+What is structurally correct now:
+
+- Del A, B, C, and D all target the same UDS schema
+- vessel selection is based on `udslocations.imo_nr`
+- app health is based on `applications`, links, metrics, and alerts
+- seeded data now respects vessel-to-application links
+
+What is still incomplete against User Story 1:
+
+- the UDS dashboard is mostly latest-state oriented
+- historical metrics exist in DB and MCP, but are not yet surfaced well in Grafana
+- the UDS path does not currently model logs
+- incident context is therefore weaker than the written user story
+
+## Important design limitations
+
+### 1. Fresh DB bias
+
+The current prototype relies on init scripts for both schema and reference data.
+That means old local volumes can drift away from code expectations.
+
+### 2. Security shortcuts
+
+The project is still a local prototype:
+
+- event acknowledge still has a GET alias
+- MCP auth is optional if `MCP_API_KEY` is unset
+- demo credentials still exist in `.env.example`
+
+### 3. Narrow mock incident model
+
+The UDS seeding path currently focuses on a small set of health metrics and a
+single main alert type (`ServiceDown`). That is enough to demonstrate the flow,
+but not enough to cover the broader operational scenarios described by Geir.

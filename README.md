@@ -8,6 +8,7 @@ what happened and suggests corrective actions.
 
 > Active development — core pipeline is live (Ollama tool-calling, MCP, generator).
 > See [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md) for task distribution across the group.
+> See [`docs/SCOPE1_REVIEW_FINDINGS.md`](docs/SCOPE1_REVIEW_FINDINGS.md) for the current Scope 1 review baseline.
 
 ---
 
@@ -44,8 +45,13 @@ docker exec -it maritime_ollama ollama pull llama3.2           # LLM for analysi
 ```
 
 > **Note:** The default `OLLAMA_MODEL` in `.env.example` is `llama3.2`.
-> If your `.env` still has `llama3.2:1b`, change it to `llama3.2` — the `1b` tag does not exist
+> If your `.env` still has `llama3.2:1b`, change it to `llama3.2` - the `1b` tag does not exist
 > and will cause analysis to fail with a 404.
+
+> **Important for current Scope 1 work:** if you already have an older
+> `timescaledb_data` volume, reset it before testing the integrated UDS path.
+> The current prototype now depends on additional init scripts for UDS schema
+> and reference data, and old DB volumes may not match the code.
 
 ```bash
 # 4) Watch the generator to confirm data is flowing
@@ -56,7 +62,7 @@ docker compose logs -f generator
 ```bash
 # 5) Open Grafana in the browser
 #    URL   → http://localhost:3000
-#    Login → admin / admin   (or whatever is in your .env)
+#    Login → use GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD from your .env
 #    Dashboards live under the "Maritime" folder.
 ```
 
@@ -114,11 +120,14 @@ docker compose up --build
 ├── .env.example                ← environment variables template
 │
 ├── db/
-│   └── init/001_init.sql       ← schema (auto-runs on first DB start)
+│   ├── init/001_init.sql       ← legacy telemetry/events/ai_analyses schema
+│   ├── init/003_uds.sql        ← Scope 1 UDS schema
+│   ├── init/004_uds_reference_data.sql ← tracked UDS reference data
+│   └── seed/uds_seed.sql       ← periodic mock UDS metrics/alerts
 │
 ├── grafana/
 │   ├── provisioning/           ← datasource + dashboard auto-config
-│   └── dashboards/             ← JSON for "Ship Ops" + "Data Quality"
+│   └── dashboards/             ← JSON for "Ship Ops" + "UDS Monitoring"
 │
 ├── services/
 │   ├── agent/                  ← FastAPI AI-agent
@@ -139,7 +148,8 @@ docker compose up --build
 │   └── knowledge/             ← 17 curated maritime RAG knowledge files (Points 1–10)
 │
 └── scripts/
-    └── reset_db.sh             ← wipe + recreate the database
+    ├── reset_db.sh             ← wipe + recreate the database
+    └── uds_seed_loop.sh        ← periodic UDS seed runner
 ```
 
 ---
@@ -162,9 +172,10 @@ docker compose up --build
 |-----------|--------|-------|
 | **RAG** | ✅ Live | 17 curated maritime knowledge files, 76 chunks in pgvector. Auto-ingests on first startup. |
 | **LLM analysis** | ✅ Live | Ollama `llama3.2` with tool-calling loop. Analyses stored in `ai_analyses`. |
-| **Grafana dashboards** | IN_PROGRESS | Provisioned; Ship Ops + Data Quality panels live. Polish ongoing (Jonas). |
+| **UDS schema + seed path** | IN_PROGRESS | Scope 1 schema, reference data, and periodic UDS seeding are integrated, but require fresh DB validation. |
+| **Grafana dashboards** | IN_PROGRESS | Ship Operations and UDS Monitoring are provisioned. UDS Monitoring still needs stronger historical incident context for full User Story 1 coverage. |
 | **Auto-analysis** | ❌ Manual only | Events must be analysed via `POST /api/v1/analyze` or Grafana data link. No background worker yet. |
-| **Auth** | ❌ None | Add JWT before any real deployment. |
+| **Auth** | ❌ Prototype only | MCP has API-key support, but agent auth and production-safe endpoint protection are still missing. |
 
 Search the codebase for `TODO` to find every pre-marked task.
 

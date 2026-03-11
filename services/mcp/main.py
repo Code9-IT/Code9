@@ -25,9 +25,19 @@ load_dotenv()
 MCP_API_KEY = os.getenv("MCP_API_KEY", "").strip()
 
 
+def _cors_allow_origins() -> list[str]:
+    raw = os.getenv(
+        "CORS_ALLOW_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000",
+    )
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_pool()
+    if not MCP_API_KEY:
+        print("[mcp] WARNING: MCP_API_KEY is empty; MCP auth is effectively disabled.")
     yield
     await close_pool()
 
@@ -42,7 +52,7 @@ app = FastAPI(
 # Allow local dev + Grafana/agent access
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_allow_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -176,6 +186,7 @@ TOOLS = [
                         "id": {"type": "integer"},
                         "event_id": {"type": "integer"},
                         "timestamp": {"type": "string", "format": "date-time"},
+                        "analysis_mode": {"type": "string"},
                         "analysis_text": {"type": ["string", "null"]},
                         "suggested_actions": {
                             "type": ["array", "null"],
@@ -189,6 +200,7 @@ TOOLS = [
                         "id",
                         "event_id",
                         "timestamp",
+                        "analysis_mode",
                         "analysis_text",
                         "suggested_actions",
                         "confidence",
@@ -532,11 +544,12 @@ async def _run_get_analysis(args: GetAnalysisArgs) -> dict[str, Any]:
     pool = get_pool()
     row = await pool.fetchrow(
         """
-        SELECT id, event_id, timestamp, analysis_text, suggested_actions,
+        SELECT id, event_id, timestamp, analysis_mode, analysis_text, suggested_actions,
                confidence, model_used, status
         FROM ai_analyses
         WHERE event_id = $1
-        ORDER BY timestamp DESC
+        ORDER BY CASE WHEN COALESCE(analysis_mode, 'full') = 'full' THEN 0 ELSE 1 END,
+                 timestamp DESC
         LIMIT 1;
         """,
         args.event_id,
@@ -549,6 +562,7 @@ async def _run_get_analysis(args: GetAnalysisArgs) -> dict[str, Any]:
         "id": row["id"],
         "event_id": row["event_id"],
         "timestamp": row["timestamp"].isoformat(),
+        "analysis_mode": row["analysis_mode"] or "full",
         "analysis_text": row["analysis_text"],
         "suggested_actions": row["suggested_actions"],
         "confidence": row["confidence"],
