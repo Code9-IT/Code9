@@ -1,152 +1,154 @@
 # Scope 1 Handoff Notes
 
-This document is meant as a short AI-readable handoff for Del A and Del B work.
-Use it together with the main project intro and Scope 1 task split.
+This file is the short handoff for the current integrated Scope 1 state.
+It replaces the older "Del A / Del B only" version of this document.
+For the deeper review and remaining findings, also read
+`docs/SCOPE1_REVIEW_FINDINGS.md`.
 
-## Recommended base branch
+## Recommended working branch
 
 Use:
 
-- `origin/feat/scope1-del-d-integration`
+- `feat/scope1-del-a-b-integration`
 
-Do not use these as your working base for Del A / Del B:
+Do not use these as your current working base:
 
 - `origin/nidal-updates`
 - `origin/feat/scope1-merged`
+- `origin/feat/scope1-del-d-integration`
 
 Reason:
 
-- `origin/nidal-updates` is too old and was based on an outdated dashboard direction.
-- `origin/feat/scope1-del-d-integration` already ports Del D onto the newer Scope 1 base.
+- `feat/scope1-del-a-b-integration` is the first branch where Del A, Del B, Del C, and Del D point in the same UDS direction.
+- Older branches represent partial integration stages.
 
-## What is already integrated on this branch
+## What is already integrated
 
-These parts are already present in `feat/scope1-del-d-integration`:
+The current integrated branch contains:
 
-- New Del D dashboard:
-  `grafana/dashboards/uds_monitoring.json`
-- Supporting dashboard docs:
-  `docs/UDS_dashboard_spec.md`
-- Supporting SQL reference:
-  `grafana/queries/uds_queries.sql`
-- Old `grafana/dashboards/data_quality.json` removed
-- `grafana/dashboards/ship_operations.json` corrected so active alarms again show latest alarms first
+- Del A:
+  - `db/init/003_uds.sql`
+- Del A support data:
+  - `db/init/004_uds_reference_data.sql`
+- Del B:
+  - `db/seed/uds_seed.sql`
+  - `scripts/uds_seed_loop.sh`
+  - `uds-seeder` service in `docker-compose.yml`
+- Del C:
+  - UDS MCP tools in `services/mcp/main.py`
+  - API key support for MCP
+- Del D:
+  - `grafana/dashboards/uds_monitoring.json`
+  - `grafana/queries/uds_queries.sql`
+  - `docs/UDS_dashboard_spec.md`
 
-## Important known issues on this branch
+Also already integrated:
 
-These are known inherited issues from `feat/scope1-merged`.
-They are not blockers for Del A / Del B today, but the AI should know about them.
+- `data_quality.json` has been removed
+- `ship_operations.json` was corrected back to latest active alarms ordering
+- the Grafana analysis flow now prefers the full analysis path
 
-### 1. Quick vs full analysis issue
+## Current Scope 1 status
 
-The current analysis flow still has a split between `quick` and `full` analysis in:
+The project is now technically aligned around the UDS schema, but Scope 1 is
+not fully closed against User Story 1 yet.
 
-- `services/agent/routes/analyze.py`
+What already works conceptually:
 
-Current risk:
+- one-vessel UDS schema
+- reference vessels and applications
+- periodic mock seeding into `metric_samples` and `alerts`
+- UDS dashboard for one selected vessel
+- MCP tools for app status, alerts, and metric history
 
-- Grafana links currently go through `/view?refresh=true`
-- That flow can end up using the quick path instead of the full tool-enabled path
+What is still missing or weaker than the user story expects:
 
-This is **not** part of Del A or Del B, but it is a known integration issue.
+- the dashboard does not yet show strong historical metric drilldown
+- the UDS path does not model logs, only metrics and alerts
+- seeded scenarios are still narrow
+- full end-to-end validation still requires a fresh DB volume
 
-### 2. `analysis_mode` migration issue
+## Known issues that still matter
 
-The code now uses `analysis_mode`, and `db/init/001_init.sql` includes it, but there is no proper migration for already-existing databases.
+### 1. Existing DB volumes may be out of date
 
-Current risk:
+The current setup relies on init scripts:
 
-- If someone already has an older TimescaleDB volume, the running DB may not match the current schema
-- Code may fail unless the DB is reset or manually migrated
+- `db/init/001_init.sql`
+- `db/init/003_uds.sql`
+- `db/init/004_uds_reference_data.sql`
 
-This matters especially if testing against an existing local DB volume.
+If a developer already has an older TimescaleDB volume, the DB may not match the
+current code and dashboard assumptions.
 
-## Important note about Geir files
+Practical consequence:
 
-`databasecodeFraGeir/` is still local/untracked in this repo state.
+- use a fresh DB volume for serious Scope 1 testing
+- otherwise apply manual migrations
 
-That means:
+### 2. `analysis_mode` still has migration risk
 
-- These files may not exist in every clone automatically
-- Jonas and Kristian must make sure they have them locally or from Discord
+The code expects `analysis_mode` in `ai_analyses`, and `001_init.sql` contains
+it now, but older local databases may still be missing that column.
 
-Required Geir files:
+This is not a Del A / Del B problem anymore. It is an integration hygiene
+problem for existing local environments.
 
-- `databasecodeFraGeir/logging_db_dbml.txt`
-- `databasecodeFraGeir/db_init_script (1).txt`
-- `databasecodeFraGeir/db_seeding_script.txt`
+### 3. Event acknowledge is still too open
 
-## Notes for Del A (Database)
+The agent still exposes:
 
-If you are doing Del A, be aware of the following:
+- `POST /api/v1/events/{event_id}/acknowledge`
+- `GET /api/v1/events/{event_id}/acknowledge`
 
-- Build the UDS schema in a **new** file:
-  `db/init/003_uds.sql`
-- Do **not** replace the old telemetry/events schema in `db/init/001_init.sql`
-- Keep the existing prototype pipeline intact
-- The Del D dashboard expects these UDS tables to exist exactly:
-  - `udslocations`
-  - `applications`
-  - `uds_location_application_instances`
-  - `metric_samples`
-  - `alerts`
-- The dashboard and MCP queries assume vessel selection by `imo_nr`
-- `metric_samples` should support latest-per-app-per-metric queries
-- `metric_samples.time` should be the hypertable time column
+This is convenient for Grafana demos, but not good API design and not something
+to carry forward without auth.
 
-### Del A mismatch to watch
+### 4. MCP auth is only enforced if `MCP_API_KEY` is set
 
-Geir's init script references `monitoring_configs`, but that table is not in the DBML.
+If `MCP_API_KEY` is empty, the MCP API effectively runs without auth.
 
-AI should not ignore this.
-It must make an explicit decision:
+That is acceptable for a local prototype, but it should be treated as a known
+security shortcut, not as a finished design.
 
-- either add a minimal `monitoring_configs` table
-- or remove/adapt that part of the init flow deliberately
+## Geir files vs tracked repo files
 
-## Notes for Del B (Seeding)
+`databasecodeFraGeir/` is still local and untracked in this repo.
 
-If you are doing Del B, be aware of the following:
+That matters less than before, because the important Scope 1 equivalents are now
+tracked in the repository:
 
-- Work from the exact schema Del A creates
-- Do not assume table/column names without checking Del A first
-- The seeding goal is to fill:
-  - `metric_samples`
-  - `alerts`
-- The intended cadence is every 30 minutes
-- The Del D dashboard is built around Geir's UDS metrics, not the old ship sensor telemetry schema
-- Del B will likely need changes in:
-  - `docker-compose.yml`
-  - seeding setup / script execution flow
+- schema: `db/init/003_uds.sql`
+- reference data: `db/init/004_uds_reference_data.sql`
+- seeding: `db/seed/uds_seed.sql`
 
-### Del B integration watch-outs
+The local Geir files are still useful as source material and comparison input,
+but the prototype no longer depends on them being present in every clone in
+order to run.
 
-- Avoid conflicting edits in `docker-compose.yml`
-- Confirm the seeded vessel IDs match `imo_nr` values expected by the dashboard
-- Confirm app identifiers map consistently across:
-  - `applications.external_id`
-  - `metric_samples.app_id`
-  - `metric_samples.application_instance_id`
-  - `alerts.application_id`
+## What to do before claiming Scope 1 works
 
-## Shared advice for Del A and Del B
+1. Start from a fresh DB volume.
+2. Bring the stack up and confirm:
+   - UDS tables exist
+   - reference vessels and apps exist
+   - `uds-seeder` starts inserting rows
+3. Verify Grafana:
+   - vessel selector is populated
+   - UDS panels show data
+   - alerts table is populated
+4. Verify MCP:
+   - `get_vessel_app_status`
+   - `get_vessel_alerts`
+   - `get_app_metric_history`
+5. Review the remaining gap against User Story 1:
+   - historical metrics visibility
+   - logs or log-like context
+   - action-oriented incident context
 
-- Branch from `feat/scope1-del-d-integration`
-- Keep PRs/commits focused
-- Do not reintroduce `data_quality.json`
-- Do not branch from `origin/nidal-updates`
-- Do not assume old dashboards or old telemetry schema are the Scope 1 target
-- Scope 1 target is Geir's User Story 1 UDS flow
+## Definition of "good enough for now"
 
-## Definition of “good enough for now”
+The current branch is good enough for integration work and end-to-end testing
+because the four Scope 1 parts are finally aligned.
 
-For today, this branch is considered good enough as the working base for Del A and Del B because:
-
-- Del D is already ported onto it
-- The old wrong dashboard direction has been removed
-- The remaining known problems are outside Del A / Del B scope
-
-But before final integration/demo, the team should still revisit:
-
-- quick vs full analysis behavior
-- `analysis_mode` database migration / DB reset strategy
+It is not yet good enough to claim that User Story 1 is fully solved.

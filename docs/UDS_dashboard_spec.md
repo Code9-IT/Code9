@@ -8,6 +8,12 @@ Replace the old `data_quality.json` dashboard with a land-operations view for
 User Story 1: one vessel, six UDS applications, latest health metrics, and
 active alerts from Geir's UDS schema.
 
+Current reality:
+
+- the dashboard is good at latest-state visibility
+- it is not yet strong enough on historical metrics and logs to claim that
+  User Story 1 is fully closed
+
 ## Data sources
 - `udslocations`
 - `applications`
@@ -19,6 +25,12 @@ The dashboard is designed for the schema described in:
 - `databasecodeFraGeir/logging_db_dbml.txt`
 - `databasecodeFraGeir/db_init_script (1).txt`
 - `databasecodeFraGeir/db_seeding_script.txt`
+
+The tracked repo implementation now lives in:
+
+- `db/init/003_uds.sql`
+- `db/init/004_uds_reference_data.sql`
+- `db/seed/uds_seed.sql`
 
 ## Provisioning
 Grafana already auto-loads every JSON file in `grafana/dashboards/`, so no
@@ -63,3 +75,5 @@ extra provisioning changes are required.
   dashboard direction for the updated scope.
 - This dashboard assumes Scope 1 database work adds the UDS schema and that the
   seeding flow populates `metric_samples` and `alerts`.
+- The main known gap is historical incident context. The DB and MCP can support
+  metric history, but the dashboard still needs better drilldown views.

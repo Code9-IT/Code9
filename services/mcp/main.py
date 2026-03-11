@@ -36,6 +36,8 @@ def _cors_allow_origins() -> list[str]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_pool()
+    if not MCP_API_KEY:
+        print("[mcp] WARNING: MCP_API_KEY is empty; MCP auth is effectively disabled.")
     yield
     await close_pool()
 
