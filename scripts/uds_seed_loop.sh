@@ -1,0 +1,75 @@
+#!/bin/sh
+set -eu
+
+DB_HOST="${DB_HOST:-timescaledb}"
+DB_PORT="${DB_PORT:-5432}"
+DB_USER="${DB_USER:-postgres}"
+DB_PASSWORD="${DB_PASSWORD:-postgres}"
+DB_NAME="${DB_NAME:-maritime_telemetry}"
+UDS_SEED_FILE="${UDS_SEED_FILE:-/seed/uds_seed.sql}"
+UDS_SEED_INTERVAL_SECONDS="${UDS_SEED_INTERVAL_SECONDS:-1800}"
+UDS_SCHEMA_RETRY_SECONDS="${UDS_SCHEMA_RETRY_SECONDS:-30}"
+
+export PGPASSWORD="$DB_PASSWORD"
+
+log() {
+  printf '%s %s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" "$*"
+}
+
+run_sql_scalar() {
+  psql \
+    -h "$DB_HOST" \
+    -p "$DB_PORT" \
+    -U "$DB_USER" \
+    -d "$DB_NAME" \
+    -tAc "$1"
+}
+
+schema_ready() {
+  [ "$(run_sql_scalar "SELECT CASE WHEN to_regclass('public.udslocations') IS NOT NULL AND to_regclass('public.applications') IS NOT NULL AND to_regclass('public.metric_samples') IS NOT NULL AND to_regclass('public.alerts') IS NOT NULL THEN 1 ELSE 0 END;")" = "1" ]
+}
+
+reference_data_ready() {
+  [ "$(run_sql_scalar "SELECT CASE WHEN (SELECT COUNT(*) FROM udslocations WHERE imo_nr IN ('IMO9300001','IMO9300002','IMO9300003')) >= 3 AND (SELECT COUNT(*) FROM applications WHERE external_id IN ('time-series-processor','data-quality-processor','uds-topic-handler-edge','uds-edge-data-api','uds-edge-ingest-source-admin','uds-edge-parquet-sync')) >= 6 AND (SELECT COUNT(*) FROM uds_location_application_instances uai JOIN udslocations u ON u.id = uai.uds_location_id JOIN applications a ON a.id = uai.application_instance_id WHERE u.imo_nr IN ('IMO9300001','IMO9300002','IMO9300003') AND a.external_id IN ('time-series-processor','data-quality-processor','uds-topic-handler-edge','uds-edge-data-api','uds-edge-ingest-source-admin','uds-edge-parquet-sync')) >= 18 THEN 1 ELSE 0 END;")" = "1" ]
+}
+
+if [ ! -f "$UDS_SEED_FILE" ]; then
+  log "UDS seed file not found: $UDS_SEED_FILE"
+  exit 1
+fi
+
+log "Waiting for PostgreSQL at $DB_HOST:$DB_PORT/$DB_NAME"
+until pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; do
+  sleep 2
+done
+log "PostgreSQL is reachable"
+
+while true; do
+  if ! schema_ready; then
+    log "UDS schema is not ready yet; waiting for Del A tables"
+    sleep "$UDS_SCHEMA_RETRY_SECONDS"
+    continue
+  fi
+
+  if ! reference_data_ready; then
+    log "UDS reference data is not ready yet; waiting for vessels/apps/app-links"
+    sleep "$UDS_SCHEMA_RETRY_SECONDS"
+    continue
+  fi
+
+  log "Running UDS seed: $UDS_SEED_FILE"
+  psql \
+    -h "$DB_HOST" \
+    -p "$DB_PORT" \
+    -U "$DB_USER" \
+    -d "$DB_NAME" \
+    -v ON_ERROR_STOP=1 \
+    -f "$UDS_SEED_FILE"
+
+  metric_count="$(run_sql_scalar "SELECT COUNT(*) FROM metric_samples;")"
+  alert_count="$(run_sql_scalar "SELECT COUNT(*) FROM alerts;")"
+  latest_metric="$(run_sql_scalar "SELECT COALESCE(to_char(MAX(time) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), 'NULL') FROM metric_samples;")"
+  log "UDS seed complete: metric_samples=$metric_count alerts=$alert_count latest_metric=$latest_metric"
+
+  sleep "$UDS_SEED_INTERVAL_SECONDS"
+done

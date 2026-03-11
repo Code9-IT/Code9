@@ -1,0 +1,644 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "UDS application monitoring for one vessel. Scope 1 replacement for the old data quality dashboard.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "title": "Vessel Overview",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id WHERE u.imo_nr = '$vessel' AND COALESCE(LOWER(al.status), 'firing') NOT IN ('resolved', 'closed', 'completed', 'cleared') AND (al.ends_at IS NULL OR al.ends_at > NOW())",
+          "refId": "A"
+        }
+      ],
+      "title": "Active Alerts",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "WITH latest_metrics AS ( SELECT DISTINCT ON (ms.application_instance_id, ms.metric_name) ms.application_instance_id, ms.metric_name, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' ORDER BY ms.application_instance_id, ms.metric_name, ms.time DESC ), active_alerts AS ( SELECT al.application_id, COUNT(*)::int AS active_alert_count FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id WHERE u.imo_nr = '$vessel' AND COALESCE(LOWER(al.status), 'firing') NOT IN ('resolved', 'closed', 'completed', 'cleared') AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY al.application_id ), app_health AS ( SELECT a.id FROM applications a JOIN uds_location_application_instances uai ON uai.application_instance_id = a.id JOIN udslocations u ON u.id = uai.uds_location_id LEFT JOIN latest_metrics lm ON lm.application_instance_id = a.id LEFT JOIN active_alerts aa ON aa.application_id = a.id WHERE u.imo_nr = '$vessel' GROUP BY a.id, aa.active_alert_count HAVING COALESCE(MAX(CASE WHEN lm.metric_name = 'service_up' THEN lm.value END), 1) <= 0 OR COALESCE(MAX(CASE WHEN lm.metric_name = 'health_check_status' THEN lm.value END), 1) <= 0 OR COALESCE(aa.active_alert_count, 0) > 0 ) SELECT COUNT(*) AS value FROM app_health",
+          "refId": "A"
+        }
+      ],
+      "title": "Apps With Issues",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 6
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT COUNT(DISTINCT application_instance_id) AS value FROM metric_samples WHERE imo_nr = '$vessel' AND time >= NOW() - INTERVAL '35 minutes'",
+          "refId": "A"
+        }
+      ],
+      "title": "Apps Reporting (35m)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 900
+              },
+              {
+                "color": "red",
+                "value": 2100
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM (NOW() - MAX(time))) AS value FROM metric_samples WHERE imo_nr = '$vessel'",
+          "refId": "A"
+        }
+      ],
+      "title": "Latest Metric Age",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "healthy": {
+                        "color": "green",
+                        "text": "healthy"
+                      },
+                      "degraded": {
+                        "color": "yellow",
+                        "text": "degraded"
+                      },
+                      "down": {
+                        "color": "red",
+                        "text": "down"
+                      },
+                      "unknown": {
+                        "color": "gray",
+                        "text": "unknown"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 5,
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Active Alerts"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "WITH selected_vessel AS ( SELECT id FROM udslocations WHERE imo_nr = '$vessel' ), latest_metrics AS ( SELECT DISTINCT ON (ms.application_instance_id, ms.metric_name) ms.application_instance_id, ms.metric_name, ms.time, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' ORDER BY ms.application_instance_id, ms.metric_name, ms.time DESC ), active_alerts AS ( SELECT al.application_id, COUNT(*)::int AS active_alert_count FROM alerts al JOIN selected_vessel sv ON sv.id = al.uds_location_id WHERE COALESCE(LOWER(al.status), 'firing') NOT IN ('resolved', 'closed', 'completed', 'cleared') AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY al.application_id ) SELECT a.name AS \"Application\", a.external_id AS \"App ID\", CASE WHEN COALESCE(MAX(CASE WHEN lm.metric_name = 'service_up' THEN lm.value END), 1) <= 0 OR COALESCE(MAX(CASE WHEN lm.metric_name = 'health_check_status' THEN lm.value END), 1) <= 0 THEN 'down' WHEN COALESCE(aa.active_alert_count, 0) > 0 THEN 'degraded' WHEN MAX(lm.time) IS NULL THEN 'unknown' ELSE 'healthy' END AS \"Status\", COALESCE(aa.active_alert_count, 0) AS \"Active Alerts\", ROUND(MAX(CASE WHEN lm.metric_name = 'process_cpu_usage' THEN lm.value END)::numeric, 2) AS \"CPU %\", ROUND(MAX(CASE WHEN lm.metric_name = 'process_memory_bytes' THEN lm.value END)::numeric, 0) AS \"Memory Bytes\", ROUND(MAX(CASE WHEN lm.metric_name = 'http_error_rate_5xx' THEN lm.value END)::numeric, 2) AS \"5xx %\", ROUND(MAX(CASE WHEN lm.metric_name = 'db_query_errors' THEN lm.value END)::numeric, 2) AS \"DB Errors\", MAX(lm.time) AS \"Latest Sample\" FROM selected_vessel sv JOIN uds_location_application_instances uai ON uai.uds_location_id = sv.id JOIN applications a ON a.id = uai.application_instance_id LEFT JOIN latest_metrics lm ON lm.application_instance_id = a.id LEFT JOIN active_alerts aa ON aa.application_id = a.id GROUP BY a.id, a.name, a.external_id, aa.active_alert_count ORDER BY a.name",
+          "refId": "A"
+        }
+      ],
+      "title": "Application Status Summary",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 200,
+      "title": "Availability",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 17
+      },
+      "id": 6,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "WITH latest_metrics AS ( SELECT DISTINCT ON (ms.application_instance_id, ms.metric_name) ms.application_instance_id, ms.metric_name, ms.value, ms.time FROM metric_samples ms WHERE ms.imo_nr = '$vessel' ORDER BY ms.application_instance_id, ms.metric_name, ms.time DESC ) SELECT a.name AS \"Application\", ROUND(MAX(CASE WHEN lm.metric_name = 'service_up' THEN lm.value END)::numeric, 2) AS \"service_up\", ROUND(MAX(CASE WHEN lm.metric_name = 'health_check_status' THEN lm.value END)::numeric, 2) AS \"health_check_status\", ROUND(MAX(CASE WHEN lm.metric_name = 'process_uptime_seconds' THEN lm.value END)::numeric, 2) AS \"process_uptime_seconds\", MAX(lm.time) AS \"Latest Sample\" FROM applications a JOIN uds_location_application_instances uai ON uai.application_instance_id = a.id JOIN udslocations u ON u.id = uai.uds_location_id LEFT JOIN latest_metrics lm ON lm.application_instance_id = a.id WHERE u.imo_nr = '$vessel' GROUP BY a.id, a.name ORDER BY a.name",
+          "refId": "A"
+        }
+      ],
+      "title": "Availability Metrics",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "id": 300,
+      "title": "Resources",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 26
+      },
+      "id": 7,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "WITH latest_metrics AS ( SELECT DISTINCT ON (ms.application_instance_id, ms.metric_name) ms.application_instance_id, ms.metric_name, ms.value, ms.time FROM metric_samples ms WHERE ms.imo_nr = '$vessel' ORDER BY ms.application_instance_id, ms.metric_name, ms.time DESC ) SELECT a.name AS \"Application\", ROUND(MAX(CASE WHEN lm.metric_name = 'process_cpu_usage' THEN lm.value END)::numeric, 2) AS \"process_cpu_usage\", ROUND(MAX(CASE WHEN lm.metric_name = 'process_memory_bytes' THEN lm.value END)::numeric, 0) AS \"process_memory_bytes\", ROUND(MAX(CASE WHEN lm.metric_name = 'process_open_handles' THEN lm.value END)::numeric, 0) AS \"process_open_handles\", MAX(lm.time) AS \"Latest Sample\" FROM applications a JOIN uds_location_application_instances uai ON uai.application_instance_id = a.id JOIN udslocations u ON u.id = uai.uds_location_id LEFT JOIN latest_metrics lm ON lm.application_instance_id = a.id WHERE u.imo_nr = '$vessel' GROUP BY a.id, a.name ORDER BY a.name",
+          "refId": "A"
+        }
+      ],
+      "title": "Resource Metrics",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 34
+      },
+      "id": 400,
+      "title": "HTTP And Exceptions",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 35
+      },
+      "id": 8,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "WITH latest_metrics AS ( SELECT DISTINCT ON (ms.application_instance_id, ms.metric_name) ms.application_instance_id, ms.metric_name, ms.value, ms.time FROM metric_samples ms WHERE ms.imo_nr = '$vessel' ORDER BY ms.application_instance_id, ms.metric_name, ms.time DESC ) SELECT a.name AS \"Application\", ROUND(MAX(CASE WHEN lm.metric_name = 'http_request_duration_p95' THEN lm.value END)::numeric, 4) AS \"http_request_duration_p95\", ROUND(MAX(CASE WHEN lm.metric_name = 'http_error_rate_5xx' THEN lm.value END)::numeric, 2) AS \"http_error_rate_5xx\", ROUND(MAX(CASE WHEN lm.metric_name = 'http_error_rate_4xx' THEN lm.value END)::numeric, 2) AS \"http_error_rate_4xx\", ROUND(MAX(CASE WHEN lm.metric_name = 'dotnet_exceptions_rate' THEN lm.value END)::numeric, 2) AS \"dotnet_exceptions_rate\", MAX(lm.time) AS \"Latest Sample\" FROM applications a JOIN uds_location_application_instances uai ON uai.application_instance_id = a.id JOIN udslocations u ON u.id = uai.uds_location_id LEFT JOIN latest_metrics lm ON lm.application_instance_id = a.id WHERE u.imo_nr = '$vessel' GROUP BY a.id, a.name ORDER BY a.name",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP And Exception Metrics",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 43
+      },
+      "id": 500,
+      "title": "Database",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 44
+      },
+      "id": 9,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "WITH latest_metrics AS ( SELECT DISTINCT ON (ms.application_instance_id, ms.metric_name) ms.application_instance_id, ms.metric_name, ms.value, ms.time FROM metric_samples ms WHERE ms.imo_nr = '$vessel' ORDER BY ms.application_instance_id, ms.metric_name, ms.time DESC ) SELECT a.name AS \"Application\", ROUND(MAX(CASE WHEN lm.metric_name = 'db_query_duration_avg' THEN lm.value END)::numeric, 4) AS \"db_query_duration_avg\", ROUND(MAX(CASE WHEN lm.metric_name = 'db_query_duration_p95' THEN lm.value END)::numeric, 4) AS \"db_query_duration_p95\", ROUND(MAX(CASE WHEN lm.metric_name = 'db_query_rate' THEN lm.value END)::numeric, 2) AS \"db_query_rate\", ROUND(MAX(CASE WHEN lm.metric_name = 'db_query_errors' THEN lm.value END)::numeric, 2) AS \"db_query_errors\", ROUND(MAX(CASE WHEN lm.metric_name = 'db_deadlocks' THEN lm.value END)::numeric, 2) AS \"db_deadlocks\", MAX(lm.time) AS \"Latest Sample\" FROM applications a JOIN uds_location_application_instances uai ON uai.application_instance_id = a.id JOIN udslocations u ON u.id = uai.uds_location_id LEFT JOIN latest_metrics lm ON lm.application_instance_id = a.id WHERE u.imo_nr = '$vessel' GROUP BY a.id, a.name ORDER BY a.name",
+          "refId": "A"
+        }
+      ],
+      "title": "Database Metrics",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "id": 600,
+      "title": "Active Alerts",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "text": "critical"
+                      },
+                      "warning": {
+                        "color": "yellow",
+                        "text": "warning"
+                      },
+                      "info": {
+                        "color": "green",
+                        "text": "info"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 53
+      },
+      "id": 10,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT a.name AS \"Application\", al.alert_name AS \"Alert\", al.severity AS \"Severity\", al.status AS \"Status\", al.alert_type AS \"Type\", al.received_at AS \"Received\", al.starts_at AS \"Started\", al.ends_at AS \"Ends\", al.annotations AS \"Annotations\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id LEFT JOIN applications a ON a.id = al.application_id WHERE u.imo_nr = '$vessel' AND COALESCE(LOWER(al.status), 'firing') NOT IN ('resolved', 'closed', 'completed', 'cleared') AND (al.ends_at IS NULL OR al.ends_at > NOW()) ORDER BY al.received_at DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Active Alerts Table",
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "maritime",
+    "uds",
+    "monitoring"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "MV Edge Aurora (IMO9300001)",
+          "value": "IMO9300001"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "timescaledb"
+        },
+        "definition": "SELECT imo_nr AS __value, name || ' (' || imo_nr || ')' AS __text FROM udslocations WHERE imo_nr IS NOT NULL ORDER BY name",
+        "description": "Select one vessel by IMO number",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Vessel",
+        "multi": false,
+        "name": "vessel",
+        "options": [],
+        "query": "SELECT imo_nr AS __value, name || ' (' || imo_nr || ')' AS __text FROM udslocations WHERE imo_nr IS NOT NULL ORDER BY name",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "UDS Application Monitoring",
+  "uid": "maritime_uds_monitoring",
+  "version": 1
+}
