@@ -41,14 +41,18 @@ Last updated: 2026-03-11
 
 ### 3. Broaden incident scenarios in mock data
 
-- Status: OPEN
+- Status: IN_PROGRESS
 - Why it matters:
   - Current UDS seeding is dominated by `ServiceDown` incidents.
   - This is too narrow for meaningful incident-review testing.
+- Current direction:
+  - Scope 1 seeding now targets `healthy`, `degraded`, `down`, `stale`, and
+    `delayed` states.
+  - Connectivity-style metrics such as `last_sync_age_seconds`,
+    `reporting_stale`, and `sync_delayed` are part of the seeded UDS contract.
 - Suggested follow-up:
-  - add degraded-but-not-down scenarios
-  - add warning-level alerts
-  - add freshness / connectivity-like failures
+  - verify the seeded mix is visible enough in Grafana after Student 1 updates
+  - tune scenario probabilities if the demo becomes too noisy or too empty
 
 ## P1 - Important security and API hardening
 
@@ -132,13 +136,16 @@ Last updated: 2026-03-11
 
 ### 11. Model connectivity constraints more directly
 
-- Status: OPEN
+- Status: IN_PROGRESS
 - Why it matters:
   - Geir's scope explicitly mentions maritime connectivity constraints
-  - current mock data does not yet simulate delayed sync or multi-day gaps
+  - the prototype still needs stronger connectivity realism beyond basic delayed/stale states
+- Current direction:
+  - Scope 1 seeding now introduces delayed/stale reporting states and explicit
+    connectivity/freshness metrics.
 - Future direction:
-  - add delayed/missing sync patterns in UDS seeding
-  - expose freshness and sync behavior in dashboard panels
+  - expose freshness and sync behavior clearly in dashboard panels
+  - consider stronger missing-window patterns if Student 1 needs more visible demo cases
 
 ## P3 - Later work after User Story 1
 
