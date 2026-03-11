@@ -174,6 +174,150 @@ CREATE INDEX IF NOT EXISTS idx_alerts_severity_status_received_at
     ON alerts (severity, status, received_at DESC);
 
 -- -------------------------------------------------------------
+-- Logs / incident context
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS app_logs (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    uds_location_id  UUID         NOT NULL REFERENCES udslocations(id) ON DELETE CASCADE,
+    application_id   UUID REFERENCES applications(id) ON DELETE SET NULL,
+    app_external_id  VARCHAR(255),
+    level            VARCHAR(50)  NOT NULL,
+    source           VARCHAR(100) NOT NULL,
+    message          TEXT         NOT NULL,
+    logged_at        TIMESTAMPTZ  NOT NULL DEFAULT timezone('UTC', now()),
+    alert_id         UUID UNIQUE REFERENCES alerts(id) ON DELETE SET NULL,
+    correlation_key  VARCHAR(255),
+    context          JSONB        NOT NULL DEFAULT '{}'::jsonb,
+    created_at       TIMESTAMPTZ  NOT NULL DEFAULT timezone('UTC', now()),
+    CONSTRAINT chk_app_logs_level
+        CHECK (LOWER(level) IN ('debug', 'info', 'warning', 'error', 'critical'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_logs_uds_location_logged_at
+    ON app_logs (uds_location_id, logged_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_app_logs_application_logged_at
+    ON app_logs (application_id, logged_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_app_logs_app_external_id_logged_at
+    ON app_logs (app_external_id, logged_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_app_logs_level
+    ON app_logs (level);
+
+CREATE INDEX IF NOT EXISTS idx_app_logs_source
+    ON app_logs (source);
+
+CREATE INDEX IF NOT EXISTS idx_app_logs_correlation_key
+    ON app_logs (correlation_key);
+
+CREATE OR REPLACE FUNCTION sync_app_log_from_alert()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO app_logs (
+        uds_location_id,
+        application_id,
+        app_external_id,
+        level,
+        source,
+        message,
+        logged_at,
+        alert_id,
+        correlation_key,
+        context
+    )
+    VALUES (
+        NEW.uds_location_id,
+        NEW.application_id,
+        NULLIF(COALESCE(NEW.labels ->> 'app_id', ''), ''),
+        CASE LOWER(COALESCE(NEW.severity, 'warning'))
+            WHEN 'critical' THEN 'error'
+            WHEN 'high' THEN 'error'
+            WHEN 'warning' THEN 'warning'
+            WHEN 'info' THEN 'info'
+            WHEN 'debug' THEN 'debug'
+            ELSE 'warning'
+        END,
+        'alerts',
+        COALESCE(
+            NULLIF(NEW.annotations ->> 'summary', ''),
+            NEW.alert_name || ' alert raised'
+        ),
+        COALESCE(NEW.received_at, NEW.starts_at, timezone('UTC', now())),
+        NEW.id,
+        NEW.fingerprint,
+        jsonb_build_object(
+            'alert_name', NEW.alert_name,
+            'alert_type', NEW.alert_type,
+            'status', COALESCE(NEW.status, 'unknown'),
+            'severity', COALESCE(NEW.severity, 'unknown'),
+            'starts_at', NEW.starts_at,
+            'ends_at', NEW.ends_at,
+            'received_at', NEW.received_at,
+            'labels', COALESCE(NEW.labels, '{}'::jsonb),
+            'annotations', COALESCE(NEW.annotations, '{}'::jsonb)
+        )
+    )
+    ON CONFLICT (alert_id) DO NOTHING;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_sync_app_log_from_alert ON alerts;
+
+CREATE TRIGGER trg_sync_app_log_from_alert
+AFTER INSERT ON alerts
+FOR EACH ROW
+EXECUTE FUNCTION sync_app_log_from_alert();
+
+INSERT INTO app_logs (
+    uds_location_id,
+    application_id,
+    app_external_id,
+    level,
+    source,
+    message,
+    logged_at,
+    alert_id,
+    correlation_key,
+    context
+)
+SELECT
+    al.uds_location_id,
+    al.application_id,
+    NULLIF(COALESCE(al.labels ->> 'app_id', ''), ''),
+    CASE LOWER(COALESCE(al.severity, 'warning'))
+        WHEN 'critical' THEN 'error'
+        WHEN 'high' THEN 'error'
+        WHEN 'warning' THEN 'warning'
+        WHEN 'info' THEN 'info'
+        WHEN 'debug' THEN 'debug'
+        ELSE 'warning'
+    END,
+    'alerts',
+    COALESCE(
+        NULLIF(al.annotations ->> 'summary', ''),
+        al.alert_name || ' alert raised'
+    ),
+    COALESCE(al.received_at, al.starts_at, timezone('UTC', now())),
+    al.id,
+    al.fingerprint,
+    jsonb_build_object(
+        'alert_name', al.alert_name,
+        'alert_type', al.alert_type,
+        'status', COALESCE(al.status, 'unknown'),
+        'severity', COALESCE(al.severity, 'unknown'),
+        'starts_at', al.starts_at,
+        'ends_at', al.ends_at,
+        'received_at', al.received_at,
+        'labels', COALESCE(al.labels, '{}'::jsonb),
+        'annotations', COALESCE(al.annotations, '{}'::jsonb)
+    )
+FROM alerts al
+ON CONFLICT (alert_id) DO NOTHING;
+
+-- -------------------------------------------------------------
 -- Ownership history
 -- -------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS uds_location_owner_history (

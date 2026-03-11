@@ -37,7 +37,7 @@ generator ------------------------> telemetry / events ----------+
 
 004_uds_reference_data.sql ---> UDS reference tables ----+
                                                          |
-uds-seeder --------------------------------------------> metric_samples / alerts
+uds-seeder --------------------------------------------> metric_samples / alerts / app_logs
                                                          |
                                                          v
                                                  uds_monitoring.json
@@ -98,6 +98,7 @@ Core tables:
 - `uds_location_application_instances`
 - `metric_samples`
 - `alerts`
+- `app_logs`
 - `uds_location_owner_history`
 - `monitoring_configs` as a compatibility shim
 
@@ -119,8 +120,8 @@ What is still incomplete against User Story 1:
 
 - the UDS dashboard is mostly latest-state oriented
 - historical metrics exist in DB and MCP, but are not yet surfaced well in Grafana
-- the UDS path does not currently model logs
-- incident context is therefore weaker than the written user story
+- the UDS path now exposes lightweight log-like incident context through `app_logs`
+- this is still a scoped prototype, not full centralized application log ingestion
 
 ## Important design limitations
 
@@ -142,3 +143,11 @@ The project is still a local prototype:
 The UDS seeding path currently focuses on a small set of health metrics and a
 single main alert type (`ServiceDown`). That is enough to demonstrate the flow,
 but not enough to cover the broader operational scenarios described by Geir.
+
+### 4. Lightweight log bridge, not full log collection
+
+The current `app_logs` path is intentionally small:
+
+- alert inserts are bridged into one stored log-like incident row
+- direct app log ingestion can be added later without breaking the MCP contract
+- this closes the User Story 1 "logs" gap for Scope 1, but it is not a full log pipeline
