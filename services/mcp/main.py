@@ -328,6 +328,58 @@ TOOLS = [
             "required": ["vessel", "app", "metric", "hours", "point_count", "series"],
         },
     },
+    {
+        "name": "get_app_logs",
+        "description": (
+            "Fetch lightweight UDS logs or log-like incident context for one vessel "
+            "application in the last N hours."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "vessel_id": {
+                    "type": "string",
+                    "description": (
+                        "Vessel identifier in UDS schema "
+                        "(imo_nr, external_id, name, or udslocations.id)"
+                    ),
+                },
+                "app": {
+                    "type": "string",
+                    "description": (
+                        "Application selector (external_id, name, or applications.id)"
+                    ),
+                },
+                "hours": {
+                    "type": "integer",
+                    "description": "How many hours back to return",
+                    "default": 24,
+                    "minimum": 1,
+                    "maximum": 720,
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of log rows to return",
+                    "default": 100,
+                    "minimum": 1,
+                    "maximum": 1000,
+                },
+            },
+            "required": ["vessel_id", "app"],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "vessel": {"type": "object"},
+                "app": {"type": "string"},
+                "hours": {"type": "integer"},
+                "count": {"type": "integer"},
+                "logs": {"type": "array"},
+                "metadata": {"type": "object"},
+            },
+            "required": ["vessel", "app", "hours", "count", "logs"],
+        },
+    },
 ]
 
 
@@ -386,6 +438,22 @@ class GetAppMetricHistoryArgs(BaseModel):
     hours: int = Field(24, ge=1, le=720, description="How many hours to look back")
 
 
+class GetAppLogsArgs(BaseModel):
+    vessel_id: str = Field(
+        ...,
+        description=(
+            "Vessel identifier in UDS schema "
+            "(imo_nr, external_id, name, or udslocations.id)"
+        ),
+    )
+    app: str = Field(
+        ...,
+        description="Application selector (external_id, name, or applications.id)",
+    )
+    hours: int = Field(24, ge=1, le=720, description="How many hours to look back")
+    limit: int = Field(100, ge=1, le=1000, description="Maximum rows to return")
+
+
 class ToolCallRequest(BaseModel):
     name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
@@ -412,6 +480,7 @@ def _normalize_error(exc: Exception) -> None:
         or "applications" in message
         or "metric_samples" in message
         or "alerts" in message
+        or "app_logs" in message
         or "uds_location_application_instances" in message
     ):
         raise HTTPException(
@@ -454,6 +523,48 @@ async def _resolve_uds_vessel(vessel_id: str) -> dict[str, Any]:
         "external_id": row["external_id"],
         "name": row["name"],
         "imo_nr": row["imo_nr"],
+    }
+
+
+async def _resolve_uds_application(vessel: dict[str, Any], app: str) -> dict[str, Any]:
+    pool = get_pool()
+    try:
+        row = await pool.fetchrow(
+            """
+            SELECT a.id, a.external_id, a.name, a.app_type
+            FROM uds_location_application_instances uai
+            JOIN applications a ON a.id = uai.application_instance_id
+            WHERE uai.uds_location_id = $1::uuid
+              AND (
+                a.id::text = $2
+                OR LOWER(a.external_id) = LOWER($2)
+                OR LOWER(a.name) = LOWER($2)
+              )
+            ORDER BY CASE
+                WHEN LOWER(a.external_id) = LOWER($2) THEN 0
+                WHEN a.id::text = $2 THEN 1
+                ELSE 2
+            END
+            LIMIT 1;
+            """,
+            vessel["uds_location_id"],
+            app,
+        )
+    except Exception as exc:
+        _normalize_error(exc)
+
+    if row is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"UDS app not found on vessel {vessel['input_vessel_id']}: {app}",
+        )
+
+    return {
+        "input_app": app,
+        "application_id": str(row["id"]),
+        "external_id": row["external_id"],
+        "name": row["name"],
+        "app_type": row["app_type"],
     }
 
 
@@ -825,6 +936,82 @@ async def _run_get_app_metric_history(args: GetAppMetricHistoryArgs) -> dict[str
     }
 
 
+async def _run_get_app_logs(args: GetAppLogsArgs) -> dict[str, Any]:
+    vessel = await _resolve_uds_vessel(args.vessel_id)
+    app_meta = await _resolve_uds_application(vessel, args.app)
+    pool = get_pool()
+
+    try:
+        rows = await pool.fetch(
+            """
+            SELECT l.id,
+                   l.logged_at,
+                   l.level,
+                   l.source,
+                   l.message,
+                   l.context,
+                   l.alert_id,
+                   l.correlation_key,
+                   l.application_id,
+                   COALESCE(a.external_id, l.app_external_id) AS app_external_id,
+                   a.name AS app_name,
+                   a.app_type AS app_type
+            FROM app_logs l
+            LEFT JOIN applications a ON a.id = l.application_id
+            WHERE l.uds_location_id = $1::uuid
+              AND l.logged_at >= NOW() - ($4 * INTERVAL '1 hour')
+              AND (
+                l.application_id = $2::uuid
+                OR LOWER(COALESCE(l.app_external_id, '')) = LOWER($3)
+              )
+            ORDER BY l.logged_at DESC
+            LIMIT $5;
+            """,
+            vessel["uds_location_id"],
+            app_meta["application_id"],
+            app_meta["external_id"],
+            args.hours,
+            args.limit,
+        )
+    except Exception as exc:
+        _normalize_error(exc)
+
+    logs = [
+        {
+            "id": str(row["id"]),
+            "timestamp": _iso(row["logged_at"]),
+            "level": row["level"],
+            "source": row["source"],
+            "message": row["message"],
+            "alert_id": str(row["alert_id"]) if row["alert_id"] else None,
+            "correlation_key": row["correlation_key"],
+            "application_id": (
+                str(row["application_id"]) if row["application_id"] else None
+            ),
+            "app_external_id": row["app_external_id"],
+            "app_name": row["app_name"] or app_meta["name"],
+            "context": row["context"],
+        }
+        for row in rows
+    ]
+
+    metadata = {
+        "application_id": app_meta["application_id"],
+        "app_external_id": app_meta["external_id"],
+        "app_name": app_meta["name"],
+        "app_type": app_meta["app_type"],
+    }
+
+    return {
+        "vessel": vessel,
+        "app": args.app,
+        "hours": args.hours,
+        "count": len(logs),
+        "logs": logs,
+        "metadata": metadata,
+    }
+
+
 TOOL_HANDLERS = {
     "get_telemetry": (GetTelemetryArgs, _run_get_telemetry),
     "get_events": (GetEventsArgs, _run_get_events),
@@ -832,6 +1019,7 @@ TOOL_HANDLERS = {
     "get_vessel_app_status": (GetVesselAppStatusArgs, _run_get_vessel_app_status),
     "get_vessel_alerts": (GetVesselAlertsArgs, _run_get_vessel_alerts),
     "get_app_metric_history": (GetAppMetricHistoryArgs, _run_get_app_metric_history),
+    "get_app_logs": (GetAppLogsArgs, _run_get_app_logs),
 }
 
 
@@ -899,3 +1087,11 @@ async def get_app_metric_history(
     _: None = Depends(_require_api_key),
 ):
     return await _run_get_app_metric_history(args)
+
+
+@app.post("/tools/get_app_logs")
+async def get_app_logs(
+    args: GetAppLogsArgs,
+    _: None = Depends(_require_api_key),
+):
+    return await _run_get_app_logs(args)
