@@ -1,16 +1,13 @@
 # Scope 1 Review Findings
 
-Last updated: 2026-03-11
+Last updated: 2026-03-12
 
-This document is the concentrated review context for the current integrated
-Scope 1 branch. It is intended for:
+This document is the concentrated review and acceptance baseline for the current
+Scope 1 integration branch.
 
-- the student team
-- later AI assistants
-- future merge and demo preparation
+Read together with:
 
-Use this file together with:
-
+- `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md`
 - `docs/SCOPE1_HANDOFF_NOTES.md`
 - `docs/NEXT_STEPS.md`
 - `docs/FUTURE_CHECKS.md`
@@ -18,7 +15,7 @@ Use this file together with:
 
 ## Scope 1 target
 
-The agreed Scope 1 target is User Story 1 from Geir:
+The agreed target is User Story 1 from Geir:
 
 > As a DevOps engineer, when I receive a warning or error from an application
 > on a vessel, I need a dashboard that shows:
@@ -27,243 +24,207 @@ The agreed Scope 1 target is User Story 1 from Geir:
 > - relevant historical metrics and logs
 > - context necessary to evaluate the situation and take action
 
-That means the review standard is not just "the code runs".
-The review standard is whether the integrated prototype gives enough incident
-context for a single-vessel application incident.
+The standard is therefore not just "the code runs". The standard is whether the
+prototype gives credible incident context for a single-vessel application
+incident.
 
-## Current integrated direction
+## Current review conclusion
 
-The project now has two parallel paths:
+The project is no longer structurally broken, and the main UDS Scope 1 gaps from
+the earlier review are now closed for prototype purposes.
 
-### Legacy prototype path
+On `feat/scope1-student1-2-3-integration`, Scope 1 now provides:
 
-- `telemetry`
-- `events`
-- `ai_analyses`
-- `services/generator/`
-- `grafana/dashboards/ship_operations.json`
-- AI analysis through the agent
+- an incident-first Grafana dashboard for one vessel
+- historical metrics inside Grafana, not only through MCP
+- log/log-like context through `app_logs`
+- broader seeded scenarios including degraded, stale, and delayed states
+- visible connectivity and freshness signals
+- working MCP access for status, alerts, metric history, and app logs
 
-This path still matters, but it is not the main Scope 1 deliverable.
+That is now a coherent bachelor prototype baseline for User Story 1.
 
-### Scope 1 UDS path
+## Evidence from the fresh-stack Student 4 validation
 
-- `db/init/003_uds.sql`
-- `db/init/004_uds_reference_data.sql`
-- `db/seed/uds_seed.sql`
-- `scripts/uds_seed_loop.sh`
-- `services/mcp/main.py` UDS tools
-- `grafana/dashboards/uds_monitoring.json`
+Acceptance rerun performed on 2026-03-12 from a fresh DB volume.
 
-This is the path that should satisfy User Story 1.
+Verified:
 
-## What is already integrated
+- `udslocations` rows: 3
+- `applications` rows: 6
+- `uds_location_application_instances` rows: 18
+- first UDS seed cycle inserted:
+  - 468 `metric_samples`
+  - 11 `alerts`
+  - 29 `app_logs`
+- seeded alert types were not limited to `ServiceDown`
+- Grafana provisioned dashboard UID `maritime_uds_monitoring`
+- MCP returned non-empty data for:
+  - `get_vessel_app_status`
+  - `get_vessel_alerts`
+  - `get_app_metric_history`
+  - `get_app_logs`
+- validation dashboard loaded successfully
+- quick analysis validation completed successfully on event `1`
 
-### Del A
+## What was closed from the earlier review
 
-Integrated schema:
+### 1. Historical metrics are now surfaced in Grafana
 
-- `owners`
-- `udslocations`
-- `applications`
-- `uds_location_application_instances`
-- `metric_samples`
-- `alerts`
-- `uds_location_owner_history`
-- `monitoring_configs` compatibility shim
+Closed for the current prototype scope.
 
-### Del A support
+What exists now:
 
-Tracked reference data now exists in the repo:
-
-- 3 vessels
-- 6 applications
-- vessel/application link rows
-- owners and owner history
-
-### Del B
-
-Integrated seeding path:
-
-- periodic `uds-seeder` service in `docker-compose.yml`
-- tracked SQL seeding file
-- retry loop that waits for schema and reference data
-
-### Del C
-
-Integrated UDS MCP tools:
-
-- `get_vessel_app_status`
-- `get_vessel_alerts`
-- `get_app_metric_history`
-
-### Del D
-
-Integrated UDS dashboard:
-
-- one vessel selector by `imo_nr`
-- latest application status
-- resource / availability / HTTP / DB metric tables
-- active alerts table
-
-## Small fixes already applied during integration review
-
-These were fixed because they were low-risk and directly helpful:
-
-1. Del B seeding now respects vessel/application links instead of assuming every
-   vessel always has every application.
-2. Del B wait-loop now checks:
-   - UDS schema tables
-   - vessels
-   - applications
-   - vessel/application link rows
-3. demo vessel names `Edge Aurora` / `Edge Borealis` were corrected
-4. obsolete `version:` was removed from `docker-compose.yml`
-5. docs were updated to reflect the integrated Scope 1 branch instead of older
-   partial branches
-
-## Main review conclusion
-
-The project is not structurally broken.
-
-The important conclusion is this:
-
-- the codebase is now coherent enough to continue from
-- but Scope 1 does not fully satisfy User Story 1 yet
-
-The remaining gaps are mostly about incident context and demo realism, not
-about having to throw away the current implementation.
-
-## Findings
-
-### High
-
-#### 1. User Story 1 is not fully met because the UDS path is weak on historical context
-
-What exists:
-
-- latest-state app health
-- active alerts
-- MCP support for metric history
-
-What is missing in practice:
-
-- the dashboard does not strongly surface historical metric drilldown
-- the incident flow from alert to app history is still thin
-
-Why this matters:
-
-- User Story 1 explicitly asks for relevant historical metrics
-- current UDS dashboard is mostly a present-state health board
+- selected app drilldown in `uds_monitoring.json`
+- time-series panels for availability, connectivity/freshness, HTTP/errors,
+  CPU/handles, memory, and database behavior
+- `incident_window` variable for 1h / 6h / 24h slices
+- metric summary table inside the same dashboard
 
 Relevant files:
 
 - `grafana/dashboards/uds_monitoring.json`
 - `grafana/queries/uds_queries.sql`
-- `services/mcp/main.py`
+- `docs/UDS_dashboard_spec.md`
 
-#### 2. User Story 1 asks for logs, but the UDS prototype does not currently model logs
+### 2. Log/log-like context now exists in the UDS path
 
-What exists:
+Closed for the current prototype scope.
 
-- `metric_samples`
-- `alerts`
+What exists now:
 
-What does not exist:
-
-- a log table
-- seeded log entries
-- log queries in MCP
-- log panels in Grafana
-
-Why this matters:
-
-- the written story says "historical metrics and logs"
-- right now the UDS solution is metrics + alerts only
-
-This is not necessarily a reason to rebuild the architecture.
-It does require an explicit product decision:
-
-- either add a lightweight log-like scope to the prototype
-- or document clearly that Scope 1 covers metrics + alerts and logs are deferred
+- tracked `app_logs` table in the UDS schema
+- seeded app logs and alert-driven log context
+- MCP access through `get_app_logs`
+- Grafana table for recent logs on the selected vessel/app pair
 
 Relevant files:
 
 - `db/init/003_uds.sql`
+- `db/seed/uds_seed.sql`
 - `services/mcp/main.py`
 - `grafana/dashboards/uds_monitoring.json`
 
-### Medium
+### 3. Seeded scenarios are broader and more realistic
 
-#### 3. Seeded incident scenarios are too narrow
+Closed for the current prototype scope.
 
-Current seeded UDS incidents are mainly `ServiceDown` style incidents.
+What exists now:
 
-Why this matters:
+- `healthy`
+- `degraded`
+- `down`
+- `stale`
+- `delayed`
 
-- it under-tests the dashboard
-- it under-tests MCP context
-- it does not reflect warning/degraded scenarios well
+Connectivity/freshness signals now include:
 
-Suggested expansion:
+- `last_sync_age_seconds`
+- `reporting_stale`
+- `sync_delayed`
 
-- warning severity
-- degraded but still alive services
-- stale reporting
-- sync delay / freshness incidents
+Alert types now include more than simple `ServiceDown` behavior.
 
 Relevant files:
 
 - `db/seed/uds_seed.sql`
 - `scripts/uds_seed_loop.sh`
 
-#### 4. Fresh DB is effectively required for trustworthy Scope 1 testing
+### 4. Fresh-DB technical acceptance was rerun successfully
 
-The integrated branch depends on init scripts for:
+Closed as a fresh-stack validation milestone for the current branch.
 
-- legacy schema
-- UDS schema
-- tracked UDS reference data
+Verified on the fresh-stack rerun:
 
-Why this matters:
+- UDS schema and tracked reference data load on startup
+- `uds-seeder` inserts metrics, alerts, and logs
+- MCP tools return meaningful UDS incident data
+- `UDS Incident Monitoring` is provisioned in Grafana
+- validation dashboard loads, and quick analysis validation works
 
-- old local volumes can silently look "sort of working"
-- that creates false confidence during demos and reviews
+This still needs to be rerun on the final merge candidate after any further
+code changes.
 
-Practical rule:
+## Remaining findings
 
-- serious Scope 1 validation should start from a reset DB volume
+### Medium
+
+#### 1. Existing DB volumes still rely on reset/runtime-guard behavior
+
+Scope 1 now works from a fresh DB and the agent adds runtime schema guards, but
+the project still does not have a formal migration strategy for older local
+volumes.
+
+Why it matters:
+
+- old local DB state can hide real integration issues
+- team members can get different results if they skip reset
 
 Relevant files:
 
 - `db/init/001_init.sql`
 - `db/init/003_uds.sql`
 - `db/init/004_uds_reference_data.sql`
-- `scripts/reset_db.sh`
+- `services/agent/main.py`
 
-### Medium / Security
+#### 2. Fresh-start bootstrap still depends on startup timing
 
-#### 5. Event acknowledge still has a state-changing GET alias
+The fresh-stack check passed, but first startup still depends on model pull,
+RAG ingest, and service readiness settling in the right order.
 
-This is useful for Grafana links, but weak API design.
+Observed during the validation rerun:
 
-Why this matters:
+- the agent retried RAG ingest until embeddings were available
+- `ollama-init` needed warmup time before the agent finished ingest cleanly
 
-- GET should not mutate state
-- it is easy to trigger accidentally
+Why it matters:
+
+- the first run can take time
+- demo preparation should allow for that warmup period
+
+Relevant files:
+
+- `docker-compose.yml`
+- `services/agent/main.py`
+- `services/agent/llm/ollama_client.py`
+- `scripts/uds_seed_loop.sh`
+
+#### 3. Legacy full analysis still needs a final warmup/signoff if it is part of the demo
+
+This does not block Scope 1 UDS acceptance, but it is still a real integration
+note.
+
+Observed during the validation rerun:
+
+- quick validation completed successfully
+- one cold-start full analysis job remained `running` after the first minute
+
+Why it matters:
+
+- the group should not overclaim legacy full-analysis readiness without a final
+  signoff pass
+- if that path is used in a demo, it should be warmed up first
+
+Relevant files:
+
+- `services/agent/routes/analyze.py`
+- `services/agent/routes/validation.py`
+- `services/agent/llm/ollama_client.py`
+
+### Low
+
+#### 4. Event acknowledge still has a state-changing GET alias
+
+This is still weak API design, even if it is convenient for Grafana links.
 
 Relevant file:
 
 - `services/agent/routes/events.py`
 
-#### 6. MCP auth still depends on `MCP_API_KEY` being non-empty
+#### 5. MCP auth is still effectively optional if `MCP_API_KEY` is empty
 
-If `MCP_API_KEY` is empty, auth is effectively off.
-
-Why this matters:
-
-- fine for local prototype
-- not okay to treat as a finished security solution
+That is acceptable for a local prototype, but it should not be treated as a
+finished security solution.
 
 Relevant files:
 
@@ -271,69 +232,44 @@ Relevant files:
 - `.env.example`
 - `docker-compose.yml`
 
-### Low
+#### 6. The demo topology is intentionally fixed to 3 vessels and 6 apps
 
-#### 7. The current demo topology is intentionally fixed to 3 vessels and 6 apps
-
-This is acceptable for Scope 1.
-It is not enough to claim the scalability part of the broader Geir description.
-
-This should be framed honestly in the thesis/demo:
-
-- we solved the one-vessel incident slice first
-- multi-vessel and broader scale are later work
+That is fine for Scope 1. It is not enough to claim the broader scalability
+part of Geir's full platform description.
 
 Relevant files:
 
 - `db/init/004_uds_reference_data.sql`
 - `db/seed/uds_seed.sql`
 
-## What is good enough right now
+#### 7. `app_logs` is still a lightweight prototype bridge
 
-These parts are good enough to continue integration work from:
+The logs path is now good enough for User Story 1 prototype context, but it is
+not a full centralized application log pipeline.
 
-- the UDS schema shape
-- the reference data direction
-- the seeding loop architecture
-- the MCP UDS tools direction
-- the UDS dashboard overall direction
+Relevant files:
 
-The current codebase is a reasonable shared baseline for the group.
+- `db/init/003_uds.sql`
+- `db/seed/uds_seed.sql`
+- `services/mcp/main.py`
 
-## What should be fixed next
+## What is good enough now
+
+These parts are good enough to carry into the final merge/demo round:
+
+- tracked UDS schema direction
+- tracked reference data
+- seeded metrics, alerts, and logs
+- incident-first UDS dashboard
+- MCP UDS tools
+- fresh-stack acceptance flow
+- validation dashboard and quick analysis path
+
+## What should happen next
 
 Recommended order:
 
-1. Run a full fresh-DB end-to-end test.
-2. Fix any runtime mismatches found there.
-3. Improve historical metric visibility in the UDS dashboard.
-4. Decide how to handle the "logs" part of User Story 1.
-5. Broaden seeded scenarios.
-
-## Files most important for the next AI to read
-
-1. `README.md`
-2. `docs/SCOPE1_HANDOFF_NOTES.md`
-3. `docs/SCOPE1_REVIEW_FINDINGS.md`
-4. `docs/NEXT_STEPS.md`
-5. `docs/FUTURE_CHECKS.md`
-6. `docs/UDS_dashboard_spec.md`
-7. `docker-compose.yml`
-8. `db/init/001_init.sql`
-9. `db/init/003_uds.sql`
-10. `db/init/004_uds_reference_data.sql`
-11. `db/seed/uds_seed.sql`
-12. `scripts/uds_seed_loop.sh`
-13. `services/mcp/main.py`
-14. `grafana/dashboards/uds_monitoring.json`
-
-## Final note
-
-Do not evaluate this project as if it were already a production monitoring
-platform.
-
-Evaluate it as a bachelor prototype whose current job is:
-
-- demonstrate a coherent Scope 1 architecture
-- make User Story 1 credibly testable
-- leave a clean base for the team to continue from
+1. Keep the docs synchronized with the branch that will actually be merged.
+2. Re-run the acceptance checklist on the final merge candidate.
+3. Do one manual Grafana signoff pass.
+4. Only then spend time on low-priority hardening.

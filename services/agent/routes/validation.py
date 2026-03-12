@@ -1,7 +1,12 @@
 """
 Validation endpoints for empirical RAG and analysis-quality checks.
-These routes do not enable auto-analysis and do not persist analysis runs.
+
+The quick validation route does not persist a new analysis row.
+The validation dashboard can also start a persisted full analysis job through
+the regular analyze API for comparison and troubleshooting.
 """
+
+import os
 
 from fastapi.responses import HTMLResponse
 from fastapi import APIRouter, HTTPException
@@ -21,12 +26,12 @@ from models import (
 )
 from rag.client import (
     RAG_MIN_SIMILARITY,
-    RAG_TOP_K,
     retrieve_context_for_query,
 )
-from routes.analyze import run_analysis_pipeline
+from routes.analyze import QUICK_ANALYSIS_TOP_K, run_quick_analysis_pipeline
 
 router = APIRouter(tags=["validation"])
+VALIDATION_MODEL = os.getenv("OLLAMA_VALIDATION_MODEL", "").strip()
 
 
 @router.get("/validate/dashboard", response_class=HTMLResponse)
@@ -80,7 +85,7 @@ async def validate_retrieval(request: RetrievalValidationRequest):
 @router.post("/validate/analysis", response_model=AnalysisValidationResponse)
 async def validate_analysis(request: AnalysisValidationRequest):
     """
-    Run one event through the live analysis pipeline without saving a new row.
+    Run one event through the quick analysis pipeline without saving a new row.
     Returns retrieval diagnostics and tool-call traces that affect output quality.
     """
     pool = get_pool()
@@ -93,13 +98,14 @@ async def validate_analysis(request: AnalysisValidationRequest):
         raise HTTPException(status_code=404, detail=f"Event {request.event_id} not found")
 
     event_dict = dict(event)
-    result = await run_analysis_pipeline(
+    result = await run_quick_analysis_pipeline(
         event_dict,
         rag_top_k=request.top_k,
         rag_min_similarity=request.min_similarity,
+        model_name=VALIDATION_MODEL or None,
     )
 
-    resolved_top_k = request.top_k if request.top_k is not None else RAG_TOP_K
+    resolved_top_k = request.top_k if request.top_k is not None else QUICK_ANALYSIS_TOP_K
     resolved_min_similarity = (
         request.min_similarity
         if request.min_similarity is not None
@@ -587,7 +593,11 @@ def _dashboard_html() -> str:
 
       <section class="panel">
         <h2>Analysis Validation</h2>
-        <p>Runs one live event through <span class="mono">/api/v1/validate/analysis</span> without writing a new analysis row.</p>
+        <p>
+          Run a fast validation pass through <span class="mono">/api/v1/validate/analysis</span>
+          without writing a new row, or start a persisted full analysis job through
+          <span class="mono">/api/v1/analyze/full</span>.
+        </p>
         <div class="controls">
           <label>Event ID
             <input id="analysisEventId" type="number" min="1" placeholder="Fetch latest event or enter one">
@@ -601,10 +611,14 @@ def _dashboard_html() -> str:
           <label>Pipeline status
             <input id="analysisPipelineStatus" type="text" value="-" readonly>
           </label>
+          <label>Elapsed time
+            <input id="analysisElapsed" type="text" value="-" readonly>
+          </label>
         </div>
         <div class="actions">
           <button class="secondary" id="useLatestEvent">Use latest event</button>
-          <button class="primary" id="runAnalysis">Run analysis validation</button>
+          <button class="secondary" id="runQuickAnalysis">Run quick validation</button>
+          <button class="primary" id="startFullAnalysis">Start full analysis</button>
         </div>
         <div class="status" id="analysisStatus"></div>
         <div class="cards">
@@ -660,12 +674,59 @@ def _dashboard_html() -> str:
   </div>
 
   <script>
+    let analysisTimerId = null;
+    let fullAnalysisPollId = null;
+
     function parseOptionalNumber(value) {
       if (value === "" || value === null || value === undefined) {
         return null;
       }
       const parsed = Number(value);
       return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function formatElapsed(ms) {
+      const totalSeconds = Math.max(Math.floor(ms / 1000), 0);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      if (minutes >= 60) {
+        const hours = Math.floor(minutes / 60);
+        const remainingMinutes = minutes % 60;
+        return `${hours}h ${remainingMinutes}m ${seconds}s`;
+      }
+      if (minutes > 0) {
+        return `${minutes}m ${seconds}s`;
+      }
+      return `${seconds}s`;
+    }
+
+    function setAnalysisElapsed(value) {
+      document.getElementById("analysisElapsed").value = value;
+    }
+
+    function startAnalysisTimer() {
+      if (analysisTimerId !== null) {
+        clearInterval(analysisTimerId);
+      }
+      const startedAt = Date.now();
+      setAnalysisElapsed("0s");
+      analysisTimerId = setInterval(() => {
+        setAnalysisElapsed(formatElapsed(Date.now() - startedAt));
+      }, 1000);
+      return startedAt;
+    }
+
+    function stopAnalysisTimer(startedAt) {
+      if (analysisTimerId !== null) {
+        clearInterval(analysisTimerId);
+        analysisTimerId = null;
+      }
+      if (!startedAt) {
+        return document.getElementById("analysisElapsed").value;
+      }
+      const elapsed = formatElapsed(Date.now() - startedAt);
+      setAnalysisElapsed(elapsed);
+      return elapsed;
     }
 
     function setStatus(element, text, tone = "") {
@@ -695,6 +756,15 @@ def _dashboard_html() -> str:
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
       });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+      return await response.json();
+    }
+
+    async function getJson(url) {
+      const response = await fetch(url);
       if (!response.ok) {
         const text = await response.text();
         throw new Error(text || `HTTP ${response.status}`);
@@ -781,30 +851,59 @@ def _dashboard_html() -> str:
       document.getElementById("analysisCardConfidence").textContent = `${Math.round((data.confidence || 0) * 100)}%`;
       document.getElementById("analysisCardModel").textContent = data.quality_factors.model_used || "-";
       document.getElementById("analysisText").textContent = data.analysis_text || "No analysis text returned.";
+      renderAnalysisTables(data.retrieved_documents || [], data.tool_calls || []);
+    }
 
+    function clearAnalysisTables() {
+      document.querySelector("#analysisDocsTable tbody").innerHTML = "";
+      document.querySelector("#toolCallsTable tbody").innerHTML = "";
+    }
+
+    function renderAnalysisTables(retrievedDocuments, toolCalls) {
       const docsTbody = document.querySelector("#analysisDocsTable tbody");
       docsTbody.innerHTML = "";
-      for (const doc of data.retrieved_documents) {
+      for (const doc of retrievedDocuments) {
         const row = document.createElement("tr");
+        const similarity = typeof doc.similarity === "number" ? doc.similarity.toFixed(3) : "-";
         row.innerHTML = `
-          <td class="mono">${doc.source}</td>
-          <td>${doc.similarity.toFixed(3)}</td>
-          <td>${doc.content_preview}</td>
+          <td class="mono">${doc.source || "-"}</td>
+          <td>${similarity}</td>
+          <td>${doc.content_preview || "-"}</td>
         `;
         docsTbody.appendChild(row);
       }
 
       const toolsTbody = document.querySelector("#toolCallsTable tbody");
       toolsTbody.innerHTML = "";
-      for (const tool of data.tool_calls) {
+      for (const tool of toolCalls) {
+        const args = tool.arguments ? JSON.stringify(tool.arguments) : "{}";
+        const ok = !!tool.succeeded;
         const row = document.createElement("tr");
         row.innerHTML = `
-          <td class="mono">${tool.name}</td>
-          <td><span class="pill ${tool.succeeded ? "good" : "bad"}">${tool.succeeded ? "yes" : "no"}</span></td>
-          <td class="mono">${JSON.stringify(tool.arguments)}</td>
-          <td>${tool.response_preview}</td>
+          <td class="mono">${tool.name || "-"}</td>
+          <td><span class="pill ${ok ? "good" : "bad"}">${ok ? "yes" : "no"}</span></td>
+          <td class="mono">${args}</td>
+          <td>${tool.response_preview || "-"}</td>
         `;
         toolsTbody.appendChild(row);
+      }
+    }
+
+    function renderFullAnalysis(data) {
+      document.getElementById("analysisPipelineStatus").value = data.status;
+      document.getElementById("analysisCardDocs").textContent = String((data.retrieved_documents || []).length);
+      document.getElementById("analysisCardTools").textContent = String((data.tool_calls || []).length);
+      document.getElementById("analysisCardConfidence").textContent = `${Math.round((data.confidence || 0) * 100)}%`;
+      document.getElementById("analysisCardModel").textContent = data.model_used || "-";
+      document.getElementById("analysisText").textContent =
+        data.analysis_text || "Full analysis job is queued or running.";
+      renderAnalysisTables(data.retrieved_documents || [], data.tool_calls || []);
+    }
+
+    function stopFullAnalysisPolling() {
+      if (fullAnalysisPollId !== null) {
+        clearInterval(fullAnalysisPollId);
+        fullAnalysisPollId = null;
       }
     }
 
@@ -849,14 +948,17 @@ def _dashboard_html() -> str:
       }
     });
 
-    document.getElementById("runAnalysis").addEventListener("click", async () => {
+    document.getElementById("runQuickAnalysis").addEventListener("click", async () => {
       const statusEl = document.getElementById("analysisStatus");
+      let startedAt = null;
       try {
         const eventId = parseOptionalNumber(document.getElementById("analysisEventId").value);
         if (eventId === null) {
           throw new Error("Enter an event id or use the latest event button first.");
         }
-        setStatus(statusEl, `Running validation for event ${eventId}...`, "warn");
+        stopFullAnalysisPolling();
+        startedAt = startAnalysisTimer();
+        setStatus(statusEl, `Running quick validation for event ${eventId}...`, "warn");
         const topK = parseOptionalNumber(document.getElementById("analysisTopK").value);
         const minSimilarity = parseOptionalNumber(document.getElementById("analysisMinSim").value);
         const payload = { event_id: eventId };
@@ -865,9 +967,75 @@ def _dashboard_html() -> str:
         const data = await postJson("/api/v1/validate/analysis", payload);
         renderAnalysis(data);
         const tone = data.quality_factors.status === "completed" ? "good" : "bad";
-        setStatus(statusEl, `Validation finished with status ${data.quality_factors.status}.`, tone);
+        const elapsed = stopAnalysisTimer(startedAt);
+        setStatus(
+          statusEl,
+          `Quick validation finished with status ${data.quality_factors.status} in ${elapsed}.`,
+          tone
+        );
       } catch (error) {
-        setStatus(statusEl, `Analysis validation failed: ${error.message}`, "bad");
+        const elapsed = stopAnalysisTimer(startedAt);
+        const suffix = startedAt ? ` after ${elapsed}` : "";
+        setStatus(statusEl, `Quick validation failed${suffix}: ${error.message}`, "bad");
+      }
+    });
+
+    document.getElementById("startFullAnalysis").addEventListener("click", async () => {
+      const statusEl = document.getElementById("analysisStatus");
+      let startedAt = null;
+      try {
+        const eventId = parseOptionalNumber(document.getElementById("analysisEventId").value);
+        if (eventId === null) {
+          throw new Error("Enter an event id or use the latest event button first.");
+        }
+        stopFullAnalysisPolling();
+        startedAt = startAnalysisTimer();
+        setStatus(statusEl, `Queueing full analysis for event ${eventId}...`, "warn");
+        const topK = parseOptionalNumber(document.getElementById("analysisTopK").value);
+        const minSimilarity = parseOptionalNumber(document.getElementById("analysisMinSim").value);
+        const payload = { event_id: eventId };
+        if (topK !== null) payload.top_k = topK;
+        if (minSimilarity !== null) payload.min_similarity = minSimilarity;
+        const job = await postJson("/api/v1/analyze/full", payload);
+        renderFullAnalysis(job);
+        setStatus(statusEl, `Full analysis job ${job.id} is ${job.status}.`, "warn");
+
+        fullAnalysisPollId = setInterval(async () => {
+          try {
+            const current = await getJson(`/api/v1/analyses/${job.id}`);
+            renderFullAnalysis(current);
+            const elapsed = formatElapsed(Date.now() - startedAt);
+            if (current.status === "completed" || current.status === "failed") {
+              stopFullAnalysisPolling();
+              stopAnalysisTimer(startedAt);
+              const tone = current.status === "completed" ? "good" : "bad";
+              setStatus(
+                statusEl,
+                `Full analysis finished with status ${current.status} in ${elapsed}.`,
+                tone
+              );
+              return;
+            }
+            setStatus(
+              statusEl,
+              `Full analysis job ${job.id} is ${current.status}. Elapsed ${elapsed}.`,
+              "warn"
+            );
+          } catch (error) {
+            stopFullAnalysisPolling();
+            const elapsed = stopAnalysisTimer(startedAt);
+            setStatus(
+              statusEl,
+              `Full analysis polling failed after ${elapsed}: ${error.message}`,
+              "bad"
+            );
+          }
+        }, 3000);
+      } catch (error) {
+        stopFullAnalysisPolling();
+        const elapsed = stopAnalysisTimer(startedAt);
+        const suffix = startedAt ? ` after ${elapsed}` : "";
+        setStatus(statusEl, `Full analysis failed${suffix}: ${error.message}`, "bad");
       }
     });
 

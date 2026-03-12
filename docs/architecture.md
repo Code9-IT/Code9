@@ -4,20 +4,21 @@
 
 This prototype now contains two related monitoring paths:
 
-1. The original ship telemetry path
+1. Legacy ship telemetry
    - synthetic sensors
    - anomaly events
    - AI analysis on those events
-2. The Scope 1 UDS path
+2. Scope 1 UDS incident monitoring
    - application health per vessel
-   - UDS metrics and alerts
-   - dashboard and MCP access for one-vessel incident handling
+   - UDS metrics, alerts, and app logs
+   - Grafana and MCP access for one-vessel incident handling
 
 The Scope 1 goal is User Story 1:
 
 - one vessel
 - all hosted applications on that vessel
-- relevant operational context when something goes wrong
+- relevant historical metrics and logs
+- enough context to evaluate the situation and take action
 
 ## High-level component view
 
@@ -52,11 +53,12 @@ uds-seeder --------------------------------------------> metric_samples / alerts
 |---------|----------------|
 | `timescaledb` | Stores legacy telemetry/events plus UDS tables |
 | `generator` | Produces legacy synthetic ship telemetry and anomaly events |
-| `uds-seeder` | Produces periodic UDS mock metrics and alerts |
-| `grafana` | Shows Ship Operations and UDS Monitoring dashboards |
+| `uds-seeder` | Produces periodic UDS mock metrics, alerts, and app logs |
+| `grafana` | Shows Ship Operations and UDS Incident Monitoring dashboards |
 | `agent` | Runs AI analysis for legacy anomaly events |
 | `mcp` | Exposes both legacy and UDS database tools |
 | `ollama` | Local LLM inference for agent and embeddings |
+| `ollama-init` | Pulls required models on stack startup |
 
 ## Data model split
 
@@ -113,41 +115,44 @@ What is structurally correct now:
 
 - Del A, B, C, and D all target the same UDS schema
 - vessel selection is based on `udslocations.imo_nr`
-- app health is based on `applications`, links, metrics, and alerts
-- seeded data now respects vessel-to-application links
+- app health is based on linked applications, metrics, alerts, and app logs
+- seeded data respects vessel-to-application links
+- Grafana supports alert -> app -> recent metric/log history drilldown
+- connectivity and freshness are visible through seeded metrics and dashboard
+  panels
 
-What is still incomplete against User Story 1:
+What is still intentionally limited:
 
-- the UDS dashboard is mostly latest-state oriented
-- historical metrics exist in DB and MCP, but are not yet surfaced well in Grafana
-- the UDS path now exposes lightweight log-like incident context through `app_logs`
-- this is still a scoped prototype, not full centralized application log ingestion
+- `app_logs` is a lightweight log bridge, not full centralized log ingestion
+- the demo topology is still 3 vessels / 6 applications
+- the legacy analysis path is related to Scope 1, but it is not the main proof
+  point for User Story 1
 
 ## Important design limitations
 
 ### 1. Fresh DB bias
 
-The current prototype relies on init scripts for both schema and reference data.
-That means old local volumes can drift away from code expectations.
+The prototype still relies on init scripts for both schema and reference data.
+Old local volumes can drift away from code expectations.
 
-### 2. Security shortcuts
+### 2. Cold-start timing matters
+
+First start still depends on model pull, RAG ingest, and service readiness.
+That is acceptable for a local prototype, but it means the stack should be
+started a little ahead of any demo.
+
+### 3. Security shortcuts
 
 The project is still a local prototype:
 
 - event acknowledge still has a GET alias
 - MCP auth is optional if `MCP_API_KEY` is unset
-- demo credentials still exist in `.env.example`
+- convenience-oriented demo credentials still exist
 
-### 3. Narrow mock incident model
-
-The UDS seeding path currently focuses on a small set of health metrics and a
-single main alert type (`ServiceDown`). That is enough to demonstrate the flow,
-but not enough to cover the broader operational scenarios described by Geir.
-
-### 4. Lightweight log bridge, not full log collection
+### 4. Prototype log bridge, not full log collection
 
 The current `app_logs` path is intentionally small:
 
-- alert inserts are bridged into one stored log-like incident row
-- direct app log ingestion can be added later without breaking the MCP contract
-- this closes the User Story 1 "logs" gap for Scope 1, but it is not a full log pipeline
+- it stores seeded app log context plus alert-driven incident rows
+- it closes the Scope 1 User Story 1 gap around logs for the prototype
+- it does not replace a future full application log pipeline

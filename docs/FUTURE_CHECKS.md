@@ -1,74 +1,90 @@
 # Future Checks - Security, Gaps, and Follow-up Work
 
-This file is the backlog for issues that should not block day-to-day prototype
-work, but still matter for integration quality, demo quality, and any later
-hardening.
+Last updated: 2026-03-12
 
-Last updated: 2026-03-11
+This file is the backlog for work that still matters after Scope 1 became
+functionally coherent. Keep immediate merge and acceptance work in
+`docs/NEXT_STEPS.md`.
 
-## How to use this file
+## Recently closed on the current integration branch
 
-- Use this as the single backlog for "important, but not the next commit".
-- When something is fixed, mark it done and note the branch or commit.
-- Keep immediate Scope 1 work in `docs/NEXT_STEPS.md`.
+These items were earlier blockers and should not be reopened as if they were
+still missing:
 
-## P0 - Must validate before saying Scope 1 works
+- historical metrics are now visible in Grafana for the selected app
+- lightweight logs/log-like context now exist through `app_logs`
+- seeded scenarios now include degraded, stale, delayed, and down cases
+- fresh-stack UDS acceptance was rerun successfully on 2026-03-12
 
-### 1. Fresh DB end-to-end test
+## P0 - Re-run before the final merge
 
-- Status: OPEN
-- Why it matters:
-  - Scope 1 now depends on:
-    - `001_init.sql`
-    - `003_uds.sql`
-    - `004_uds_reference_data.sql`
-  - Existing local DB volumes may not match current code.
-- Required validation:
-  - reset DB volume
-  - bring stack up
-  - confirm `uds-seeder` inserts into `metric_samples` and `alerts`
-  - confirm Grafana vessel selector is populated
-
-### 2. Close the User Story 1 gap around historical context
+### 1. Repeat fresh-stack acceptance on the last merge candidate
 
 - Status: OPEN
 - Why it matters:
-  - User Story 1 explicitly asks for relevant historical metrics and logs.
-  - The current UDS dashboard mostly shows latest-state tables.
-- Required follow-up:
-  - add historical metric views or drilldowns in Grafana
-  - decide how logs or log-like context will be represented for Scope 1
+  - the current branch passed on 2026-03-12
+  - any later merge can still regress schema, seeding, MCP, or Grafana wiring
+- Reference:
+  - `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md`
 
-### 3. Broaden incident scenarios in mock data
+### 2. Keep docs aligned with the branch that is actually being merged
+
+- Status: OPEN
+- Why it matters:
+  - stale docs already cost time during Scope 1 integration
+  - this repo changed quickly across several intermediate branches
+
+## P1 - Important reliability and hardening work
+
+### 3. Proper migration path for old DB volumes
+
+- Status: OPEN
+- Why it matters:
+  - the current prototype works best from a fresh DB volume
+  - runtime guards help, but they do not replace migrations
+- Future direction:
+  - add formal migrations
+  - or document a strict reset-only policy for prototype branches
+
+### 4. Reduce cold-start timing sensitivity
 
 - Status: IN_PROGRESS
 - Why it matters:
-  - Current UDS seeding is dominated by `ServiceDown` incidents.
-  - This is too narrow for meaningful incident-review testing.
+  - first start still depends on model pull, RAG ingest, and service readiness
 - Current direction:
-  - Scope 1 seeding now targets `healthy`, `degraded`, `down`, `stale`, and
-    `delayed` states.
-  - Connectivity-style metrics such as `last_sync_age_seconds`,
-    `reporting_stale`, and `sync_delayed` are part of the seeded UDS contract.
-- Suggested follow-up:
-  - verify the seeded mix is visible enough in Grafana after Student 1 updates
-  - tune scenario probabilities if the demo becomes too noisy or too empty
+  - `ollama-init` pulls models
+  - the agent retries RAG ingest
+  - `uds-seeder` waits for schema and reference data
+- Future direction:
+  - keep startup reliable without manual intervention
+  - reduce noisy warmup retries if time allows
 
-## P1 - Important security and API hardening
+### 5. Legacy full analysis warmup/performance signoff
 
-### 4. State-changing GET endpoint for event acknowledge
+- Status: OPEN
+- Why it matters:
+  - quick validation works on the fresh stack
+  - one cold-start full analysis job stayed `running` longer than the first
+    minute during the Student 4 validation rerun
+- Future direction:
+  - warm the path up before demoing it
+  - inspect model/runtime behavior if the group wants that path to be a major
+    proof point
+
+## P1.5 - Security and API cleanup
+
+### 6. State-changing GET endpoint for event acknowledge
 
 - Status: OPEN
 - File:
   - `services/agent/routes/events.py`
 - Why it matters:
   - `GET /events/{id}/acknowledge` mutates state
-  - this is demo-friendly but weak API design
 - Future direction:
   - keep POST as canonical
-  - remove GET alias or protect it behind auth/proxy rules
+  - remove or restrict the GET alias later
 
-### 5. MCP auth is optional if `MCP_API_KEY` is empty
+### 7. MCP auth is optional if `MCP_API_KEY` is empty
 
 - Status: OPEN
 - File:
@@ -79,73 +95,48 @@ Last updated: 2026-03-11
   - require non-empty key in non-dev mode
   - or fail startup when auth is expected but not configured
 
-### 6. Demo credentials and broad local access
+### 8. Demo credentials and broad local access
 
 - Status: OPEN
 - Files:
   - `.env.example`
   - `docker-compose.yml`
 - Why it matters:
-  - default Grafana credentials are still weak
+  - default credentials are still demo-oriented
   - services are exposed locally for convenience
 - Future direction:
-  - change demo defaults
-  - define a safer "demo/prod-like" env profile
-
-## P1.5 - Reliability and integration hygiene
-
-### 7. `analysis_mode` migration path for existing DBs
-
-- Status: OPEN
-- Why it matters:
-  - code expects `analysis_mode`
-  - old local volumes may still miss it
-- Future direction:
-  - add a real migration strategy
-  - or document reset-only policy explicitly for prototype branches
-
-### 8. Remove stale integration assumptions from docs when code changes
-
-- Status: OPEN
-- Why it matters:
-  - several docs previously described older merge states
-  - this cost time during integration
-- Future direction:
-  - update docs in the same PR as integration changes
+  - define a safer demo profile if this needs broader sharing
 
 ## P2 - Product and demo quality improvements
 
-### 9. Route MCP metric history into the UDS dashboard
+### 9. Richer historical backfill immediately after a fresh start
 
 - Status: OPEN
 - Why it matters:
-  - the DB and MCP support metric history
-  - the dashboard still emphasizes latest-state tables
+  - the graphs work now
+  - they will still look stronger if the demo starts with more history already
+    present
 - Future direction:
-  - add time-series drilldowns for selected app metrics
+  - optionally backfill a few recent windows on fresh startup
 
-### 10. Add more operational context around alerts
-
-- Status: OPEN
-- Why it matters:
-  - current alert context is enough to show a table
-  - it is not yet enough to guide a real incident response discussion
-- Future direction:
-  - link alerts to relevant recent metric windows
-  - show app-specific context around the time of failure
-
-### 11. Model connectivity constraints more directly
+### 10. Stronger alert-to-context ergonomics in Grafana
 
 - Status: IN_PROGRESS
 - Why it matters:
-  - Geir's scope explicitly mentions maritime connectivity constraints
-  - the prototype still needs stronger connectivity realism beyond basic delayed/stale states
-- Current direction:
-  - Scope 1 seeding now introduces delayed/stale reporting states and explicit
-    connectivity/freshness metrics.
+  - the dashboard already supports alert -> app -> recent history
+  - there is still room for cleaner drilldown ergonomics and panel ordering
 - Future direction:
-  - expose freshness and sync behavior clearly in dashboard panels
-  - consider stronger missing-window patterns if Student 1 needs more visible demo cases
+  - tune layout and panel order only if the team has spare time
+
+### 11. Stronger live tool use in legacy full analysis
+
+- Status: OPEN
+- Why it matters:
+  - the main Scope 1 proof point is now the UDS incident flow, not legacy full
+    analysis
+  - still, better live tool usage would improve the validation/demo story
+- Future direction:
+  - refine prompting and tool selection only if the team has spare capacity
 
 ## P3 - Later work after User Story 1
 

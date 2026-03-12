@@ -1,154 +1,138 @@
 # Scope 1 Handoff Notes
 
 This file is the short handoff for the current integrated Scope 1 state.
-It replaces the older "Del A / Del B only" version of this document.
-For the deeper review and remaining findings, also read
-`docs/SCOPE1_REVIEW_FINDINGS.md`.
+
+For deeper review and remaining findings, also read:
+
+- `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md`
+- `docs/SCOPE1_REVIEW_FINDINGS.md`
+- `docs/NEXT_STEPS.md`
 
 ## Recommended working branch
 
-Use:
+Current integrated working branch:
 
-- `feat/scope1-del-a-b-integration`
+- `feat/scope1-student1-2-3-integration`
 
-Do not use these as your current working base:
-
-- `origin/nidal-updates`
-- `origin/feat/scope1-merged`
-- `origin/feat/scope1-del-d-integration`
-
-Reason:
-
-- `feat/scope1-del-a-b-integration` is the first branch where Del A, Del B, Del C, and Del D point in the same UDS direction.
-- Older branches represent partial integration stages.
+Treat older branches such as `feat/scope1-merged`,
+`feat/scope1-del-d-integration`, and `feat/scope1-del-a-b-integration` as
+historical integration steps, not as the best current base.
 
 ## What is already integrated
 
-The current integrated branch contains:
+### UDS schema and seed path
 
-- Del A:
-  - `db/init/003_uds.sql`
-- Del A support data:
-  - `db/init/004_uds_reference_data.sql`
-- Del B:
-  - `db/seed/uds_seed.sql`
-  - `scripts/uds_seed_loop.sh`
-  - `uds-seeder` service in `docker-compose.yml`
-- Del C:
-  - UDS MCP tools in `services/mcp/main.py`
-  - API key support for MCP
-- Del D:
-  - `grafana/dashboards/uds_monitoring.json`
-  - `grafana/queries/uds_queries.sql`
-  - `docs/UDS_dashboard_spec.md`
-
-Also already integrated:
-
-- `data_quality.json` has been removed
-- `ship_operations.json` was corrected back to latest active alarms ordering
-- the Grafana analysis flow now prefers the full analysis path
-
-## Current Scope 1 status
-
-The project is now technically aligned around the UDS schema, but Scope 1 is
-not fully closed against User Story 1 yet.
-
-What already works conceptually:
-
-- one-vessel UDS schema
-- reference vessels and applications
-- periodic mock seeding into `metric_samples` and `alerts`
-- UDS dashboard for one selected vessel
-- MCP tools for app status, alerts, and metric history
-
-What is still missing or weaker than the user story expects:
-
-- the dashboard does not yet show strong historical metric drilldown
-- the UDS path does not model logs, only metrics and alerts
-- seeded scenarios are still narrow
-- full end-to-end validation still requires a fresh DB volume
-
-## Known issues that still matter
-
-### 1. Existing DB volumes may be out of date
-
-The current setup relies on init scripts:
-
-- `db/init/001_init.sql`
 - `db/init/003_uds.sql`
 - `db/init/004_uds_reference_data.sql`
+- `db/seed/uds_seed.sql`
+- `scripts/uds_seed_loop.sh`
+- `uds-seeder` service in `docker-compose.yml`
 
-If a developer already has an older TimescaleDB volume, the DB may not match the
-current code and dashboard assumptions.
+### UDS incident visibility
 
-Practical consequence:
+- `grafana/dashboards/uds_monitoring.json`
+- `grafana/queries/uds_queries.sql`
+- `docs/UDS_dashboard_spec.md`
 
-- use a fresh DB volume for serious Scope 1 testing
-- otherwise apply manual migrations
+### UDS data access
 
-### 2. `analysis_mode` still has migration risk
+- `services/mcp/main.py`
+- API key support for MCP
+- UDS tools for:
+  - vessel app status
+  - vessel alerts
+  - app metric history
+  - app logs
 
-The code expects `analysis_mode` in `ai_analyses`, and `001_init.sql` contains
-it now, but older local databases may still be missing that column.
+### Legacy analysis support
 
-This is not a Del A / Del B problem anymore. It is an integration hygiene
-problem for existing local environments.
+- validation dashboard in `services/agent/routes/validation.py`
+- quick and full analysis routing in `services/agent/routes/analyze.py`
+- runtime schema guards in `services/agent/main.py`
 
-### 3. Event acknowledge is still too open
+## Fresh-stack acceptance rerun summary
 
-The agent still exposes:
+Student 4 reran the acceptance flow on 2026-03-12 from a fresh DB volume.
 
-- `POST /api/v1/events/{event_id}/acknowledge`
-- `GET /api/v1/events/{event_id}/acknowledge`
+Confirmed:
 
-This is convenient for Grafana demos, but not good API design and not something
-to carry forward without auth.
+- UDS schema and reference data load correctly on startup
+- fresh DB counts:
+  - `udslocations`: 3
+  - `applications`: 6
+  - `uds_location_application_instances`: 18
+- first `uds-seeder` cycle inserted:
+  - `metric_samples`: 468
+  - `alerts`: 11
+  - `app_logs`: 29
+- seeded alert mix included degraded, stale, delayed, and down cases
+- Grafana provisioned `UDS Incident Monitoring`
+- MCP returned non-empty results for status, alerts, metric history, and logs
+- validation dashboard returned HTTP 200
+- quick analysis validation completed on the fresh stack
 
-### 4. MCP auth is only enforced if `MCP_API_KEY` is set
+## Real remaining risks
 
-If `MCP_API_KEY` is empty, the MCP API effectively runs without auth.
+### 1. Fresh DB is still the only trustworthy validation path
 
-That is acceptable for a local prototype, but it should be treated as a known
-security shortcut, not as a finished design.
+The stack works from a fresh DB and runtime guards help in some places, but the
+project still does not have a formal migration strategy for older local DBs.
+
+Practical rule:
+
+- use `docker compose down -v` before serious Scope 1 validation
+
+### 2. Legacy full analysis should still be warmed up before a demo
+
+During the fresh-stack validation rerun:
+
+- quick validation completed successfully
+- one full analysis job was still `running` after the first minute
+
+Practical rule:
+
+- if you want to demo legacy full analysis, run it early and verify it
+  separately
+- do not make that path the main Scope 1 proof point
+
+### 3. Bootstrap timing still matters on first start
+
+The first run may still take time because model pull, RAG ingest, generator,
+and `uds-seeder` need to settle.
+
+Practical rule:
+
+- give the stack a few minutes on the first startup
+- watch `ollama-init`, `agent`, `generator`, and `uds-seeder` logs
+
+### 4. Security shortcuts are still present
+
+These are known prototype shortcuts, not current Scope 1 blockers:
+
+- acknowledge still has a GET alias
+- MCP auth is optional if `MCP_API_KEY` is empty
+- demo credentials are still convenience-oriented
 
 ## Geir files vs tracked repo files
 
-`databasecodeFraGeir/` is still local and untracked in this repo.
+`databasecodeFraGeir/` is still local and untracked.
 
-That matters less than before, because the important Scope 1 equivalents are now
-tracked in the repository:
+That no longer blocks the runnable prototype, because the important Scope 1
+files are now tracked in the repo:
 
 - schema: `db/init/003_uds.sql`
 - reference data: `db/init/004_uds_reference_data.sql`
 - seeding: `db/seed/uds_seed.sql`
 
-The local Geir files are still useful as source material and comparison input,
-but the prototype no longer depends on them being present in every clone in
-order to run.
+The Geir files are still useful as source material and comparison input, but
+they are no longer the runnable source of truth.
 
-## What to do before claiming Scope 1 works
+## Definition of good enough now
 
-1. Start from a fresh DB volume.
-2. Bring the stack up and confirm:
-   - UDS tables exist
-   - reference vessels and apps exist
-   - `uds-seeder` starts inserting rows
-3. Verify Grafana:
-   - vessel selector is populated
-   - UDS panels show data
-   - alerts table is populated
-4. Verify MCP:
-   - `get_vessel_app_status`
-   - `get_vessel_alerts`
-   - `get_app_metric_history`
-5. Review the remaining gap against User Story 1:
-   - historical metrics visibility
-   - logs or log-like context
-   - action-oriented incident context
+The current branch is good enough for:
 
-## Definition of "good enough for now"
+- final merge preparation
+- repeatable acceptance testing
+- demo preparation of the UDS incident flow
 
-The current branch is good enough for integration work and end-to-end testing
-because the four Scope 1 parts are finally aligned.
-
-It is not yet good enough to claim that User Story 1 is fully solved.
+It is not the same thing as a production-ready platform.

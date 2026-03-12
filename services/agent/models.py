@@ -1,5 +1,5 @@
 """
-Pydantic models – request / response schemas for the Agent API.
+Pydantic models - request / response schemas for the Agent API.
 """
 
 from datetime import datetime
@@ -7,7 +7,7 @@ from typing import Any, List, Optional
 from pydantic import BaseModel, Field
 
 
-# ─── Analyse endpoint ─────────────────────────────────────
+# --- Analyse endpoint -------------------------------------------------------
 class AnalyzeRequest(BaseModel):
     """POST /api/v1/analyze"""
     event_id: int
@@ -23,9 +23,11 @@ class AnalyzeResponse(BaseModel):
     analysis_mode:     str = "full"   # 'quick' | 'full'
     analysis_text:     str
     suggested_actions: List[str]
-    confidence:        float          # 0.0 – 1.0
+    confidence:        float          # 0.0 - 1.0
     model_used:        str            # e.g. 'stub', 'ollama/llama3'
     status:            str            # 'pending' | 'running' | 'completed' | 'failed'
+    retrieved_documents: List["RetrievedDocument"] = Field(default_factory=list)
+    tool_calls: List["ToolCallTrace"] = Field(default_factory=list)
 
 
 class RetrievedDocument(BaseModel):
@@ -111,7 +113,7 @@ class AnalysisValidationResponse(BaseModel):
     quality_factors: AnalysisQualityFactors
 
 
-# ─── Event schema ─────────────────────────────────────────
+# --- Event schema -----------------------------------------------------------
 class EventSchema(BaseModel):
     """Used when returning event data from the API."""
     id:               int

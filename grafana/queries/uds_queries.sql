@@ -199,6 +199,9 @@ SELECT
   la.alert_name AS "Latest Alert",
   la.severity AS "Latest Severity",
   la.starts_at AS "Latest Incident Start",
+  ROUND(COALESCE(MAX(CASE WHEN lm.metric_name = 'last_sync_age_seconds' THEN lm.value END), 0)::numeric, 0) AS "Last Sync Age (s)",
+  COALESCE(MAX(CASE WHEN lm.metric_name = 'reporting_stale' THEN lm.value END), 0)::int AS "Reporting Stale",
+  COALESCE(MAX(CASE WHEN lm.metric_name = 'sync_delayed' THEN lm.value END), 0)::int AS "Sync Delayed",
   ROUND(MAX(CASE WHEN lm.metric_name = 'http_error_rate_5xx' THEN lm.value END)::numeric, 2) AS "5xx %",
   ROUND(MAX(CASE WHEN lm.metric_name = 'process_cpu_usage' THEN lm.value END)::numeric, 2) AS "CPU %",
   MAX(lm.time) AS "Latest Sample"
@@ -265,6 +268,9 @@ SELECT
   la.alert_name AS "Latest Alert",
   la.severity AS "Latest Severity",
   la.starts_at AS "Latest Incident Start",
+  ROUND(COALESCE(MAX(CASE WHEN lm.metric_name = 'last_sync_age_seconds' THEN lm.value END), 0)::numeric, 0) AS "Last Sync Age (s)",
+  COALESCE(MAX(CASE WHEN lm.metric_name = 'reporting_stale' THEN lm.value END), 0)::int AS "Reporting Stale",
+  COALESCE(MAX(CASE WHEN lm.metric_name = 'sync_delayed' THEN lm.value END), 0)::int AS "Sync Delayed",
   MAX(lm.time) AS "Latest Sample"
 FROM selected_vessel sv
 JOIN uds_location_application_instances uai ON uai.uds_location_id = sv.id
@@ -296,6 +302,28 @@ WHERE u.imo_nr = '$vessel'
 ORDER BY al.starts_at DESC;
 
 -- ------------------------------------------------------------------
+-- Table: Selected App Recent Logs
+-- ------------------------------------------------------------------
+SELECT
+  l.logged_at AS "Logged At",
+  l.level AS "Level",
+  l.source AS "Source",
+  l.message AS "Message",
+  l.correlation_key AS "Correlation",
+  l.context AS "Context"
+FROM app_logs l
+JOIN udslocations u ON u.id = l.uds_location_id
+LEFT JOIN applications a ON a.id = l.application_id
+WHERE u.imo_nr = '$vessel'
+  AND (
+    LOWER(COALESCE(l.app_external_id, '')) = LOWER('${app}')
+    OR LOWER(COALESCE(a.external_id, '')) = LOWER('${app}')
+  )
+  AND l.logged_at >= NOW() - INTERVAL '${incident_window}'
+ORDER BY l.logged_at DESC
+LIMIT 100;
+
+-- ------------------------------------------------------------------
 -- Time series: Availability Signals
 -- ------------------------------------------------------------------
 SELECT ms.time AS "time", ms.metric_name AS metric, ms.value
@@ -303,6 +331,18 @@ FROM metric_samples ms
 WHERE ms.imo_nr = '$vessel'
   AND ms.app_id = '${app}'
   AND ms.metric_name IN ('service_up', 'health_check_status')
+  AND $__timeFilter(ms.time)
+  AND ms.time >= NOW() - INTERVAL '${incident_window}'
+ORDER BY ms.time;
+
+-- ------------------------------------------------------------------
+-- Time series: Connectivity And Freshness
+-- ------------------------------------------------------------------
+SELECT ms.time AS "time", ms.metric_name AS metric, ms.value
+FROM metric_samples ms
+WHERE ms.imo_nr = '$vessel'
+  AND ms.app_id = '${app}'
+  AND ms.metric_name IN ('last_sync_age_seconds', 'reporting_stale', 'sync_delayed')
   AND $__timeFilter(ms.time)
   AND ms.time >= NOW() - INTERVAL '${incident_window}'
 ORDER BY ms.time;
@@ -389,17 +429,20 @@ ORDER BY
     WHEN 'service_up' THEN 1
     WHEN 'health_check_status' THEN 2
     WHEN 'process_uptime_seconds' THEN 3
-    WHEN 'http_request_duration_p95' THEN 4
-    WHEN 'http_error_rate_5xx' THEN 5
-    WHEN 'http_error_rate_4xx' THEN 6
-    WHEN 'dotnet_exceptions_rate' THEN 7
-    WHEN 'process_cpu_usage' THEN 8
-    WHEN 'process_memory_bytes' THEN 9
-    WHEN 'process_open_handles' THEN 10
-    WHEN 'db_query_duration_avg' THEN 11
-    WHEN 'db_query_duration_p95' THEN 12
-    WHEN 'db_query_rate' THEN 13
-    WHEN 'db_query_errors' THEN 14
-    WHEN 'db_deadlocks' THEN 15
+    WHEN 'last_sync_age_seconds' THEN 4
+    WHEN 'reporting_stale' THEN 5
+    WHEN 'sync_delayed' THEN 6
+    WHEN 'http_request_duration_p95' THEN 7
+    WHEN 'http_error_rate_5xx' THEN 8
+    WHEN 'http_error_rate_4xx' THEN 9
+    WHEN 'dotnet_exceptions_rate' THEN 10
+    WHEN 'process_cpu_usage' THEN 11
+    WHEN 'process_memory_bytes' THEN 12
+    WHEN 'process_open_handles' THEN 13
+    WHEN 'db_query_duration_avg' THEN 14
+    WHEN 'db_query_duration_p95' THEN 15
+    WHEN 'db_query_rate' THEN 16
+    WHEN 'db_query_errors' THEN 17
+    WHEN 'db_deadlocks' THEN 18
     ELSE 99
   END;

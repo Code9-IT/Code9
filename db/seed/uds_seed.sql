@@ -75,6 +75,10 @@ scenario_flags AS (
   SELECT
     ai.*,
     CASE
+      WHEN ai.imo_nr = 'IMO9300001' AND ai.app_id = 'uds-edge-data-api' THEN 'delayed'
+      WHEN ai.imo_nr = 'IMO9300001' AND ai.app_id = 'data-quality-processor' THEN 'stale'
+      WHEN ai.imo_nr = 'IMO9300002' AND ai.app_id = 'uds-edge-parquet-sync' THEN 'down'
+      WHEN ai.imo_nr = 'IMO9300003' AND ai.app_id = 'time-series-processor' THEN 'degraded'
       WHEN scenario_roll < 0.08 THEN 'down'
       WHEN scenario_roll < 0.24 THEN 'degraded'
       WHEN scenario_roll < 0.34 THEN 'stale'
@@ -356,6 +360,10 @@ scenario_flags AS (
   SELECT
     ai.*,
     CASE
+      WHEN ai.imo_nr = 'IMO9300001' AND ai.app_id = 'uds-edge-data-api' THEN 'delayed'
+      WHEN ai.imo_nr = 'IMO9300001' AND ai.app_id = 'data-quality-processor' THEN 'stale'
+      WHEN ai.imo_nr = 'IMO9300002' AND ai.app_id = 'uds-edge-parquet-sync' THEN 'down'
+      WHEN ai.imo_nr = 'IMO9300003' AND ai.app_id = 'time-series-processor' THEN 'degraded'
       WHEN scenario_roll < 0.08 THEN 'down'
       WHEN scenario_roll < 0.24 THEN 'degraded'
       WHEN scenario_roll < 0.34 THEN 'stale'
@@ -450,5 +458,126 @@ SELECT
 FROM scenario_flags sf
 WHERE sf.scenario <> 'healthy'
 ON CONFLICT DO NOTHING;
+
+WITH
+sync_run AS (
+  SELECT date_trunc('minute', timezone('UTC', now())) AS sync_time_utc
+),
+app_instances AS (
+  SELECT
+    u.id AS uds_location_id,
+    u.imo_nr,
+    a.id AS application_id,
+    a.external_id AS app_id,
+    a.name AS app_name
+  FROM uds_location_application_instances uai
+  JOIN udslocations u ON u.id = uai.uds_location_id
+  JOIN applications a ON a.id = uai.application_instance_id
+  WHERE u.imo_nr IN ('IMO9300001', 'IMO9300002', 'IMO9300003')
+    AND a.external_id IN (
+      'time-series-processor',
+      'data-quality-processor',
+      'uds-topic-handler-edge',
+      'uds-edge-data-api',
+      'uds-edge-ingest-source-admin',
+      'uds-edge-parquet-sync'
+    )
+),
+scenario_flags AS (
+  SELECT
+    ai.*,
+    CASE
+      WHEN ai.imo_nr = 'IMO9300001' AND ai.app_id = 'uds-edge-data-api' THEN 'delayed'
+      WHEN ai.imo_nr = 'IMO9300001' AND ai.app_id = 'data-quality-processor' THEN 'stale'
+      WHEN ai.imo_nr = 'IMO9300002' AND ai.app_id = 'uds-edge-parquet-sync' THEN 'down'
+      WHEN ai.imo_nr = 'IMO9300003' AND ai.app_id = 'time-series-processor' THEN 'degraded'
+      WHEN scenario_roll < 0.08 THEN 'down'
+      WHEN scenario_roll < 0.24 THEN 'degraded'
+      WHEN scenario_roll < 0.34 THEN 'stale'
+      WHEN scenario_roll < 0.44 THEN 'delayed'
+      ELSE 'healthy'
+    END AS scenario,
+    (
+      (
+        get_byte(decode(md5(ai.imo_nr || ':' || ai.app_id || ':' || sr.sync_time_utc::text || ':subtype'), 'hex'), 0)::bigint * 16777216 +
+        get_byte(decode(md5(ai.imo_nr || ':' || ai.app_id || ':' || sr.sync_time_utc::text || ':subtype'), 'hex'), 1)::bigint * 65536 +
+        get_byte(decode(md5(ai.imo_nr || ':' || ai.app_id || ':' || sr.sync_time_utc::text || ':subtype'), 'hex'), 2)::bigint * 256 +
+        get_byte(decode(md5(ai.imo_nr || ':' || ai.app_id || ':' || sr.sync_time_utc::text || ':subtype'), 'hex'), 3)::bigint
+      ) / 4294967295.0
+    ) AS subtype_roll
+  FROM (
+    SELECT
+      ai.*,
+      (
+        (
+          get_byte(decode(md5(ai.imo_nr || ':' || ai.app_id || ':' || sr.sync_time_utc::text || ':scenario'), 'hex'), 0)::bigint * 16777216 +
+          get_byte(decode(md5(ai.imo_nr || ':' || ai.app_id || ':' || sr.sync_time_utc::text || ':scenario'), 'hex'), 1)::bigint * 65536 +
+          get_byte(decode(md5(ai.imo_nr || ':' || ai.app_id || ':' || sr.sync_time_utc::text || ':scenario'), 'hex'), 2)::bigint * 256 +
+          get_byte(decode(md5(ai.imo_nr || ':' || ai.app_id || ':' || sr.sync_time_utc::text || ':scenario'), 'hex'), 3)::bigint
+        ) / 4294967295.0
+      ) AS scenario_roll
+    FROM app_instances ai
+    CROSS JOIN sync_run sr
+  ) ai
+  CROSS JOIN sync_run sr
+)
+INSERT INTO app_logs (
+  uds_location_id,
+  application_id,
+  app_external_id,
+  level,
+  source,
+  message,
+  logged_at,
+  correlation_key,
+  context
+)
+SELECT
+  sf.uds_location_id,
+  sf.application_id,
+  sf.app_id,
+  CASE
+    WHEN sf.scenario = 'down' THEN 'error'
+    WHEN sf.scenario IN ('degraded', 'stale', 'delayed') THEN 'warning'
+    ELSE 'info'
+  END,
+  CASE
+    WHEN sf.scenario = 'down' THEN 'application'
+    WHEN sf.scenario = 'degraded' THEN 'runtime'
+    WHEN sf.scenario = 'stale' THEN 'sync-agent'
+    WHEN sf.scenario = 'delayed' THEN 'connectivity'
+    ELSE 'sync-agent'
+  END,
+  CASE
+    WHEN sf.scenario = 'down' THEN 'Health checks are failing and the application is unavailable.'
+    WHEN sf.scenario = 'degraded' AND sf.subtype_roll < 0.5 THEN 'Request latency is elevated and server errors are increasing.'
+    WHEN sf.scenario = 'degraded' THEN 'CPU, handle count, or database pressure is elevated.'
+    WHEN sf.scenario = 'stale' THEN 'No fresh metrics received in the expected reporting window; showing last known values.'
+    WHEN sf.scenario = 'delayed' THEN 'Metric sync is delayed, likely due to intermittent vessel connectivity.'
+    ELSE 'Periodic sync completed successfully and the application is healthy.'
+  END,
+  CASE
+    WHEN sf.scenario = 'stale' THEN (SELECT sync_time_utc FROM sync_run) - interval '38 minutes'
+    WHEN sf.scenario = 'delayed' THEN (SELECT sync_time_utc FROM sync_run) - interval '10 minutes'
+    WHEN sf.scenario = 'degraded' THEN (SELECT sync_time_utc FROM sync_run) - interval '4 minutes'
+    WHEN sf.scenario = 'down' THEN (SELECT sync_time_utc FROM sync_run) - interval '2 minutes'
+    ELSE (SELECT sync_time_utc FROM sync_run) - interval '1 minute'
+  END,
+  md5(
+    sf.imo_nr || ':' || sf.app_id || ':' || sf.scenario || ':' ||
+    (SELECT sync_time_utc FROM sync_run)::text || ':app-log'
+  )::varchar(255),
+  jsonb_build_object(
+    'imo', sf.imo_nr,
+    'app_id', sf.app_id,
+    'app_name', sf.app_name,
+    'scenario', sf.scenario,
+    'sync_window', CASE
+      WHEN sf.scenario = 'stale' THEN 'missing metrics > 35m'
+      WHEN sf.scenario = 'delayed' THEN 'sync delayed 10m+'
+      ELSE 'normal'
+    END
+  )
+FROM scenario_flags sf;
 
 COMMIT;

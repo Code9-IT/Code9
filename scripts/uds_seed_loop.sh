@@ -26,7 +26,7 @@ run_sql_scalar() {
 }
 
 schema_ready() {
-  [ "$(run_sql_scalar "SELECT CASE WHEN to_regclass('public.udslocations') IS NOT NULL AND to_regclass('public.applications') IS NOT NULL AND to_regclass('public.metric_samples') IS NOT NULL AND to_regclass('public.alerts') IS NOT NULL THEN 1 ELSE 0 END;")" = "1" ]
+  [ "$(run_sql_scalar "SELECT CASE WHEN to_regclass('public.udslocations') IS NOT NULL AND to_regclass('public.applications') IS NOT NULL AND to_regclass('public.metric_samples') IS NOT NULL AND to_regclass('public.alerts') IS NOT NULL AND to_regclass('public.app_logs') IS NOT NULL THEN 1 ELSE 0 END;")" = "1" ]
 }
 
 reference_data_ready() {
@@ -68,10 +68,12 @@ while true; do
 
   metric_count="$(run_sql_scalar "SELECT COUNT(*) FROM metric_samples;")"
   alert_count="$(run_sql_scalar "SELECT COUNT(*) FROM alerts;")"
+  log_count="$(run_sql_scalar "SELECT COUNT(*) FROM app_logs;")"
   latest_metric="$(run_sql_scalar "SELECT COALESCE(to_char(MAX(time) AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"'), 'NULL') FROM metric_samples;")"
   recent_alert_mix="$(run_sql_scalar "SELECT COALESCE(string_agg(alert_type || ':' || cnt, ', ' ORDER BY alert_type), 'none') FROM (SELECT alert_type, COUNT(*)::int AS cnt FROM alerts WHERE received_at >= NOW() - INTERVAL '1 hour' GROUP BY alert_type) t;")"
   recent_connectivity_mix="$(run_sql_scalar "SELECT COALESCE(string_agg(metric_name || ':' || affected, ', ' ORDER BY metric_name), 'none') FROM (SELECT metric_name, COUNT(DISTINCT application_instance_id)::int AS affected FROM metric_samples WHERE time >= NOW() - INTERVAL '1 hour' AND metric_name IN ('reporting_stale', 'sync_delayed') AND value > 0 GROUP BY metric_name) t;")"
-  log "UDS seed complete: metric_samples=$metric_count alerts=$alert_count latest_metric=$latest_metric recent_alert_mix=$recent_alert_mix connectivity=$recent_connectivity_mix"
+  recent_log_mix="$(run_sql_scalar "SELECT COALESCE(string_agg(level || ':' || cnt, ', ' ORDER BY level), 'none') FROM (SELECT LOWER(level) AS level, COUNT(*)::int AS cnt FROM app_logs WHERE logged_at >= NOW() - INTERVAL '1 hour' GROUP BY LOWER(level)) t;")"
+  log "UDS seed complete: metric_samples=$metric_count alerts=$alert_count app_logs=$log_count latest_metric=$latest_metric recent_alert_mix=$recent_alert_mix connectivity=$recent_connectivity_mix logs=$recent_log_mix"
 
   sleep "$UDS_SEED_INTERVAL_SECONDS"
 done

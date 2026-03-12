@@ -1,13 +1,13 @@
 """
 Maritime Synthetic Data Generator
 ==================================
-Continuously writes telemetry rows – and occasional anomaly events –
+Continuously writes telemetry rows - and occasional anomaly events -
 into TimescaleDB.  This populates the Grafana dashboards and gives
 the AI agent events to analyse.
 
 Configuration (all via env vars, see .env.example):
-  GENERATE_INTERVAL_SECONDS   – seconds between write cycles (default 3)
-  ANOMALY_PROBABILITY         – per-sensor probability per cycle (default 0.00008,
+  GENERATE_INTERVAL_SECONDS   - seconds between write cycles (default 3)
+  ANOMALY_PROBABILITY         - per-sensor probability per cycle (default 0.00008,
                                 ~1 event per 8 min with 77 threshold combinations)
 
 TODO: add a "burst" mode that fires several anomalies quickly for live demos.
@@ -20,13 +20,14 @@ from db        import get_connection
 from sensors   import generate_telemetry_batch, VESSELS
 from anomalies import maybe_generate_anomaly
 
-# ─── Configuration ───────────────────────────────────────
+# --- Configuration ----------------------------------------------------------
 INTERVAL        = int(os.getenv("GENERATE_INTERVAL_SECONDS", "3"))
 ANOMALY_PROB    = float(os.getenv("ANOMALY_PROBABILITY",      "0.00008"))
 STALE_SECONDS   = int(os.getenv("STALE_SENSOR_SECONDS",       "60"))   # seconds before a silent sensor fires an event
 WATCHDOG_CYCLES = int(os.getenv("WATCHDOG_INTERVAL_CYCLES",   "10"))   # run watchdog every N cycles (~30s default)
+STARTUP_DEMO_EVENT = os.getenv("GENERATE_STARTUP_DEMO_EVENT", "true").lower() != "false"
 
-# ─── SQL ──────────────────────────────────────────────────
+# --- SQL --------------------------------------------------------------------
 INSERT_TELEMETRY = """
     INSERT INTO telemetry (vessel_id, sensor_name, value)
     VALUES (%(vessel_id)s, %(sensor_name)s, %(value)s);
@@ -55,6 +56,33 @@ STALE_SENSORS_QUERY = """
 """
 
 
+def ensure_startup_demo_event(cur) -> None:
+    """Guarantee a single analyzable event exists on a fresh stack."""
+    if not STARTUP_DEMO_EVENT:
+        return
+
+    cur.execute("SELECT COUNT(*) FROM events;")
+    if int(cur.fetchone()[0] or 0) > 0:
+        return
+
+    cur.execute(
+        """
+        INSERT INTO events (vessel_id, sensor_name, event_type, severity, details)
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING id
+        """,
+        (
+            VESSELS[0],
+            "dg1_engine_speed",
+            "demo_startup_alert",
+            "warning",
+            "Synthetic startup event inserted automatically so the analysis flow is testable on a fresh stack.",
+        ),
+    )
+    event_id = cur.fetchone()[0]
+    print(f"[generator] STARTUP DEMO EVENT -> id={event_id} on {VESSELS[0]}")
+
+
 def check_stale_sensors(cur, vessel_id: str, stale_seconds: int) -> int:
     """Create a sensor_offline event for any sensor silent longer than stale_seconds.
     Returns the number of offline sensors detected."""
@@ -69,15 +97,15 @@ def check_stale_sensors(cur, vessel_id: str, stale_seconds: int) -> int:
             "details":     f"Sensor '{sensor_name}' has not reported data for over {stale_seconds} seconds. "
                            f"Check sensor connection, data pipeline, and upstream data source.",
         })
-        print(f"[generator] STALE SENSOR → {sensor_name} on {vessel_id} (silent >{stale_seconds}s)")
+        print(f"[generator] STALE SENSOR -> {sensor_name} on {vessel_id} (silent >{stale_seconds}s)")
     return len(rows)
 
 
-# ─── Main loop ────────────────────────────────────────────
+# --- Main loop --------------------------------------------------------------
 def main():
-    print("[generator] Starting … waiting for database …")
+    print("[generator] Starting ... waiting for database ...")
     conn = get_connection()
-    print(f"[generator] Running – interval={INTERVAL}s, anomaly_prob={ANOMALY_PROB}")
+    print(f"[generator] Running - interval={INTERVAL}s, anomaly_prob={ANOMALY_PROB}")
 
     cycle = 0
     while True:
@@ -86,6 +114,9 @@ def main():
                 # 1) Normal telemetry for every sensor on every vessel
                 batch = generate_telemetry_batch()
                 cur.executemany(INSERT_TELEMETRY, batch)
+
+                if cycle == 0:
+                    ensure_startup_demo_event(cur)
 
                 # 2) Maybe produce an anomaly for each vessel
                 for vessel in VESSELS:
@@ -105,7 +136,7 @@ def main():
                             "severity":   anomaly["severity"],
                             "details":    anomaly["details"],
                         })
-                        print(f"[generator] ANOMALY → {anomaly['event_type']} on {anomaly['vessel_id']} (severity={anomaly['severity']})")
+                        print(f"[generator] ANOMALY -> {anomaly['event_type']} on {anomaly['vessel_id']} (severity={anomaly['severity']})")
 
                 # 3) Watchdog: detect sensors that have gone silent
                 if cycle % WATCHDOG_CYCLES == 0:
@@ -116,7 +147,7 @@ def main():
 
             cycle += 1
             if cycle % 20 == 0:
-                print(f"[generator] … cycle {cycle}")
+                print(f"[generator] ... cycle {cycle}")
 
             time.sleep(INTERVAL)
 
@@ -130,7 +161,7 @@ def main():
             # (covers server-side termination, network drop, and explicit close).
             # Check this regardless of whether rollback succeeded.
             if conn.closed:
-                print("[generator] Connection lost – reconnecting …")
+                print("[generator] Connection lost - reconnecting ...")
                 try:
                     conn = get_connection()
                 except Exception as reconnect_exc:

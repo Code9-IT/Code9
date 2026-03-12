@@ -1,11 +1,11 @@
 # =============================================================
-# Maritime Agentic Observability – .gitignore
+# Maritime Agentic Observability - .gitignore
 # =============================================================
 
-# ─── Environment (NEVER commit a real .env) ─────────────
+# --- Environment (NEVER commit a real .env) ---------------------------------
 .env
 
-# ─── Python ───────────────────────────────────────────────
+# --- Python -----------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
@@ -17,27 +17,28 @@ env/
 dist/
 build/
 
-# ─── IDE ──────────────────────────────────────────────────
+# --- IDE --------------------------------------------------------------------
 .idea/
 .vscode/
 .claude/
 *.swp
 *.swo
 
-# ─── OS ───────────────────────────────────────────────────
+# --- OS ---------------------------------------------------------------------
 .DS_Store
 Thumbs.db
 
-# ─── Logs ─────────────────────────────────────────────────
+# --- Logs -------------------------------------------------------------------
 *.log
 logs/
 
-# ─── Docker ───────────────────────────────────────────────
+# --- Docker -----------------------------------------------------------------
 .docker/
 
-# ─── Local / personal folders (not part of the project) ──
+# --- Local / personal folders (not part of the project) ---------------------
 tester/
 KristianEkstraFolder/
 
-# ─── Temporary Claude file-write helpers ──────────────────
+# --- Temporary Claude file-write helpers ------------------------------------
 write_*.py
+databasecodeFraGeir/

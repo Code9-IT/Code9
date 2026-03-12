@@ -1,190 +1,218 @@
-# Maritime Agentic Observability – Starter Kit
+# Maritime Agentic Observability Starter Kit
 
-Bachelor project in collaboration with **Knowit Sørlandet**.
+Bachelor project in collaboration with **Knowit Sorlandet**.
 
-A prototype that adds an **AI-agent layer** on top of a maritime
-telemetry dashboard: when an anomaly is detected the agent explains
-what happened and suggests corrective actions.
+This repository now contains two parallel monitoring paths:
 
-> Active development — core pipeline is live (Ollama tool-calling, MCP, generator).
-> See [`docs/NEXT_STEPS.md`](docs/NEXT_STEPS.md) for task distribution across the group.
-> See [`docs/SCOPE1_REVIEW_FINDINGS.md`](docs/SCOPE1_REVIEW_FINDINGS.md) for the current Scope 1 review baseline.
+1. Legacy ship telemetry
+   - synthetic sensors
+   - anomaly events
+   - AI analysis for telemetry incidents
+2. Scope 1 UDS incident monitoring
+   - application health per vessel
+   - periodic UDS metrics, alerts, and app logs
+   - Grafana and MCP support for single-vessel incident handling
 
----
+The current Scope 1 target is User Story 1 from Geir:
 
-## Quick Start
+> When a warning or error arrives from an application on a vessel, the team
+> needs a dashboard that shows the full operational state of the vessel's
+> applications, relevant historical metrics and logs, and enough context to
+> evaluate the situation and take action.
+
+Useful companion docs:
+
+- `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md`
+- `docs/SCOPE1_HANDOFF_NOTES.md`
+- `docs/SCOPE1_REVIEW_FINDINGS.md`
+- `docs/NEXT_STEPS.md`
+- `docs/UDS_dashboard_spec.md`
+- `docs/FUTURE_CHECKS.md`
+
+## Current status
+
+As of 2026-03-12, a fresh-stack Student 4 validation on
+`feat/scope1-student1-2-3-integration` confirmed:
+
+- tracked UDS schema and reference data load on a fresh DB volume
+- the repo seeds 3 demo vessels, 6 applications, and 18 vessel/application links
+- `uds-seeder` inserts `metric_samples`, `alerts`, and `app_logs`
+- `UDS Incident Monitoring` is provisioned in Grafana
+- MCP UDS tools return vessel status, alerts, metric history, and app logs
+- the validation dashboard loads, and quick legacy-event analysis completes
+
+The main remaining work is now final merge discipline, documentation hygiene,
+and low-priority hardening.
+
+One important caveat still exists: legacy **full** analysis can take longer than
+the first minute on a cold start, so if you plan to demo that path, warm it up
+and verify it separately. That does not block Scope 1 UDS acceptance.
+
+## Quick start
 
 ### Prerequisites
 
-| Tool | Min version | Why |
-|------|-------------|-----|
-| Docker Desktop | latest | runs everything |
+- Docker Desktop
 
-That is it – no local Python, no database install.
+No local PostgreSQL or Python install is required for the normal workflow.
 
-### Steps
+### Start the stack
 
 ```bash
-# 1) Clone
 git clone <repo-url>
 cd <repo-dir>
-
-# 2) Copy env file  (edit passwords/ports if you like)
 cp .env.example .env
-
-# 3) Build + start all services
-docker compose up --build
+docker compose up -d --build
 ```
 
-First run downloads images and may take a couple of minutes.
+Important first-start behavior:
+
+- `ollama-init` pulls `llama3.2` and `nomic-embed-text`
+- the agent retries RAG ingest until embeddings are available
+- the generator inserts one startup event if the legacy `events` table is empty
+- `uds-seeder` waits until the UDS schema and reference data exist
+
+Useful startup logs:
 
 ```bash
-# 3b) Pull the two Ollama models (first run only – ~2.3 GB total)
-docker exec -it maritime_ollama ollama pull nomic-embed-text   # embedding model for RAG (274 MB)
-docker exec -it maritime_ollama ollama pull llama3.2           # LLM for analysis (2.0 GB)
+docker compose logs -f ollama-init agent generator uds-seeder
 ```
 
-> **Note:** The default `OLLAMA_MODEL` in `.env.example` is `llama3.2`.
-> If your `.env` still has `llama3.2:1b`, change it to `llama3.2` - the `1b` tag does not exist
-> and will cause analysis to fail with a 404.
+### Open the main services
 
-> **Important for current Scope 1 work:** if you already have an older
-> `timescaledb_data` volume, reset it before testing the integrated UDS path.
-> The current prototype now depends on additional init scripts for UDS schema
-> and reference data, and old DB volumes may not match the code.
+- Grafana: `http://localhost:3000`
+- Agent docs: `http://localhost:8000/docs`
+- Validation dashboard: `http://localhost:8000/api/v1/validate/dashboard`
+- MCP docs: `http://localhost:8001/docs`
+
+Default demo Grafana credentials from `.env.example` are:
+
+- user: `admin`
+- password: `code9-demo-admin`
+
+### Important reset rule
+
+The database init scripts only auto-run on a fresh DB volume. For trustworthy
+Scope 1 validation, reset the stack like this:
 
 ```bash
-# 4) Watch the generator to confirm data is flowing
-docker compose logs -f generator
-# You should see  [generator] Connected …  and periodic cycle messages.
+docker compose down -v
+docker compose up -d --build
 ```
 
-```bash
-# 5) Open Grafana in the browser
-#    URL   → http://localhost:3000
-#    Login → use GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD from your .env
-#    Dashboards live under the "Maritime" folder.
-```
+If you test against an old volume, you may hide schema drift or init problems.
 
-### Trigger an analysis manually
+### Scope 1 acceptance
 
-```bash
-# a) Find a recent event ID (grab any id from the Events table in Grafana, or:)
-curl -s http://localhost:8000/api/v1/events?limit=1 | python -m json.tool
+Use `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md` as the repeatable acceptance flow.
+That checklist covers:
 
-# b) Ask the agent to analyse that event (replace 1 with the real id)
-curl -X POST http://localhost:8000/api/v1/analyze \
-     -H "Content-Type: application/json" \
-     -d '{"event_id": 1}'
+- fresh DB startup
+- UDS schema and reference data
+- seeding into metrics, alerts, and logs
+- Grafana incident flow
+- MCP sanity checks
+- validation and legacy-analysis sanity checks
 
-# c) Force a fresh re-analysis for the same event (bypasses duplicate guard)
-curl -X POST http://localhost:8000/api/v1/analyze \
-     -H "Content-Type: application/json" \
-     -d '{"event_id": 1, "force": true}'
-```
+## Project layout
 
-The analysis appears in the **AI Analyses** panel
-on the Ship Operations dashboard within the next Grafana refresh.
-By default, repeated analyse calls for the same `event_id` return the latest
-existing analysis. Set `"force": true` when you explicitly want a new LLM run.
-
-### Add knowledge docs and ingest
-
-```bash
-# Put curated .md/.txt files in docs/knowledge/
-# Then ingest/update embeddings:
-docker exec maritime_agent python rag/ingest.py
-```
-
-### Stop
-
-```bash
-docker compose down
-```
-
-### Reset (wipe all data)
-
-```bash
-bash scripts/reset_db.sh        # Linux / macOS / Git Bash
-# then:
-docker compose up --build
-```
-
----
-
-## Project Layout
-
-```
+```text
 .
-├── docker-compose.yml          ← all services in one file
-├── .env.example                ← environment variables template
-│
-├── db/
-│   ├── init/001_init.sql       ← legacy telemetry/events/ai_analyses schema
-│   ├── init/003_uds.sql        ← Scope 1 UDS schema
-│   ├── init/004_uds_reference_data.sql ← tracked UDS reference data
-│   └── seed/uds_seed.sql       ← periodic mock UDS metrics/alerts
-│
-├── grafana/
-│   ├── provisioning/           ← datasource + dashboard auto-config
-│   └── dashboards/             ← JSON for "Ship Ops" + "UDS Monitoring"
-│
-├── services/
-│   ├── agent/                  ← FastAPI AI-agent
-│   │   ├── main.py             ← app entry point
-│   │   ├── routes/             ← HTTP endpoints
-│   │   ├── rag/                ← RAG (pgvector retrieval + ingest, live)
-│   │   └── llm/                ← Ollama client (llama3.2, live)
-│   ├── mcp/                    ← MCP REST adapter (DB tools for agent)
-│   └── generator/              ← synthetic data writer
-│       ├── main.py             ← infinite loop: generate → insert
-│       ├── sensors.py          ← sensor definitions + normal values
-│       └── anomalies.py        ← random anomaly generation
-│
-├── docs/
-│   ├── architecture.md         ← system overview + diagram
-│   ├── NEXT_STEPS.md          ← task distribution + 73-sensor reference
-│   ├── FUTURE_CHECKS.md       ← security backlog + RAG quality roadmap
-│   └── knowledge/             ← 17 curated maritime RAG knowledge files (Points 1–10)
-│
-└── scripts/
-    ├── reset_db.sh             ← wipe + recreate the database
-    └── uds_seed_loop.sh        ← periodic UDS seed runner
+|-- docker-compose.yml
+|-- .env.example
+|
+|-- db/
+|   |-- init/001_init.sql
+|   |-- init/002_rag.sql
+|   |-- init/003_uds.sql
+|   |-- init/004_uds_reference_data.sql
+|   `-- seed/uds_seed.sql
+|
+|-- grafana/
+|   |-- dashboards/
+|   |   |-- ship_operations.json
+|   |   `-- uds_monitoring.json
+|   |-- provisioning/
+|   `-- queries/uds_queries.sql
+|
+|-- services/
+|   |-- agent/
+|   |-- generator/
+|   `-- mcp/
+|
+|-- scripts/
+|   |-- reset_db.sh
+|   `-- uds_seed_loop.sh
+|
+`-- docs/
+    |-- SCOPE1_ACCEPTANCE_CHECKLIST.md
+    |-- SCOPE1_HANDOFF_NOTES.md
+    |-- SCOPE1_REVIEW_FINDINGS.md
+    |-- NEXT_STEPS.md
+    |-- FUTURE_CHECKS.md
+    `-- UDS_dashboard_spec.md
 ```
 
----
+## Scope 1 path summary
 
-## Tech Stack
+### Legacy path
 
-| Tool | Role |
-|------|------|
-| **TimescaleDB** | Time-series database (PostgreSQL) |
-| **Grafana 11** | Dashboard visualisation |
-| **FastAPI** | Agent HTTP API |
-| **Ollama** | Local LLM (llama3.2) – live, tool-calling enabled |
-| **Docker Compose** | Single-command local environment |
+Defined mainly by:
 
----
+- `db/init/001_init.sql`
+- `services/generator/`
+- `services/agent/routes/analyze.py`
+- `grafana/dashboards/ship_operations.json`
 
-## Current state
+Tables:
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| **RAG** | ✅ Live | 17 curated maritime knowledge files, 76 chunks in pgvector. Auto-ingests on first startup. |
-| **LLM analysis** | ✅ Live | Ollama `llama3.2` with tool-calling loop. Analyses stored in `ai_analyses`. |
-| **UDS schema + seed path** | IN_PROGRESS | Scope 1 schema, reference data, and periodic UDS seeding are integrated, but require fresh DB validation. |
-| **Grafana dashboards** | IN_PROGRESS | Ship Operations and UDS Monitoring are provisioned. UDS Monitoring still needs stronger historical incident context for full User Story 1 coverage. |
-| **Auto-analysis** | ❌ Manual only | Events must be analysed via `POST /api/v1/analyze` or Grafana data link. No background worker yet. |
-| **Auth** | ❌ Prototype only | MCP has API-key support, but agent auth and production-safe endpoint protection are still missing. |
+- `telemetry`
+- `events`
+- `ai_analyses`
 
-Search the codebase for `TODO` to find every pre-marked task.
+### UDS path
 
----
+Defined mainly by:
 
-## Contributing (group workflow)
+- `db/init/003_uds.sql`
+- `db/init/004_uds_reference_data.sql`
+- `db/seed/uds_seed.sql`
+- `scripts/uds_seed_loop.sh`
+- `services/mcp/main.py`
+- `grafana/dashboards/uds_monitoring.json`
 
-1. Pull latest `main`.
-2. Create a feature branch: `git checkout -b feat/your-name-feature`.
-3. Work in **your** directory (see `docs/NEXT_STEPS.md`).
-4. Push the branch and open a Pull Request.
-5. Someone else reviews → merge → delete branch.
+Tables:
+
+- `owners`
+- `udslocations`
+- `applications`
+- `uds_location_application_instances`
+- `metric_samples`
+- `alerts`
+- `app_logs`
+- `uds_location_owner_history`
+- `monitoring_configs` (compatibility shim)
+
+## Known limitations
+
+These are still real, but they are not the main Scope 1 blocker anymore:
+
+- `GET /api/v1/events/{event_id}/acknowledge` still mutates state
+- MCP auth is only enforced if `MCP_API_KEY` is non-empty
+- existing DB volumes still rely on reset/runtime-guard behavior instead of a
+  full migration strategy
+- the demo topology is intentionally fixed to 3 vessels and 6 applications
+- `app_logs` is a lightweight prototype bridge, not a full centralized log
+  pipeline
+- cold-start legacy full analysis may need extra warmup time before a demo
+
+See `docs/FUTURE_CHECKS.md` for the current backlog.
+
+## Group workflow
+
+1. Work from the current integration branch or a short-lived feature branch on top of it.
+2. Keep changes narrow and scoped.
+3. Update docs in the same PR when behavior changes.
+4. Re-run the Scope 1 acceptance checklist after meaningful merges.
+5. Treat `databasecodeFraGeir/` as local source material, not the runnable
+   source of truth.

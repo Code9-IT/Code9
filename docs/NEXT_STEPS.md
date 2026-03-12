@@ -1,145 +1,104 @@
-# Next Steps - Scope 1 Integration
+# Next Steps - Scope 1 Finalization
 
-This file replaces the older person-by-person work split.
-The project is now in an integration phase where Del A, B, C, and D already
-exist in the same branch and the next work should be driven by the User Story 1
-gap, not by the old ownership split.
+Last updated: 2026-03-12
 
-For longer-term backlog items, see `docs/FUTURE_CHECKS.md`.
-For the concentrated review baseline, see `docs/SCOPE1_REVIEW_FINDINGS.md`.
+This file now describes the post-integration work for Scope 1. It is no longer
+the old student split plan.
 
-## Scope 1 target
+Companion docs:
 
-User Story 1:
+- `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md`
+- `docs/SCOPE1_HANDOFF_NOTES.md`
+- `docs/SCOPE1_REVIEW_FINDINGS.md`
+- `docs/FUTURE_CHECKS.md`
 
-- one vessel
-- one or more warnings/errors from applications on that vessel
-- complete operational state of the hosted applications
-- relevant historical metrics and logs
-- enough context to evaluate the situation and take action
+## Current conclusion
 
-## What is already in place
+The UDS Scope 1 path is now functionally coherent and has passed a fresh-stack
+acceptance rerun on `feat/scope1-student1-2-3-integration`.
 
-### Del A - UDS schema
+What was verified on 2026-03-12:
 
-- `db/init/003_uds.sql`
-- `db/init/004_uds_reference_data.sql`
+- the stack booted from `docker compose down -v` and `docker compose up -d --build`
+- tracked UDS schema and reference data loaded correctly
+- the fresh DB contained:
+  - 3 vessels
+  - 6 applications
+  - 18 vessel/application link rows
+- the first `uds-seeder` cycle inserted:
+  - 468 `metric_samples`
+  - 11 `alerts`
+  - 29 `app_logs`
+- the seeded alert mix included:
+  - `service_down`
+  - `latency_degraded`
+  - `reporting_stale`
+  - `sync_delayed`
+- Grafana provisioned `UDS Incident Monitoring`
+- MCP returned real UDS incident data for `IMO9300001`
+- the validation dashboard returned HTTP 200
+- quick analysis validation completed successfully on the fresh stack
 
-Current result:
+## What that means
 
-- UDS schema exists
-- 3 reference vessels exist
-- 6 reference applications exist
-- vessel/application link rows exist
+The real remaining work is not rebuilding Scope 1 architecture anymore.
+It is:
 
-### Del B - UDS seeding
+- keeping docs aligned with the actual merge candidate
+- rerunning acceptance after further merges
+- doing one last browser-based signoff before the final demo or PR
 
-- `db/seed/uds_seed.sql`
-- `scripts/uds_seed_loop.sh`
-- `uds-seeder` service in `docker-compose.yml`
+## What still needs explicit attention
 
-Current result:
+### High priority
 
-- periodic UDS seeding exists
-- seeding now respects vessel/application link rows
-- seeding waits until schema and reference data are ready
+1. Re-run the acceptance checklist on the latest merge candidate.
+2. Keep the docs synchronized with the branch that the group actually plans to
+   merge.
+3. Do one manual Grafana signoff pass on `UDS Incident Monitoring` after the
+   last code merge.
 
-### Del C - MCP UDS tools
+### Medium priority
 
-- `services/mcp/main.py`
+1. If the group wants to demo legacy full analysis, run it early and verify it
+   separately.
+   Reason:
+   - on the fresh-stack validation, quick validation completed
+   - one cold-start full analysis job was still `running` after the first minute
+2. Decide whether the dashboard needs any final visual polish for the demo.
 
-Current result:
+### Low priority
 
-- `get_vessel_app_status`
-- `get_vessel_alerts`
-- `get_app_metric_history`
-- API key support for MCP
+Do not spend time here unless the group finishes early:
 
-### Del D - UDS dashboard
+- auth hardening
+- removing the acknowledge GET route
+- migration strategy for older DB volumes
+- multi-vessel Scope 2 work
+- NOC Scope 3 work
+- deeper RAG tuning beyond what already works
 
-- `grafana/dashboards/uds_monitoring.json`
-- `grafana/queries/uds_queries.sql`
+## Recommended demo flow
+
+1. Open Grafana at `http://localhost:3000`
+2. Open `UDS Incident Monitoring`
+3. Select `IMO9300001`
+4. Use `Active Incident Queue` or `Application Incident Board`
+5. Click `Application` or `App ID` to pivot into the selected app drilldown
+6. Show:
+   - recent alerts
+   - recent logs
+   - connectivity/freshness
+   - recent metric history
+   - metric window summary
+7. Optionally open `http://localhost:8000/api/v1/validate/dashboard`
+8. Only demo legacy full analysis if it has already warmed up cleanly
+
+## Files to keep in sync from now on
+
+- `README.md`
+- `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md`
+- `docs/SCOPE1_HANDOFF_NOTES.md`
+- `docs/SCOPE1_REVIEW_FINDINGS.md`
+- `docs/FUTURE_CHECKS.md`
 - `docs/UDS_dashboard_spec.md`
-
-Current result:
-
-- one-vessel UDS dashboard exists
-- vessel selector is based on `imo_nr`
-- app health tables and alert tables are in place
-
-## What still blocks full User Story 1 closure
-
-### 1. Historical metrics are not surfaced strongly enough
-
-The data and MCP support exist, but the dashboard still behaves mostly like a
-latest-state health board.
-
-What should be added next:
-
-- time-series drilldown for selected application metrics
-- at least one clear path from alert -> app -> recent metric history
-
-### 2. Logs are not represented in the UDS path
-
-The current UDS implementation models:
-
-- `metric_samples`
-- `alerts`
-
-It does not yet model log delivery or log history in the UDS side.
-
-Decision needed:
-
-- either add a lightweight log-like representation for Scope 1
-- or document clearly that Scope 1 covers metrics + alerts only, and that logs
-  are postponed
-
-### 3. Seeded scenarios are too narrow
-
-Current seeded UDS incidents are weighted around service-down style failures.
-
-What should be expanded next:
-
-- warning-level alerts
-- degraded-but-not-down scenarios
-- stale reporting / delayed sync style issues
-
-### 4. Full end-to-end verification is still required
-
-The integrated code is not enough by itself. The stack still needs a fresh DB
-run and validation.
-
-Required test flow:
-
-1. start from a fresh DB volume
-2. run `docker compose up`
-3. confirm reference data exists
-4. confirm `uds-seeder` inserts into `metric_samples` and `alerts`
-5. confirm Grafana UDS panels render
-6. confirm MCP UDS tools return expected data
-
-## Current recommended execution order
-
-1. Run the full fresh-DB integration test.
-2. Fix any schema/seeding/runtime mismatches discovered there.
-3. Add historical metric views to the UDS dashboard.
-4. Decide how to cover the "logs" part of User Story 1.
-5. Expand seeded incident scenarios.
-6. Only then declare Scope 1 functionally complete.
-
-## What does not need focus right now
-
-These are real issues, but they are not the next Scope 1 blocker:
-
-- User Story 2 and 3
-- RAG tuning beyond what already works
-- JWT / full auth
-- rate limiting
-- audit logging
-
-## Practical notes for the team
-
-- Work from `feat/scope1-del-a-b-integration`
-- Treat `databasecodeFraGeir/` as local source material, not as the runnable source of truth
-- Use the tracked repo files for schema, reference data, and seeding
-- If something only works on an old DB volume, do not trust that result
