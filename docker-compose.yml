@@ -16,8 +16,6 @@
 #   ollama       – local LLM (llama3.2 – pull model after first start)
 # =============================================================
 
-version: '3.8'
-
 services:
   # ─── TIME-SERIES DATABASE ─────────────────────────────────
   timescaledb:
@@ -130,6 +128,28 @@ services:
       ANOMALY_PROBABILITY:       ${ANOMALY_PROBABILITY:-0.00008}
       STALE_SENSOR_SECONDS:      ${STALE_SENSOR_SECONDS:-60}
       WATCHDOG_INTERVAL_CYCLES:  ${WATCHDOG_INTERVAL_CYCLES:-10}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── UDS SEEDER ───────────────────────────────────────────
+  uds-seeder:
+    image: postgres:16-alpine
+    container_name: maritime_uds_seeder
+    environment:
+      DB_HOST: timescaledb
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_NAME: ${DB_NAME:-maritime_telemetry}
+      UDS_SEED_FILE: /seed/uds_seed.sql
+      UDS_SEED_INTERVAL_SECONDS: ${UDS_SEED_INTERVAL_SECONDS:-1800}
+      UDS_SCHEMA_RETRY_SECONDS: ${UDS_SCHEMA_RETRY_SECONDS:-30}
+    volumes:
+      - ./db/seed:/seed:ro
+      - ./scripts/uds_seed_loop.sh:/usr/local/bin/uds_seed_loop.sh:ro
+    entrypoint: ["sh", "/usr/local/bin/uds_seed_loop.sh"]
     depends_on:
       timescaledb:
         condition: service_healthy

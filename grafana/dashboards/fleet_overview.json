@@ -1,6 +1,6 @@
 {
   "annotations": {"list": []},
-  "description": "Fleet-wide overview for DevOps engineers. Shows cross-vessel health, correlated issues, and connectivity status.",
+  "description": "Fleet-wide overview for DevOps engineers. Shows cross-vessel health, correlated issues, and connectivity status. Drilldown to an IMO-based single-vessel UDS dashboard is pending in this branch.",
   "editable": true,
   "graphTooltip": 1,
   "id": null,
@@ -151,11 +151,22 @@
       },
       "targets": [{
         "format": "table",
-        "rawSql": "SELECT COUNT(DISTINCT a.external_id) AS \"Correlated Apps\" FROM alerts al JOIN applications a ON a.id = al.application_id JOIN udslocations u ON u.id = al.uds_location_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY a.external_id HAVING COUNT(DISTINCT u.imo_nr) > 1",
+        "rawSql": "SELECT COUNT(*) AS \"Correlated Apps\" FROM ( SELECT a.external_id FROM alerts al JOIN applications a ON a.id = al.application_id JOIN udslocations u ON u.id = al.uds_location_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY a.external_id HAVING COUNT(DISTINCT u.imo_nr) > 1 ) correlated_apps",
         "refId": "A"
       }],
       "title": "Apps Affected on Multiple Vessels",
       "type": "stat"
+    },
+    {
+      "datasource": null,
+      "gridPos": {"h": 3, "w": 24, "x": 0, "y": 5},
+      "id": 6,
+      "options": {
+        "content": "## Integration note\n\nThis dashboard is built on IMO-based UDS fleet data. The checked-in single-vessel dashboards in this branch still use `vessel_001`-style identifiers, so vessel drilldown is intentionally disabled here until the IMO-based single-vessel UDS dashboard is versioned in the repo.",
+        "mode": "markdown"
+      },
+      "title": "Drilldown Status",
+      "type": "text"
     },
     {
       "datasource": {"type": "postgres", "uid": "timescaledb"},
@@ -201,22 +212,10 @@
               },
               {"id": "custom.displayMode", "value": "color-background-solid"}
             ]
-          },
-          {
-            "matcher": {"id": "byName", "options": "Vessel"},
-            "properties": [
-              {"id": "links", "value": [
-                {
-                  "title": "Drill down to vessel",
-                  "url": "/d/maritime_uds_app_health/uds-app-health?var-vessel=${__data.fields[\"IMO\"]}",
-                  "targetBlank": false
-                }
-              ]}
-            ]
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 5},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
       "id": 10,
       "options": {
         "showHeader": true,
@@ -233,7 +232,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 13},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 16},
       "id": 20,
       "title": "Cross-Vessel Active Alerts",
       "type": "row"
@@ -270,22 +269,10 @@
               },
               {"id": "custom.displayMode", "value": "color-background-solid"}
             ]
-          },
-          {
-            "matcher": {"id": "byName", "options": "Vessel"},
-            "properties": [
-              {"id": "links", "value": [
-                {
-                  "title": "Drill down to vessel",
-                  "url": "/d/maritime_uds_app_health/uds-app-health?var-vessel=${__data.fields[\"IMO\"]}",
-                  "targetBlank": false
-                }
-              ]}
-            ]
           }
         ]
       },
-      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 14},
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 17},
       "id": 21,
       "options": {
         "showHeader": true,
@@ -302,7 +289,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 24},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 27},
       "id": 30,
       "title": "Cross-Vessel Correlation",
       "type": "row"
@@ -340,7 +327,7 @@
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 25},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
       "id": 31,
       "options": {
         "showHeader": true,
@@ -388,7 +375,7 @@
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 25},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
       "id": 32,
       "options": {
         "showHeader": true,
@@ -405,7 +392,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 33},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 36},
       "id": 40,
       "title": "Fleet Connectivity",
       "type": "row"
@@ -455,22 +442,10 @@
               {"id": "custom.displayMode", "value": "color-background-solid"},
               {"id": "unit", "value": "s"}
             ]
-          },
-          {
-            "matcher": {"id": "byName", "options": "Vessel"},
-            "properties": [
-              {"id": "links", "value": [
-                {
-                  "title": "Drill down to vessel",
-                  "url": "/d/maritime_uds_app_health/uds-app-health?var-vessel=${__data.fields[\"IMO\"]}",
-                  "targetBlank": false
-                }
-              ]}
-            ]
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 34},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 37},
       "id": 41,
       "options": {
         "showHeader": true,
@@ -487,7 +462,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 42},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 45},
       "id": 50,
       "title": "Alert Trend",
       "type": "row"
@@ -506,7 +481,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 43},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 46},
       "id": 51,
       "options": {
         "legend": {"displayMode": "list", "placement": "bottom"},
