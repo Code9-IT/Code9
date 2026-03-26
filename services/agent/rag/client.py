@@ -14,8 +14,8 @@ from db import get_pool
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
 OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
-RAG_TOP_K = int(os.getenv("RAG_TOP_K", "3"))
-RAG_MIN_SIMILARITY = float(os.getenv("RAG_MIN_SIMILARITY", "0.20"))
+RAG_TOP_K = int(os.getenv("RAG_TOP_K", "5"))
+RAG_MIN_SIMILARITY = float(os.getenv("RAG_MIN_SIMILARITY", "0.60"))
 EMBED_TIMEOUT = float(os.getenv("RAG_EMBED_TIMEOUT_SECONDS", "30"))
 
 
@@ -26,18 +26,39 @@ class RAGDocument:
     title: str
     content: str
     source: str = "unknown"
+    similarity: float = 0.0
 
 
 async def retrieve_context(
     event_type: str,
     sensor_name: str,
     vessel_id: str,
+    top_k: int | None = None,
+    min_similarity: float | None = None,
 ) -> List[RAGDocument]:
     """
     Retrieve top knowledge chunks for an event.
     Returns an empty list when there are no relevant matches.
     """
     query = f"{event_type} {sensor_name} {vessel_id}"
+    return await retrieve_context_for_query(
+        query,
+        top_k=top_k,
+        min_similarity=min_similarity,
+    )
+
+
+async def retrieve_context_for_query(
+    query: str,
+    top_k: int | None = None,
+    min_similarity: float | None = None,
+) -> List[RAGDocument]:
+    """Retrieve top knowledge chunks for a free-form query."""
+    resolved_top_k = max(int(top_k or RAG_TOP_K), 1)
+    resolved_min_similarity = (
+        RAG_MIN_SIMILARITY if min_similarity is None else float(min_similarity)
+    )
+
     try:
         embedding = await _embed_text(query)
     except Exception as exc:
@@ -60,7 +81,7 @@ async def retrieve_context(
                 LIMIT $2
                 """,
                 vector_literal,
-                max(RAG_TOP_K, 1),
+                resolved_top_k,
             )
     except Exception as exc:
         print(f"[rag] Retrieval query failed: {exc}")
@@ -69,13 +90,14 @@ async def retrieve_context(
     docs: List[RAGDocument] = []
     for row in rows:
         similarity = float(row["similarity"] or 0.0)
-        if similarity < RAG_MIN_SIMILARITY:
+        if similarity < resolved_min_similarity:
             continue
         docs.append(
             RAGDocument(
                 title=row["title"],
                 content=row["content"],
                 source=row["source"],
+                similarity=similarity,
             )
         )
     return docs

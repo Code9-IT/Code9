@@ -333,39 +333,6 @@ SELECT
 FROM values_calc v
 ON CONFLICT DO NOTHING;
 
--- Resolve previous firing alerts for all seeded apps before inserting fresh ones.
--- This prevents alert accumulation: each seed cycle produces a clean snapshot of
--- the current scenario state rather than an ever-growing backlog.
-WITH
-sync_run AS (
-  SELECT date_trunc('minute', timezone('UTC', now())) AS sync_time_utc
-),
-seeded_apps AS (
-  SELECT
-    u.id AS uds_location_id,
-    a.id AS application_id
-  FROM uds_location_application_instances uai
-  JOIN udslocations u ON u.id = uai.uds_location_id
-  JOIN applications a ON a.id = uai.application_instance_id
-  WHERE u.imo_nr IN ('IMO9300001', 'IMO9300002', 'IMO9300003')
-    AND a.external_id IN (
-      'time-series-processor',
-      'data-quality-processor',
-      'uds-topic-handler-edge',
-      'uds-edge-data-api',
-      'uds-edge-ingest-source-admin',
-      'uds-edge-parquet-sync'
-    )
-)
-UPDATE alerts
-SET status = 'resolved',
-    ends_at = (SELECT sync_time_utc FROM sync_run)
-WHERE status = 'firing'
-  AND ends_at IS NULL
-  AND (uds_location_id, application_id) IN (
-    SELECT uds_location_id, application_id FROM seeded_apps
-  );
-
 WITH
 sync_run AS (
   SELECT date_trunc('minute', timezone('UTC', now())) AS sync_time_utc

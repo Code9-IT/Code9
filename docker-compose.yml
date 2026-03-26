@@ -1,5 +1,5 @@
 # =============================================================
-# Maritime Agentic Observability – Docker Compose
+# Maritime Agentic Observability - Docker Compose
 # =============================================================
 # Quick start:
 #   cp .env.example .env
@@ -8,16 +8,16 @@
 #   docker exec -it maritime_ollama ollama pull nomic-embed-text
 #
 # Services:
-#   timescaledb  – time-series database (PostgreSQL + TimescaleDB)
-#   grafana      – dashboards (auto-provisioned)
-#   agent        – FastAPI AI-agent (event analysis + tool-calling loop)
-#   generator    – synthetic telemetry + anomaly writer
-#   mcp          – MCP-style REST adapter (exposes DB tools to agent)
-#   ollama       – local LLM (llama3.2 – pull model after first start)
+#   timescaledb  - time-series database (PostgreSQL + TimescaleDB)
+#   grafana      - dashboards (auto-provisioned)
+#   agent        - FastAPI AI-agent (event analysis + tool-calling loop)
+#   generator    - synthetic telemetry + anomaly writer
+#   mcp          - MCP-style REST adapter (exposes DB tools to agent)
+#   ollama       - local LLM (llama3.2 - pull model after first start)
 # =============================================================
 
 services:
-  # ─── TIME-SERIES DATABASE ─────────────────────────────────
+  # --- TIME-SERIES DATABASE -------------------------------------------------
   timescaledb:
     image: timescale/timescaledb:latest-pg16
     container_name: maritime_timescaledb
@@ -37,7 +37,21 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # ─── GRAFANA ──────────────────────────────────────────────
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+    entrypoint:
+      - /bin/sh
+      - -lc
+      - until ollama list >/dev/null 2>&1; do sleep 2; done; ollama pull "$$OLLAMA_MODEL"; ollama pull "$$OLLAMA_EMBED_MODEL"
+    restart: "no"
+
+  # --- GRAFANA --------------------------------------------------------------
   grafana:
     image: grafana/grafana:11.0.0
     container_name: maritime_grafana
@@ -58,7 +72,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ─── AI AGENT SERVICE (FastAPI) ───────────────────────────
+  # --- AI AGENT SERVICE (FastAPI) -------------------------------------------
   agent:
     build:
       context:    ./services/agent
@@ -74,11 +88,19 @@ services:
       DB_NAME:     ${DB_NAME:-maritime_telemetry}
       OLLAMA_URL:   ${OLLAMA_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2}
+      OLLAMA_QUICK_MODEL: ${OLLAMA_QUICK_MODEL:-}
+      OLLAMA_VALIDATION_MODEL: ${OLLAMA_VALIDATION_MODEL:-}
       OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-300}
+      QUICK_ANALYSIS_TOP_K: ${QUICK_ANALYSIS_TOP_K:-1}
+      QUICK_ANALYSIS_MAX_CONTEXT_CHARS: ${QUICK_ANALYSIS_MAX_CONTEXT_CHARS:-900}
+      QUICK_ANALYSIS_NUM_PREDICT: ${QUICK_ANALYSIS_NUM_PREDICT:-180}
       MCP_URL:      ${MCP_URL:-http://mcp:8001}
+      MCP_API_KEY:  ${MCP_API_KEY:-code9-scope1-demo-key}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000}
       STUB_MODE:    ${STUB_MODE:-false}
-      RAG_TOP_K:    ${RAG_TOP_K:-3}
-      RAG_MIN_SIMILARITY: ${RAG_MIN_SIMILARITY:-0.20}
+      RAG_TOP_K:    ${RAG_TOP_K:-5}
+      RAG_MIN_SIMILARITY: ${RAG_MIN_SIMILARITY:-0.60}
       KNOWLEDGE_DIR: ${KNOWLEDGE_DIR:-/app/docs/knowledge}
     volumes:
       - ./docs/knowledge:/app/docs/knowledge:ro
@@ -91,7 +113,7 @@ services:
         condition: service_started
     restart: unless-stopped
 
-  # ─── MCP SERVER (REST adapter exposing DB tools) ──────────
+  # --- MCP SERVER (REST adapter exposing DB tools) --------------------------
   mcp:
     build:
       context:    ./services/mcp
@@ -105,12 +127,14 @@ services:
       DB_USER:     ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_NAME:     ${DB_NAME:-maritime_telemetry}
+      MCP_API_KEY: ${MCP_API_KEY:-code9-scope1-demo-key}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000}
     depends_on:
       timescaledb:
         condition: service_healthy
     restart: unless-stopped
 
-  # ─── SYNTHETIC DATA GENERATOR ─────────────────────────────
+  # --- SYNTHETIC DATA GENERATOR ---------------------------------------------
   generator:
     build:
       context:    ./services/generator
@@ -124,7 +148,7 @@ services:
       DB_NAME:     ${DB_NAME:-maritime_telemetry}
       GENERATE_INTERVAL_SECONDS: ${GENERATE_INTERVAL_SECONDS:-3}
       # With 77 threshold combinations: P(event/cycle) = 1-(1-p)^77.
-      # 0.00008 → P≈0.6% per cycle → ~1 event per 8 minutes at 3s interval.
+      # 0.00008 -> P~=0.6% per cycle -> ~1 event per 8 minutes at 3s interval.
       ANOMALY_PROBABILITY:       ${ANOMALY_PROBABILITY:-0.00008}
       STALE_SENSOR_SECONDS:      ${STALE_SENSOR_SECONDS:-60}
       WATCHDOG_INTERVAL_CYCLES:  ${WATCHDOG_INTERVAL_CYCLES:-10}
@@ -133,7 +157,6 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ─── UDS SEEDER ───────────────────────────────────────────
   uds-seeder:
     image: postgres:16-alpine
     container_name: maritime_uds_seeder
@@ -154,8 +177,7 @@ services:
       timescaledb:
         condition: service_healthy
     restart: unless-stopped
-
-  # ─── OLLAMA – local LLM ───────────────────────────────────
+  # --- OLLAMA - local LLM ---------------------------------------------------
   # After first start, pull a model:
   #   docker exec -it maritime_ollama ollama pull llama3.2
   #   docker exec -it maritime_ollama ollama pull nomic-embed-text
@@ -170,7 +192,8 @@ services:
       - ollama_data:/root/.ollama
     restart: unless-stopped
 
-# ─── VOLUMES ──────────────────────────────────────────────
+# --- VOLUMES ----------------------------------------------------------------
 volumes:
   timescaledb_data:
   ollama_data:
+

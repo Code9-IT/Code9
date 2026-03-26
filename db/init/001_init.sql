@@ -1,5 +1,5 @@
 -- =============================================================
--- Maritime Observability – Database Schema
+-- Maritime Observability - Database Schema
 -- Engine: TimescaleDB (PostgreSQL extension)
 -- =============================================================
 -- Runs automatically on first container start via
@@ -9,7 +9,7 @@
 
 CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
--- ─── TELEMETRY ───────────────────────────────────────────
+-- --- TELEMETRY -------------------------------------------------------------
 -- Continuous sensor readings.  One row = one reading.
 -- Sensor names are intentionally generic (see sensors.py).
 CREATE TABLE IF NOT EXISTS telemetry (
@@ -25,7 +25,7 @@ SELECT create_hypertable('telemetry', 'timestamp',
        migrate_data        => true,
        if_not_exists       => TRUE);
 
--- ─── EVENTS ──────────────────────────────────────────────
+-- --- EVENTS ----------------------------------------------------------------
 -- Threshold breaches / anomalies detected by the generator
 -- (or, later, by a dedicated alerting rule).
 -- Each event is the trigger that asks the AI agent to analyse.
@@ -34,34 +34,37 @@ CREATE TABLE IF NOT EXISTS events (
     timestamp           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     vessel_id           TEXT        NOT NULL,
     sensor_name         TEXT        NOT NULL,
-    event_type          TEXT        NOT NULL,   -- 'HIGH_TEMPERATURE', 'LOW_OIL_PRESSURE', …
+    event_type          TEXT        NOT NULL,   -- 'HIGH_TEMPERATURE', 'LOW_OIL_PRESSURE', ...
     severity            TEXT        NOT NULL DEFAULT 'warning',  -- info | warning | critical
     details             TEXT,                   -- free-text description
-
-    -- Human-in-the-loop ──────────────────────────────────
+    -- Human-in-the-loop -----------------------------------------------------
     -- TODO: link acknowledged_by to a proper user/operator table
     acknowledged        BOOLEAN     DEFAULT FALSE,
     acknowledged_by     TEXT,
     acknowledged_at     TIMESTAMPTZ
 );
 
--- ─── AI ANALYSES ─────────────────────────────────────────
+-- --- AI ANALYSES -----------------------------------------------------------
 -- Stores every response the agent produces for an event.
 -- An event can be analysed more than once (retry / re-analyse).
 CREATE TABLE IF NOT EXISTS ai_analyses (
     id                  SERIAL      PRIMARY KEY,
     event_id            INTEGER     REFERENCES events(id),
     timestamp           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    analysis_mode       TEXT        NOT NULL DEFAULT 'full',    -- 'quick' | 'full'
     analysis_text       TEXT,                   -- LLM-generated explanation
     suggested_actions   TEXT[],                 -- array of action strings
-    confidence          FLOAT,                  -- 0.0 – 1.0
+    confidence          FLOAT,                  -- 0.0 - 1.0
     model_used          TEXT,                   -- e.g. 'ollama/llama3' or 'stub'
-    status              TEXT        NOT NULL DEFAULT 'pending'  -- pending | completed | failed
+    status              TEXT        NOT NULL DEFAULT 'pending', -- pending | running | completed | failed
+    retrieved_documents JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    tool_calls          JSONB       NOT NULL DEFAULT '[]'::jsonb
 );
 
--- ─── INDEXES ─────────────────────────────────────────────
+-- --- INDEXES ---------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_telemetry_vessel_time  ON telemetry  (vessel_id,  timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_telemetry_sensor_time  ON telemetry  (sensor_name, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_events_vessel_time     ON events     (vessel_id,  timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_events_unacked         ON events     (acknowledged) WHERE acknowledged = FALSE;
 CREATE INDEX IF NOT EXISTS idx_analyses_event         ON ai_analyses(event_id);
+CREATE INDEX IF NOT EXISTS idx_analyses_event_mode    ON ai_analyses(event_id, analysis_mode, timestamp DESC);

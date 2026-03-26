@@ -1,169 +1,149 @@
-# Future Checks - Security, Gaps, and Next Build Steps
+# Future Checks - Security, Gaps, and Follow-up Work
 
-This document tracks what is still missing, what should be hardened before any real deployment,
-and what we should build after RAG content is in place.
+Last updated: 2026-03-12
 
-Last updated: 2026-02-22
+This file is the backlog for work that still matters after Scope 1 became
+functionally coherent. Keep immediate merge and acceptance work in
+`docs/NEXT_STEPS.md`.
 
----
+## Recently closed on the current integration branch
 
-## How To Use This File
+These items were earlier blockers and should not be reopened as if they were
+still missing:
 
-- Keep this as the single backlog for "not now, but important later".
-- When a point is fixed, mark it done and add commit/PR reference.
-- Review this file before demo prep and before starting a new development sprint.
+- historical metrics are now visible in Grafana for the selected app
+- lightweight logs/log-like context now exist through `app_logs`
+- seeded scenarios now include degraded, stale, delayed, and down cases
+- fresh-stack UDS acceptance was rerun successfully on 2026-03-12
 
----
+## P0 - Re-run before the final merge
 
-## Current Snapshot
-
-- Core pipeline: running (`generator -> DB -> agent -> Grafana`).
-- Dashboards: major Jonas fixes merged.
-- RAG infrastructure: in place (`pgvector`, retrieval, ingest script, knowledge folder).
-- RAG content: still pending (curated maritime documents).
-
----
-
-## P0 - Critical Blockers
-
-- None currently identified for local bachelor-project demo use.
-
----
-
-## P1 - Important Security / Hardening
-
-### 1) State-changing GET endpoints (demo convenience, not production-safe)
+### 1. Repeat fresh-stack acceptance on the last merge candidate
 
 - Status: OPEN
-- Files:
-  - `services/agent/routes/analyze.py`
+- Why it matters:
+  - the current branch passed on 2026-03-12
+  - any later merge can still regress schema, seeding, MCP, or Grafana wiring
+- Reference:
+  - `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md`
+
+### 2. Keep docs aligned with the branch that is actually being merged
+
+- Status: OPEN
+- Why it matters:
+  - stale docs already cost time during Scope 1 integration
+  - this repo changed quickly across several intermediate branches
+
+## P1 - Important reliability and hardening work
+
+### 3. Proper migration path for old DB volumes
+
+- Status: OPEN
+- Why it matters:
+  - the current prototype works best from a fresh DB volume
+  - runtime guards help, but they do not replace migrations
+- Future direction:
+  - add formal migrations
+  - or document a strict reset-only policy for prototype branches
+
+### 4. Reduce cold-start timing sensitivity
+
+- Status: IN_PROGRESS
+- Why it matters:
+  - first start still depends on model pull, RAG ingest, and service readiness
+- Current direction:
+  - `ollama-init` pulls models
+  - the agent retries RAG ingest
+  - `uds-seeder` waits for schema and reference data
+- Future direction:
+  - keep startup reliable without manual intervention
+  - reduce noisy warmup retries if time allows
+
+### 5. Legacy full analysis warmup/performance signoff
+
+- Status: OPEN
+- Why it matters:
+  - quick validation works on the fresh stack
+  - one cold-start full analysis job stayed `running` longer than the first
+    minute during the Student 4 validation rerun
+- Future direction:
+  - warm the path up before demoing it
+  - inspect model/runtime behavior if the group wants that path to be a major
+    proof point
+
+## P1.5 - Security and API cleanup
+
+### 6. State-changing GET endpoint for event acknowledge
+
+- Status: OPEN
+- File:
   - `services/agent/routes/events.py`
 - Why it matters:
-  - GET should be idempotent/safe by HTTP semantics.
-  - Easy to trigger accidentally (crawler/prefetch/link-preview behavior).
-- Recommended future fix:
-  - Keep POST as canonical.
-  - Either remove GET aliases or protect them with auth + CSRF-safe design.
-  - In Grafana: move to secure API path with token/auth proxy.
+  - `GET /events/{id}/acknowledge` mutates state
+- Future direction:
+  - keep POST as canonical
+  - remove or restrict the GET alias later
 
-### 2) No auth + wide-open CORS
+### 7. MCP auth is optional if `MCP_API_KEY` is empty
 
 - Status: OPEN
 - File:
-  - `services/agent/main.py`
+  - `services/mcp/main.py`
 - Why it matters:
-  - `allow_origins=["*"]` and no auth means any reachable origin can call the API.
-- Recommended future fix:
-  - Add JWT (or reverse-proxy auth) and role checks.
-  - Restrict CORS to trusted UI origins only.
+  - empty `MCP_API_KEY` disables effective protection
+- Future direction:
+  - require non-empty key in non-dev mode
+  - or fail startup when auth is expected but not configured
 
-### 3) Prompt-injection risk from external text sources
+### 8. Demo credentials and broad local access
 
-- Status: PARTIALLY MITIGATED
-- File:
-  - `services/agent/routes/analyze.py`
-- Why it matters:
-  - Retrieved docs can contain adversarial instructions.
-- What is done:
-  - System prompt now tells the model to treat retrieved text as reference evidence only.
-- Recommended future fix:
-  - Add content sanitation and source allowlist policy.
-  - Add retrieval-time filtering and optional moderation checks.
-
-### 4) Embedding dimension coupling to current model
-
-- Status: OPEN (known design constraint)
+- Status: OPEN
 - Files:
-  - `db/init/002_rag.sql`
-  - `services/agent/rag/client.py`
-  - `services/agent/rag/ingest.py`
+  - `.env.example`
+  - `docker-compose.yml`
 - Why it matters:
-  - Schema uses `VECTOR(768)` (fits `nomic-embed-text`).
-  - Changing embedding model dimension will break inserts/retrieval.
-- Recommended future fix:
-  - Keep model fixed for this project, or add migration path/versioned embedding tables.
+  - default credentials are still demo-oriented
+  - services are exposed locally for convenience
+- Future direction:
+  - define a safer demo profile if this needs broader sharing
 
----
+## P2 - Product and demo quality improvements
 
-## P1.5 - Reliability / Ops
+### 9. Richer historical backfill immediately after a fresh start
 
-### 5) Ensure ANN index exists in old DB volumes
+- Status: OPEN
+- Why it matters:
+  - the graphs work now
+  - they will still look stronger if the demo starts with more history already
+    present
+- Future direction:
+  - optionally backfill a few recent windows on fresh startup
 
-- Status: FIXED
-- Files:
-  - `db/init/002_rag.sql`
-  - `services/agent/rag/ingest.py`
-- Note:
-  - Runtime schema check now also creates `idx_knowledge_docs_embedding`.
+### 10. Stronger alert-to-context ergonomics in Grafana
 
-### 6) Do not ingest guidance docs as knowledge
+- Status: IN_PROGRESS
+- Why it matters:
+  - the dashboard already supports alert -> app -> recent history
+  - there is still room for cleaner drilldown ergonomics and panel ordering
+- Future direction:
+  - tune layout and panel order only if the team has spare time
 
-- Status: FIXED (basic)
-- File:
-  - `services/agent/rag/ingest.py`
-- Note:
-  - `README` is excluded.
-- Better future improvement:
-  - Ingest only from a strict subfolder/pattern (e.g. `docs/knowledge/articles/*.md`).
+### 11. Stronger live tool use in legacy full analysis
 
----
+- Status: OPEN
+- Why it matters:
+  - the main Scope 1 proof point is now the UDS incident flow, not legacy full
+    analysis
+  - still, better live tool usage would improve the validation/demo story
+- Future direction:
+  - refine prompting and tool selection only if the team has spare capacity
 
-## P2 - Complete RAG Content (Next Main Sprint)
+## P3 - Later work after User Story 1
 
-### Must do
-
-- [ ] Add 10-12 focused maritime documents to `docs/knowledge/`.
-- [ ] Each doc should include:
-  - Scope
-  - Causes
-  - How to diagnose
-  - Recommended actions
-  - Limits / regulations
-  - Sources
-- [ ] Ingest after each batch:
-  - `docker exec maritime_agent python rag/ingest.py`
-- [ ] Validate retrieval quality for representative event types.
-- [ ] Tune:
-  - `RAG_TOP_K`
-  - `RAG_MIN_SIMILARITY`
-
-### Quality target
-
-- For each major sensor/event cluster, at least one relevant source-backed document is retrieved.
-- AI analysis should reference concrete domain context, not generic text.
-
----
-
-## P3 - Next Product Features (After RAG)
-
-### Crew chatbot on main UI (planned)
-
-- Goal:
-  - Crew can ask operational questions, for example:
-    - "How many events happened in the last week?"
-    - "Which sensors triggered most alarms?"
-    - "Any unresolved critical alarms right now?"
-- Needed pieces:
-  - Query-to-tool flow (reuse MCP tools + add aggregated query tool if needed).
-  - Guardrails for allowed question types.
-  - Simple chat UI and response logging.
-
-### Additional platform improvements
-
-- [ ] Add audit logging for analyze/acknowledge actions.
-- [ ] Add rate limiting for API endpoints.
-- [ ] Add automated tests for RAG retrieval + ingest.
-- [ ] Add "production mode" env profile (auth on, strict CORS, no GET aliases).
-
----
-
-## Definition Of "Deployment-Ready" (Future)
-
-This prototype is demo-ready, not production-ready. Before any real deployment:
-
-- [ ] Auth and authorization enabled.
-- [ ] CORS restricted.
-- [ ] State-changing GET aliases removed or protected.
-- [ ] Secrets management and secure config reviewed.
-- [ ] Incident/audit logging in place.
-- [ ] RAG source governance process documented.
+- User Story 2: multi-vessel incident view
+- User Story 3: NOC support view
+- stronger auth and authorization
+- audit logging
+- rate limiting
+- deeper automated tests
+- broader retrieval validation for RAG
