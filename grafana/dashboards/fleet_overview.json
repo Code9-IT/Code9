@@ -1,0 +1,535 @@
+{
+  "annotations": {"list": []},
+  "description": "Fleet-wide overview for DevOps engineers. Shows cross-vessel health, correlated issues, and connectivity status.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 1,
+      "title": "Fleet Health Overview",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 3}
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 1},
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [{
+        "format": "table",
+        "rawSql": "SELECT COUNT(DISTINCT u.id) AS \"Total Vessels\" FROM udslocations u",
+        "refId": "A"
+      }],
+      "title": "Total Vessels",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 3}
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 1},
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [{
+        "format": "table",
+        "rawSql": "SELECT COUNT(*) AS \"Active Alerts\" FROM alerts WHERE status = 'firing' AND (ends_at IS NULL OR ends_at > NOW())",
+        "refId": "A"
+      }],
+      "title": "Fleet Active Alerts",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 1},
+              {"color": "red", "value": 2}
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 1},
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [{
+        "format": "table",
+        "rawSql": "SELECT COUNT(DISTINCT u.imo_nr) AS \"Critical Vessels\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id WHERE al.status = 'firing' AND al.severity = 'critical' AND (al.ends_at IS NULL OR al.ends_at > NOW())",
+        "refId": "A"
+      }],
+      "title": "Vessels with Critical Alerts",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 1},
+              {"color": "red", "value": 3}
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 1},
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "targets": [{
+        "format": "table",
+        "rawSql": "SELECT COUNT(DISTINCT a.external_id) AS \"Correlated Apps\" FROM alerts al JOIN applications a ON a.id = al.application_id JOIN udslocations u ON u.id = al.uds_location_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY a.external_id HAVING COUNT(DISTINCT u.imo_nr) > 1",
+        "refId": "A"
+      }],
+      "title": "Apps Affected on Multiple Vessels",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"displayMode": "auto", "filterable": true},
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Status"},
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {"type": "value", "options": {"healthy": {"text": "Healthy", "color": "green"}}},
+                  {"type": "value", "options": {"degraded": {"text": "Degraded", "color": "orange"}}},
+                  {"type": "value", "options": {"critical": {"text": "Critical", "color": "red"}}}
+                ]
+              },
+              {"id": "custom.displayMode", "value": "color-background-solid"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Active Alerts"},
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "yellow", "value": 1},
+                    {"color": "red", "value": 3}
+                  ]
+                }
+              },
+              {"id": "custom.displayMode", "value": "color-background-solid"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Vessel"},
+            "properties": [
+              {"id": "links", "value": [
+                {
+                  "title": "Drill down to vessel",
+                  "url": "/d/maritime_uds_app_health/uds-app-health?var-vessel=${__data.fields[\"IMO\"]}",
+                  "targetBlank": false
+                }
+              ]}
+            ]
+          }
+        ]
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 5},
+      "id": 10,
+      "options": {
+        "showHeader": true,
+        "sortBy": [{"displayName": "Active Alerts", "desc": true}],
+        "footer": {"show": false}
+      },
+      "targets": [{
+        "format": "table",
+        "rawSql": "SELECT u.name AS \"Vessel\", u.imo_nr AS \"IMO\", COUNT(DISTINCT CASE WHEN al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.id END) AS \"Active Alerts\", COUNT(DISTINCT CASE WHEN al.status = 'firing' AND al.severity = 'critical' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.id END) AS \"Critical\", COUNT(DISTINCT CASE WHEN al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.application_id END) AS \"Affected Apps\", (SELECT COUNT(*) FROM uds_location_application_instances WHERE uds_location_id = u.id) AS \"Total Apps\", CASE WHEN COUNT(DISTINCT CASE WHEN al.status = 'firing' AND al.severity = 'critical' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.id END) > 0 THEN 'critical' WHEN COUNT(DISTINCT CASE WHEN al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.id END) > 0 THEN 'degraded' ELSE 'healthy' END AS \"Status\", to_char(MAX(ms.time), 'YYYY-MM-DD HH24:MI:SS') AS \"Latest Metric\" FROM udslocations u LEFT JOIN alerts al ON al.uds_location_id = u.id LEFT JOIN metric_samples ms ON ms.imo_nr = u.imo_nr GROUP BY u.id, u.name, u.imo_nr ORDER BY \"Active Alerts\" DESC, u.name ASC",
+        "refId": "A"
+      }],
+      "title": "Fleet Vessel Status",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 13},
+      "id": 20,
+      "title": "Cross-Vessel Active Alerts",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"displayMode": "auto", "filterable": true}
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Severity"},
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {"type": "value", "options": {"critical": {"text": "Critical", "color": "red"}}},
+                  {"type": "value", "options": {"warning": {"text": "Warning", "color": "orange"}}}
+                ]
+              },
+              {"id": "custom.displayMode", "value": "color-background-solid"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Status"},
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {"type": "value", "options": {"firing": {"text": "Firing", "color": "red"}}},
+                  {"type": "value", "options": {"resolved": {"text": "Resolved", "color": "green"}}}
+                ]
+              },
+              {"id": "custom.displayMode", "value": "color-background-solid"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Vessel"},
+            "properties": [
+              {"id": "links", "value": [
+                {
+                  "title": "Drill down to vessel",
+                  "url": "/d/maritime_uds_app_health/uds-app-health?var-vessel=${__data.fields[\"IMO\"]}",
+                  "targetBlank": false
+                }
+              ]}
+            ]
+          }
+        ]
+      },
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 14},
+      "id": 21,
+      "options": {
+        "showHeader": true,
+        "sortBy": [{"displayName": "Severity", "desc": true}],
+        "footer": {"show": false}
+      },
+      "targets": [{
+        "format": "table",
+        "rawSql": "SELECT u.name AS \"Vessel\", u.imo_nr AS \"IMO\", a.name AS \"Application\", al.alert_name AS \"Alert\", al.severity AS \"Severity\", al.status AS \"Status\", al.alert_type AS \"Type\", to_char(al.starts_at, 'YYYY-MM-DD HH24:MI') AS \"Started\", CASE WHEN al.ends_at IS NOT NULL THEN ROUND(EXTRACT(EPOCH FROM (al.ends_at - al.starts_at)) / 60)::text || ' min' ELSE ROUND(EXTRACT(EPOCH FROM (NOW() - al.starts_at)) / 60)::text || ' min (ongoing)' END AS \"Duration\", COALESCE(al.annotations->>'summary', '') AS \"Summary\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id LEFT JOIN applications a ON a.id = al.application_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) ORDER BY CASE al.severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END ASC, al.starts_at DESC",
+        "refId": "A"
+      }],
+      "title": "Active Alerts Across Fleet",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 24},
+      "id": 30,
+      "title": "Cross-Vessel Correlation",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"displayMode": "auto", "filterable": true},
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Affected Vessels"},
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "orange", "value": 2},
+                    {"color": "red", "value": 3}
+                  ]
+                }
+              },
+              {"id": "custom.displayMode", "value": "color-background-solid"}
+            ]
+          }
+        ]
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 25},
+      "id": 31,
+      "options": {
+        "showHeader": true,
+        "sortBy": [{"displayName": "Affected Vessels", "desc": true}],
+        "footer": {"show": false}
+      },
+      "targets": [{
+        "format": "table",
+        "rawSql": "SELECT a.external_id AS \"App ID\", a.name AS \"Application\", COUNT(DISTINCT u.imo_nr) AS \"Affected Vessels\", STRING_AGG(DISTINCT u.name || ' (' || u.imo_nr || ')', ', ' ORDER BY u.name || ' (' || u.imo_nr || ')') AS \"Vessels\", STRING_AGG(DISTINCT al.alert_name, ', ') AS \"Alert Types\", STRING_AGG(DISTINCT al.severity, ', ') AS \"Severities\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id JOIN applications a ON a.id = al.application_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY a.external_id, a.name HAVING COUNT(DISTINCT u.imo_nr) > 1 ORDER BY COUNT(DISTINCT u.imo_nr) DESC, a.name ASC",
+        "refId": "A"
+      }],
+      "title": "Correlated App Issues (Same App on Multiple Vessels)",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"displayMode": "auto", "filterable": true},
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Affected Vessels"},
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "orange", "value": 2},
+                    {"color": "red", "value": 3}
+                  ]
+                }
+              },
+              {"id": "custom.displayMode", "value": "color-background-solid"}
+            ]
+          }
+        ]
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 25},
+      "id": 32,
+      "options": {
+        "showHeader": true,
+        "sortBy": [{"displayName": "Affected Vessels", "desc": true}],
+        "footer": {"show": false}
+      },
+      "targets": [{
+        "format": "table",
+        "rawSql": "SELECT al.alert_name AS \"Alert Type\", al.alert_type AS \"Category\", COUNT(DISTINCT u.imo_nr) AS \"Affected Vessels\", STRING_AGG(DISTINCT u.name || ' (' || u.imo_nr || ')', ', ' ORDER BY u.name || ' (' || u.imo_nr || ')') AS \"Vessels\", STRING_AGG(DISTINCT a.name, ', ') AS \"Applications\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id LEFT JOIN applications a ON a.id = al.application_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY al.alert_name, al.alert_type HAVING COUNT(DISTINCT u.imo_nr) > 1 ORDER BY COUNT(DISTINCT u.imo_nr) DESC, al.alert_name ASC",
+        "refId": "A"
+      }],
+      "title": "Correlated Alert Types (Same Alert on Multiple Vessels)",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 33},
+      "id": 40,
+      "title": "Fleet Connectivity",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"displayMode": "auto", "filterable": true},
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {"id": "byName", "options": "Connectivity"},
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {"type": "value", "options": {"Fresh": {"text": "Fresh", "color": "green"}}},
+                  {"type": "value", "options": {"Delayed": {"text": "Delayed", "color": "orange"}}},
+                  {"type": "value", "options": {"Stale": {"text": "Stale", "color": "red"}}}
+                ]
+              },
+              {"id": "custom.displayMode", "value": "color-background-solid"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Sync Age"},
+            "properties": [
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {"color": "green", "value": null},
+                    {"color": "orange", "value": 300},
+                    {"color": "red", "value": 1800}
+                  ]
+                }
+              },
+              {"id": "custom.displayMode", "value": "color-background-solid"},
+              {"id": "unit", "value": "s"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Vessel"},
+            "properties": [
+              {"id": "links", "value": [
+                {
+                  "title": "Drill down to vessel",
+                  "url": "/d/maritime_uds_app_health/uds-app-health?var-vessel=${__data.fields[\"IMO\"]}",
+                  "targetBlank": false
+                }
+              ]}
+            ]
+          }
+        ]
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 34},
+      "id": 41,
+      "options": {
+        "showHeader": true,
+        "sortBy": [{"displayName": "Connectivity", "desc": false}],
+        "footer": {"show": false}
+      },
+      "targets": [{
+        "format": "table",
+        "rawSql": "WITH latest_sync AS ( SELECT ms.imo_nr, MAX(ms.time) AS latest_metric_time, AVG(CASE WHEN ms.metric_name = 'last_sync_age_seconds' THEN ms.value END) AS avg_sync_age, MAX(CASE WHEN ms.metric_name = 'reporting_stale' THEN ms.value END) AS reporting_stale, MAX(CASE WHEN ms.metric_name = 'sync_delayed' THEN ms.value END) AS sync_delayed FROM metric_samples ms WHERE ms.metric_name IN ('last_sync_age_seconds', 'reporting_stale', 'sync_delayed') AND ms.time > NOW() - INTERVAL '2 hours' GROUP BY ms.imo_nr ) SELECT u.name AS \"Vessel\", u.imo_nr AS \"IMO\", to_char(ls.latest_metric_time, 'YYYY-MM-DD HH24:MI:SS') AS \"Latest Metric\", ROUND(EXTRACT(EPOCH FROM (NOW() - ls.latest_metric_time)))::int AS \"Freshness (s)\", ROUND(COALESCE(ls.avg_sync_age, 0))::int AS \"Sync Age\", CASE WHEN COALESCE(ls.reporting_stale, 0) >= 1 THEN 'Stale' WHEN COALESCE(ls.sync_delayed, 0) >= 1 THEN 'Delayed' WHEN ls.latest_metric_time IS NULL THEN 'Stale' WHEN EXTRACT(EPOCH FROM (NOW() - ls.latest_metric_time)) > 1800 THEN 'Stale' WHEN EXTRACT(EPOCH FROM (NOW() - ls.latest_metric_time)) > 600 THEN 'Delayed' ELSE 'Fresh' END AS \"Connectivity\", COALESCE(stale_apps.cnt, 0) AS \"Stale Apps\", COALESCE(delayed_apps.cnt, 0) AS \"Delayed Apps\" FROM udslocations u LEFT JOIN latest_sync ls ON ls.imo_nr = u.imo_nr LEFT JOIN LATERAL ( SELECT COUNT(DISTINCT ms2.app_id)::int AS cnt FROM metric_samples ms2 WHERE ms2.imo_nr = u.imo_nr AND ms2.metric_name = 'reporting_stale' AND ms2.value >= 1 AND ms2.time > NOW() - INTERVAL '2 hours' ) stale_apps ON true LEFT JOIN LATERAL ( SELECT COUNT(DISTINCT ms3.app_id)::int AS cnt FROM metric_samples ms3 WHERE ms3.imo_nr = u.imo_nr AND ms3.metric_name = 'sync_delayed' AND ms3.value >= 1 AND ms3.time > NOW() - INTERVAL '2 hours' ) delayed_apps ON true ORDER BY CASE WHEN COALESCE(ls.reporting_stale, 0) >= 1 THEN 0 WHEN COALESCE(ls.sync_delayed, 0) >= 1 THEN 1 ELSE 2 END ASC, u.name ASC",
+        "refId": "A"
+      }],
+      "title": "Fleet Connectivity Status",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 42},
+      "id": 50,
+      "title": "Alert Trend",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "fillOpacity": 30,
+            "lineWidth": 2,
+            "stacking": {"mode": "normal"}
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 43},
+      "id": 51,
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom"},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      },
+      "targets": [{
+        "format": "time_series",
+        "rawSql": "SELECT time_bucket('30 minutes', al.starts_at) AS \"time\", u.name AS metric, COUNT(*) AS value FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id WHERE al.starts_at > NOW() - INTERVAL '6 hours' GROUP BY 1, u.name ORDER BY 1",
+        "refId": "A"
+      }],
+      "title": "Alerts Over Time by Vessel (6h)",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["maritime", "fleet", "scope2", "multi-vessel"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Fleet Overview",
+  "uid": "maritime_fleet_overview",
+  "version": 1
+}
