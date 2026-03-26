@@ -1,99 +1,136 @@
-# UDS App Health Dashboard (Del D)
+# UDS Incident Monitoring Dashboard
 
-This document describes the new Grafana dashboard implemented in `grafana/dashboards/uds_app_health.json`. It replaces the previous "Data Quality" view and focuses on application‑level observability for the UDS prototype.
+This document describes the Scope 1 Grafana dashboard in
+`grafana/dashboards/uds_monitoring.json`.
 
 ## Goal
-Show operators and developers the runtime health of the AI agent pipeline, event ingestion, and unacknowledged alarms.
+Turn the UDS dashboard into an incident board for User Story 1, not just a
+latest-state vessel health board.
+
+The main dashboard outcome is now:
+
+- select one vessel
+- identify the affected app from active alerts
+- pivot directly into that app's recent alert and metric history
+- inspect the incident over a clear drilldown window inside Grafana itself
+
+## Current Scope
+The dashboard is intentionally focused on one-vessel incident handling using:
+
+- `metric_samples`
+- `alerts`
+- `app_logs`
+
+This is still a prototype, but it now includes a lightweight log/log-like path
+for selected applications in addition to alerts and metric history.
+
+## Data Sources
+- `udslocations`
+- `applications`
+- `uds_location_application_instances`
+- `metric_samples`
+- `alerts`
+- `app_logs`
+
+Tracked repo implementation lives in:
+
+- `db/init/003_uds.sql`
+- `db/init/004_uds_reference_data.sql`
+- `db/seed/uds_seed.sql`
 
 ## Provisioning
-- Dashboard JSON lives in `grafana/dashboards/uds_app_health.json`.
-- The existing provisioning YAML (`grafana/provisioning/dashboards/dashboards.yaml`) loads all files in that directory, so no additional configuration is required.
-- The dashboard is auto‑imported into the "Maritime" folder when Grafana starts.
+Grafana auto-loads every JSON file in `grafana/dashboards/`, so no extra
+provisioning changes are required.
 
-## Time range & templating
-- Default time range: **last 1 hour**.
-- Template variable `vessel` selects `vessel_id` from `telemetry`.
+## Variables
+- `vessel`
+  - selects one ship by `imo_nr`, labeled as `name (imo_nr)`
+- `app`
+  - selects one application on the selected vessel
+  - the dropdown sorts incident-affected apps first
+  - the value is `applications.external_id`
+- `incident_window`
+  - controls the drilldown window for the selected application
+  - options: `Last 1h`, `Last 6h`, `Last 24h`
+
+## Incident Flow
+1. Select a vessel with `vessel`.
+2. Review `Active Incident Queue` to see active alerts and affected apps.
+3. Click `Application` or `App ID` in either incident table to set the `app`
+   drilldown target on the same dashboard.
+4. Use `Selected App Drilldown` and `incident_window` to inspect recent alerts,
+   logs, availability, connectivity/freshness, HTTP/errors, resources, memory,
+   and database behavior.
+5. Use `Metric Window Summary` for a compact min/avg/max/latest view of the
+   same incident window.
 
 ## Panels
-1. **Latest AI Analyses** – table of the 5 most recent analyses for the selected vessel.
-   ```sql
-   SELECT a.id, a.timestamp, a.event_id, e.sensor_name, e.event_type, e.severity,
-          a.status, a.confidence, a.model_used, a.analysis_text, a.suggested_actions
-   FROM ai_analyses a
-   JOIN events e ON a.event_id = e.id
-   WHERE e.vessel_id = '$vessel'
-   ORDER BY a.timestamp DESC
-   LIMIT 5
-   ```
+### Incident Overview
+1. `Active Alerts`
+   - count of active alerts for the selected vessel
+2. `Affected Apps`
+   - distinct app count across active alerts on the selected vessel
+3. `Most Recent Incident Age`
+   - seconds since the latest active incident started
+4. `Selected App Metric Age`
+   - freshness of the currently selected app's most recent metric sample
+5. `Active Incident Queue`
+   - active alert table for the selected vessel
+   - includes app, alert, severity, status, type, start time, open minutes, and summary
+   - `Application` and `App ID` fields are clickable drilldown links
+6. `Application Incident Board`
+   - one row per app on the selected vessel
+   - shows current status, active alert count, latest alert, latest severity,
+     incident start, 5xx rate, CPU, and latest sample
+   - `Application` and `App ID` fields are clickable drilldown links
 
-2. **Avg Analysis Latency (s, 1h)** – stat showing the average time between an event and its analysis.
-   ```sql
-   SELECT AVG(EXTRACT(EPOCH FROM (a.timestamp - e.timestamp))) AS value
-   FROM ai_analyses a
-   JOIN events e ON a.event_id = e.id
-   WHERE e.vessel_id = '$vessel'
-     AND a.timestamp > NOW() - INTERVAL '1 hour'
-   ```
+### Selected App Drilldown
+7. `Selected App Context`
+   - one-row summary for the selected vessel/app pair
+   - shows current status, active alerts, latest alert metadata, and latest sample
+8. `Selected App Recent Alerts`
+    - alert history for the selected app inside the chosen `incident_window`
+9. `Selected App Recent Logs`
+   - recent log/log-like context for the selected app inside the chosen
+     `incident_window`
+   - includes `Level`, `Source`, `Message`, `Correlation`, and raw `Context`
+10. `Availability Signals ($incident_window)`
+    - `service_up`
+    - `health_check_status`
+11. `Connectivity And Freshness ($incident_window)`
+    - `last_sync_age_seconds`
+    - `reporting_stale`
+    - `sync_delayed`
+12. `HTTP And Exception History ($incident_window)`
+    - `http_request_duration_p95`
+    - `http_error_rate_5xx`
+    - `http_error_rate_4xx`
+    - `dotnet_exceptions_rate`
+13. `CPU And Handles ($incident_window)`
+    - `process_cpu_usage`
+    - `process_open_handles`
+14. `Memory Footprint ($incident_window)`
+    - `process_memory_bytes`
+15. `Database Latency ($incident_window)`
+    - `db_query_duration_avg`
+    - `db_query_duration_p95`
+16. `Database Error Activity ($incident_window)`
+    - `db_query_rate`
+    - `db_query_errors`
+    - `db_deadlocks`
+17. `Metric Window Summary ($incident_window)`
+    - grouped by metric name
+    - shows min, avg, max, latest, unit, and latest sample time
 
-3. **Analysis Error Rate (1h)** – stat percent of analyses that did not complete successfully in the past hour.
-   ```sql
-   SELECT ROUND(100.0 * SUM(CASE WHEN a.status != 'completed' THEN 1 ELSE 0 END) /
-                NULLIF(COUNT(*),0),2) AS value
-   FROM ai_analyses a
-   JOIN events e ON a.event_id = e.id
-   WHERE e.vessel_id = '$vessel'
-     AND a.timestamp > NOW() - INTERVAL '1 hour'
-   ```
-
-4. **Telemetry Ingestion Rate (1h)** – bar chart of raw telemetry rows per minute.
-   ```sql
-   SELECT time_bucket('1 minute', timestamp) AS "time",
-          COUNT(*) AS records
-   FROM telemetry
-   WHERE vessel_id = '$vessel'
-     AND timestamp > NOW() - INTERVAL '1 hour'
-   GROUP BY 1 ORDER BY 1
-   ```
-
-5. **Event Rate (1h)** – bar chart of anomaly events per minute.
-   ```sql
-   SELECT time_bucket('1 minute', timestamp) AS "time",
-          COUNT(*) AS events
-   FROM events
-   WHERE vessel_id = '$vessel'
-     AND timestamp > NOW() - INTERVAL '1 hour'
-   GROUP BY 1 ORDER BY 1
-   ```
-
-6. **Unacknowledged Alarms** – table of recent events that have not been acknowledged.
-   ```sql
-   SELECT id, timestamp, vessel_id, sensor_name, event_type, severity, details
-   FROM events
-   WHERE vessel_id = '$vessel' AND acknowledged = FALSE
-   ORDER BY timestamp DESC LIMIT 25
-   ```
-
-## Alerts (future work)
-- *Unacknowledged alarms* &gt; 10
-- *Avg analysis latency* &gt; 120 s
-- *Analysis error rate* &gt; 5% over 1 h
-
-Alerting rules can be defined in Grafana's alerting UI or added under `grafana/provisioning/alerting`.
-
-## Testing locally
-1. Start the stack: `docker compose up --build`.
-2. Access Grafana at `http://localhost:3000` (admin/admin).
-3. Navigate to **Maritime → UDS App Health**.
-4. Generate a few anomalies via the `generator` or `curl -X POST …/api/v1/analyze` and confirm panels update.
-
-## Next modifications
-- Add service heartbeat table if explicit availability metrics are desired.
-- Extend with Ollama/agent health panels once a metrics exporter is available.
-
-## PR checklist
-- [ ] `uds_app_health.json` imported successfully in Grafana (load/folder check).
-- [ ] `data_quality.json` renamed/archived so old dashboard is not provisioned.
-- [ ] SQL queries in `grafana/queries/uds_queries.sql` produce expected results.
-- [ ] Documentation (`UDS_dashboard_spec.md`, README, NEXT_STEPS) updated accordingly.
-- [ ] Local validation instructions added and verified.
-- [ ] Optional alerting rules drafted or noted.
+## Notes
+- `grafana/queries/uds_queries.sql` mirrors the dashboard queries for review and
+  maintenance.
+- The dashboard default time range remains `now-24h`, while `incident_window`
+  gives a clearer app-focused incident slice inside that range.
+- `ship_operations.json` stays in place as the original sensor dashboard.
+- `app_logs` currently mixes trigger-generated alert logs with seeded
+  application/sync logs, which is good enough for the prototype's incident
+  context goal.
+- This dashboard now closes the specific Grafana gap from the review:
+  alert -> affected app -> recent metric/log history is visible in Grafana
+  without needing MCP first.

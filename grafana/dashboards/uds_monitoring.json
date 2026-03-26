@@ -1,0 +1,1331 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Incident-first UDS monitoring for one vessel. Click Application or App ID in the incident tables to focus the selected app drilldown and review recent metric and log history in Grafana itself.",
+  "editable": true,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "title": "Incident Overview",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS value FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id WHERE u.imo_nr = '$vessel' AND COALESCE(LOWER(al.status), 'firing') NOT IN ('resolved', 'closed', 'completed', 'cleared') AND (al.ends_at IS NULL OR al.ends_at > NOW())",
+          "refId": "A"
+        }
+      ],
+      "title": "Active Alerts",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT COUNT(DISTINCT al.application_id) AS value FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id WHERE u.imo_nr = '$vessel' AND COALESCE(LOWER(al.status), 'firing') NOT IN ('resolved', 'closed', 'completed', 'cleared') AND (al.ends_at IS NULL OR al.ends_at > NOW())",
+          "refId": "A"
+        }
+      ],
+      "title": "Affected Apps",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1800
+              },
+              {
+                "color": "red",
+                "value": 7200
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM (NOW() - MAX(al.starts_at))) AS value FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id WHERE u.imo_nr = '$vessel' AND COALESCE(LOWER(al.status), 'firing') NOT IN ('resolved', 'closed', 'completed', 'cleared') AND (al.ends_at IS NULL OR al.ends_at > NOW())",
+          "refId": "A"
+        }
+      ],
+      "title": "Most Recent Incident Age",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 900
+              },
+              {
+                "color": "red",
+                "value": 2100
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT EXTRACT(EPOCH FROM (NOW() - MAX(ms.time))) AS value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' AND ms.app_id = '${app}'",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected App Metric Age",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "text": "critical"
+                      },
+                      "info": {
+                        "color": "green",
+                        "text": "info"
+                      },
+                      "warning": {
+                        "color": "yellow",
+                        "text": "warning"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Application"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Focus App Drilldown",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-app=${__data.fields[\"App ID\"]}&var-incident_window=${incident_window}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "App ID"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Focus App Drilldown",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-app=${__value.raw}&var-incident_window=${incident_window}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "id": 5,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT a.name AS \"Application\", a.external_id AS \"App ID\", al.alert_name AS \"Alert\", al.severity AS \"Severity\", al.status AS \"Status\", al.alert_type AS \"Type\", al.starts_at AS \"Started\", ROUND((EXTRACT(EPOCH FROM (NOW() - al.starts_at)) / 60.0)::numeric, 1) AS \"Open Minutes\", al.received_at AS \"Received\", COALESCE(al.annotations ->> 'summary', al.alert_name) AS \"Summary\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id LEFT JOIN applications a ON a.id = al.application_id WHERE u.imo_nr = '$vessel' AND COALESCE(LOWER(al.status), 'firing') NOT IN ('resolved', 'closed', 'completed', 'cleared') AND (al.ends_at IS NULL OR al.ends_at > NOW()) ORDER BY CASE LOWER(al.severity) WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END, al.starts_at DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Active Incident Queue",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Current Status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "degraded": {
+                        "color": "yellow",
+                        "text": "degraded"
+                      },
+                      "down": {
+                        "color": "red",
+                        "text": "down"
+                      },
+                      "healthy": {
+                        "color": "green",
+                        "text": "healthy"
+                      },
+                      "unknown": {
+                        "color": "gray",
+                        "text": "unknown"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Latest Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "text": "critical"
+                      },
+                      "info": {
+                        "color": "green",
+                        "text": "info"
+                      },
+                      "warning": {
+                        "color": "yellow",
+                        "text": "warning"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Application"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Focus App Drilldown",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-app=${__data.fields[\"App ID\"]}&var-incident_window=${incident_window}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "App ID"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Focus App Drilldown",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-app=${__value.raw}&var-incident_window=${incident_window}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "id": 6,
+      "options": {
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Active Alerts"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "WITH selected_vessel AS ( SELECT id FROM udslocations WHERE imo_nr = '$vessel' ), latest_metrics AS ( SELECT DISTINCT ON (ms.application_instance_id, ms.metric_name) ms.application_instance_id, ms.metric_name, ms.time, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' ORDER BY ms.application_instance_id, ms.metric_name, ms.time DESC ), active_alerts AS ( SELECT al.application_id, COUNT(*)::int AS active_alert_count FROM alerts al JOIN selected_vessel sv ON sv.id = al.uds_location_id WHERE COALESCE(LOWER(al.status), 'firing') NOT IN ('resolved', 'closed', 'completed', 'cleared') AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY al.application_id ), latest_alert AS ( SELECT DISTINCT ON (al.application_id) al.application_id, al.alert_name, al.severity, al.starts_at FROM alerts al JOIN selected_vessel sv ON sv.id = al.uds_location_id ORDER BY al.application_id, al.starts_at DESC ) SELECT a.name AS \"Application\", a.external_id AS \"App ID\", CASE WHEN COALESCE(MAX(CASE WHEN lm.metric_name = 'service_up' THEN lm.value END), 1) <= 0 OR COALESCE(MAX(CASE WHEN lm.metric_name = 'health_check_status' THEN lm.value END), 1) <= 0 THEN 'down' WHEN COALESCE(aa.active_alert_count, 0) > 0 THEN 'degraded' WHEN MAX(lm.time) IS NULL THEN 'unknown' ELSE 'healthy' END AS \"Current Status\", COALESCE(aa.active_alert_count, 0) AS \"Active Alerts\", la.alert_name AS \"Latest Alert\", la.severity AS \"Latest Severity\", la.starts_at AS \"Latest Incident Start\", ROUND(COALESCE(MAX(CASE WHEN lm.metric_name = 'last_sync_age_seconds' THEN lm.value END), 0)::numeric, 0) AS \"Last Sync Age (s)\", COALESCE(MAX(CASE WHEN lm.metric_name = 'reporting_stale' THEN lm.value END), 0)::int AS \"Reporting Stale\", COALESCE(MAX(CASE WHEN lm.metric_name = 'sync_delayed' THEN lm.value END), 0)::int AS \"Sync Delayed\", ROUND(MAX(CASE WHEN lm.metric_name = 'http_error_rate_5xx' THEN lm.value END)::numeric, 2) AS \"5xx %\", ROUND(MAX(CASE WHEN lm.metric_name = 'process_cpu_usage' THEN lm.value END)::numeric, 2) AS \"CPU %\", MAX(lm.time) AS \"Latest Sample\" FROM selected_vessel sv JOIN uds_location_application_instances uai ON uai.uds_location_id = sv.id JOIN applications a ON a.id = uai.application_instance_id LEFT JOIN latest_metrics lm ON lm.application_instance_id = a.id LEFT JOIN active_alerts aa ON aa.application_id = a.id LEFT JOIN latest_alert la ON la.application_id = a.id GROUP BY a.id, a.name, a.external_id, aa.active_alert_count, la.alert_name, la.severity, la.starts_at ORDER BY COALESCE(aa.active_alert_count, 0) DESC, la.starts_at DESC NULLS LAST, a.name",
+          "refId": "A"
+        }
+      ],
+      "title": "Application Incident Board",
+      "type": "table"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "id": 200,
+      "title": "Selected App Drilldown",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Current Status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "degraded": {
+                        "color": "yellow",
+                        "text": "degraded"
+                      },
+                      "down": {
+                        "color": "red",
+                        "text": "down"
+                      },
+                      "healthy": {
+                        "color": "green",
+                        "text": "healthy"
+                      },
+                      "unknown": {
+                        "color": "gray",
+                        "text": "unknown"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Latest Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "text": "critical"
+                      },
+                      "info": {
+                        "color": "green",
+                        "text": "info"
+                      },
+                      "warning": {
+                        "color": "yellow",
+                        "text": "warning"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
+      "id": 7,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "WITH selected_vessel AS ( SELECT id, name, imo_nr FROM udslocations WHERE imo_nr = '$vessel' ), latest_metrics AS ( SELECT DISTINCT ON (ms.application_instance_id, ms.metric_name) ms.application_instance_id, ms.metric_name, ms.time, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' ORDER BY ms.application_instance_id, ms.metric_name, ms.time DESC ), active_alerts AS ( SELECT al.application_id, COUNT(*)::int AS active_alert_count FROM alerts al JOIN selected_vessel sv ON sv.id = al.uds_location_id WHERE COALESCE(LOWER(al.status), 'firing') NOT IN ('resolved', 'closed', 'completed', 'cleared') AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY al.application_id ), latest_alert AS ( SELECT DISTINCT ON (al.application_id) al.application_id, al.alert_name, al.severity, al.starts_at FROM alerts al JOIN selected_vessel sv ON sv.id = al.uds_location_id ORDER BY al.application_id, al.starts_at DESC ) SELECT sv.name AS \"Vessel\", sv.imo_nr AS \"IMO\", a.name AS \"Application\", a.external_id AS \"App ID\", a.app_type AS \"Type\", CASE WHEN COALESCE(MAX(CASE WHEN lm.metric_name = 'service_up' THEN lm.value END), 1) <= 0 OR COALESCE(MAX(CASE WHEN lm.metric_name = 'health_check_status' THEN lm.value END), 1) <= 0 THEN 'down' WHEN COALESCE(aa.active_alert_count, 0) > 0 THEN 'degraded' WHEN MAX(lm.time) IS NULL THEN 'unknown' ELSE 'healthy' END AS \"Current Status\", COALESCE(aa.active_alert_count, 0) AS \"Active Alerts\", la.alert_name AS \"Latest Alert\", la.severity AS \"Latest Severity\", la.starts_at AS \"Latest Incident Start\", ROUND(COALESCE(MAX(CASE WHEN lm.metric_name = 'last_sync_age_seconds' THEN lm.value END), 0)::numeric, 0) AS \"Last Sync Age (s)\", COALESCE(MAX(CASE WHEN lm.metric_name = 'reporting_stale' THEN lm.value END), 0)::int AS \"Reporting Stale\", COALESCE(MAX(CASE WHEN lm.metric_name = 'sync_delayed' THEN lm.value END), 0)::int AS \"Sync Delayed\", MAX(lm.time) AS \"Latest Sample\" FROM selected_vessel sv JOIN uds_location_application_instances uai ON uai.uds_location_id = sv.id JOIN applications a ON a.id = uai.application_instance_id LEFT JOIN latest_metrics lm ON lm.application_instance_id = a.id LEFT JOIN active_alerts aa ON aa.application_id = a.id LEFT JOIN latest_alert la ON la.application_id = a.id WHERE a.external_id = '${app}' GROUP BY sv.name, sv.imo_nr, a.id, a.name, a.external_id, a.app_type, aa.active_alert_count, la.alert_name, la.severity, la.starts_at",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected App Context",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "text": "critical"
+                      },
+                      "info": {
+                        "color": "green",
+                        "text": "info"
+                      },
+                      "warning": {
+                        "color": "yellow",
+                        "text": "warning"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
+      "id": 8,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT al.alert_name AS \"Alert\", al.severity AS \"Severity\", al.status AS \"Status\", al.alert_type AS \"Type\", al.starts_at AS \"Started\", al.ends_at AS \"Ended\", al.received_at AS \"Received\", COALESCE(al.annotations ->> 'summary', al.alert_name) AS \"Summary\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id JOIN applications a ON a.id = al.application_id WHERE u.imo_nr = '$vessel' AND a.external_id = '${app}' AND al.starts_at >= NOW() - INTERVAL '${incident_window}' ORDER BY al.starts_at DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected App Recent Alerts",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 30
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT ms.time AS \"time\", ms.metric_name AS metric, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' AND ms.app_id = '${app}' AND ms.metric_name IN ('service_up', 'health_check_status') AND $__timeFilter(ms.time) AND ms.time >= NOW() - INTERVAL '${incident_window}' ORDER BY ms.time",
+          "refId": "A"
+        }
+      ],
+      "title": "Availability Signals ($incident_window)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "http_request_duration_p95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "http_error_rate_5xx"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "http_error_rate_4xx"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 30
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT ms.time AS \"time\", ms.metric_name AS metric, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' AND ms.app_id = '${app}' AND ms.metric_name IN ('http_request_duration_p95', 'http_error_rate_5xx', 'http_error_rate_4xx', 'dotnet_exceptions_rate') AND $__timeFilter(ms.time) AND ms.time >= NOW() - INTERVAL '${incident_window}' ORDER BY ms.time",
+          "refId": "A"
+        }
+      ],
+      "title": "HTTP And Exception History ($incident_window)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "process_cpu_usage"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 38
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT ms.time AS \"time\", ms.metric_name AS metric, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' AND ms.app_id = '${app}' AND ms.metric_name IN ('process_cpu_usage', 'process_open_handles') AND $__timeFilter(ms.time) AND ms.time >= NOW() - INTERVAL '${incident_window}' ORDER BY ms.time",
+          "refId": "A"
+        }
+      ],
+      "title": "CPU And Handles ($incident_window)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 38
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT ms.time AS \"time\", ms.metric_name AS metric, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' AND ms.app_id = '${app}' AND ms.metric_name IN ('process_memory_bytes') AND $__timeFilter(ms.time) AND ms.time >= NOW() - INTERVAL '${incident_window}' ORDER BY ms.time",
+          "refId": "A"
+        }
+      ],
+      "title": "Memory Footprint ($incident_window)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "db_query_duration_avg"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "db_query_duration_p95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 46
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT ms.time AS \"time\", ms.metric_name AS metric, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' AND ms.app_id = '${app}' AND ms.metric_name IN ('db_query_duration_avg', 'db_query_duration_p95') AND $__timeFilter(ms.time) AND ms.time >= NOW() - INTERVAL '${incident_window}' ORDER BY ms.time",
+          "refId": "A"
+        }
+      ],
+      "title": "Database Latency ($incident_window)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 46
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT ms.time AS \"time\", ms.metric_name AS metric, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' AND ms.app_id = '${app}' AND ms.metric_name IN ('db_query_rate', 'db_query_errors', 'db_deadlocks') AND $__timeFilter(ms.time) AND ms.time >= NOW() - INTERVAL '${incident_window}' ORDER BY ms.time",
+          "refId": "A"
+        }
+      ],
+      "title": "Database Error Activity ($incident_window)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "fillOpacity": 10,
+            "lineWidth": 2
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "last_sync_age_seconds"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 54
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT ms.time AS \"time\", ms.metric_name AS metric, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' AND ms.app_id = '${app}' AND ms.metric_name IN ('last_sync_age_seconds', 'reporting_stale', 'sync_delayed') AND $__timeFilter(ms.time) AND ms.time >= NOW() - INTERVAL '${incident_window}' ORDER BY ms.time",
+          "refId": "A"
+        }
+      ],
+      "title": "Connectivity And Freshness ($incident_window)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Level"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "critical": {
+                        "color": "red",
+                        "text": "critical"
+                      },
+                      "error": {
+                        "color": "red",
+                        "text": "error"
+                      },
+                      "warning": {
+                        "color": "yellow",
+                        "text": "warning"
+                      },
+                      "info": {
+                        "color": "green",
+                        "text": "info"
+                      },
+                      "debug": {
+                        "color": "blue",
+                        "text": "debug"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Message"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 380
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Context"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 260
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 54
+      },
+      "id": 17,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT l.logged_at AS \"Logged At\", l.level AS \"Level\", l.source AS \"Source\", l.message AS \"Message\", l.correlation_key AS \"Correlation\", l.context AS \"Context\" FROM app_logs l JOIN udslocations u ON u.id = l.uds_location_id LEFT JOIN applications a ON a.id = l.application_id WHERE u.imo_nr = '$vessel' AND ( LOWER(COALESCE(l.app_external_id, '')) = LOWER('${app}') OR LOWER(COALESCE(a.external_id, '')) = LOWER('${app}') ) AND l.logged_at >= NOW() - INTERVAL '${incident_window}' ORDER BY l.logged_at DESC LIMIT 100",
+          "refId": "A"
+        }
+      ],
+      "title": "Selected App Recent Logs",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "displayMode": "auto"
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 62
+      },
+      "id": 15,
+      "options": {
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT ms.metric_name AS \"Metric\", ROUND(MIN(ms.value)::numeric, 4) AS \"Min\", ROUND(AVG(ms.value)::numeric, 4) AS \"Avg\", ROUND(MAX(ms.value)::numeric, 4) AS \"Max\", ROUND(((ARRAY_AGG(ms.value ORDER BY ms.time DESC))[1])::numeric, 4) AS \"Latest\", MAX(ms.metric_unit) AS \"Unit\", MAX(ms.time) AS \"Latest Sample\" FROM metric_samples ms WHERE ms.imo_nr = '$vessel' AND ms.app_id = '${app}' AND $__timeFilter(ms.time) AND ms.time >= NOW() - INTERVAL '${incident_window}' GROUP BY ms.metric_name ORDER BY CASE ms.metric_name WHEN 'service_up' THEN 1 WHEN 'health_check_status' THEN 2 WHEN 'process_uptime_seconds' THEN 3 WHEN 'last_sync_age_seconds' THEN 4 WHEN 'reporting_stale' THEN 5 WHEN 'sync_delayed' THEN 6 WHEN 'http_request_duration_p95' THEN 7 WHEN 'http_error_rate_5xx' THEN 8 WHEN 'http_error_rate_4xx' THEN 9 WHEN 'dotnet_exceptions_rate' THEN 10 WHEN 'process_cpu_usage' THEN 11 WHEN 'process_memory_bytes' THEN 12 WHEN 'process_open_handles' THEN 13 WHEN 'db_query_duration_avg' THEN 14 WHEN 'db_query_duration_p95' THEN 15 WHEN 'db_query_rate' THEN 16 WHEN 'db_query_errors' THEN 17 WHEN 'db_deadlocks' THEN 18 ELSE 99 END",
+          "refId": "A"
+        }
+      ],
+      "title": "Metric Window Summary ($incident_window)",
+      "type": "table"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": [
+    "maritime",
+    "uds",
+    "incident-response"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "MV Edge Aurora (IMO9300001)",
+          "value": "IMO9300001"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "timescaledb"
+        },
+        "definition": "SELECT imo_nr AS __value, name || ' (' || imo_nr || ')' AS __text FROM udslocations WHERE imo_nr IS NOT NULL ORDER BY name",
+        "description": "Select one vessel by IMO number",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Vessel",
+        "multi": false,
+        "name": "vessel",
+        "options": [],
+        "query": "SELECT imo_nr AS __value, name || ' (' || imo_nr || ')' AS __text FROM udslocations WHERE imo_nr IS NOT NULL ORDER BY name",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "Time Series Processor",
+          "value": "time-series-processor"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "timescaledb"
+        },
+        "definition": "WITH selected_vessel AS ( SELECT id FROM udslocations WHERE imo_nr = '$vessel' ), latest_metrics AS ( SELECT DISTINCT ON (ms.application_instance_id, ms.metric_name) ms.application_instance_id, ms.metric_name, ms.time, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' ORDER BY ms.application_instance_id, ms.metric_name, ms.time DESC ), active_alerts AS ( SELECT al.application_id, COUNT(*)::int AS active_alert_count FROM alerts al JOIN selected_vessel sv ON sv.id = al.uds_location_id WHERE COALESCE(LOWER(al.status), 'firing') NOT IN ('resolved', 'closed', 'completed', 'cleared') AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY al.application_id ), app_board AS ( SELECT a.external_id AS app_id, a.name AS app_name, CASE WHEN COALESCE(MAX(CASE WHEN lm.metric_name = 'service_up' THEN lm.value END), 1) <= 0 OR COALESCE(MAX(CASE WHEN lm.metric_name = 'health_check_status' THEN lm.value END), 1) <= 0 THEN 'down' WHEN COALESCE(aa.active_alert_count, 0) > 0 THEN 'degraded' WHEN MAX(lm.time) IS NULL THEN 'unknown' ELSE 'healthy' END AS current_status, COALESCE(aa.active_alert_count, 0) AS active_alerts FROM selected_vessel sv JOIN uds_location_application_instances uai ON uai.uds_location_id = sv.id JOIN applications a ON a.id = uai.application_instance_id LEFT JOIN latest_metrics lm ON lm.application_instance_id = a.id LEFT JOIN active_alerts aa ON aa.application_id = a.id GROUP BY a.id, a.external_id, a.name, aa.active_alert_count ) SELECT app_id AS __value, app_name || ' | ' || current_status || ' | alerts=' || active_alerts AS __text FROM app_board ORDER BY CASE current_status WHEN 'down' THEN 0 WHEN 'degraded' THEN 1 WHEN 'unknown' THEN 2 ELSE 3 END, active_alerts DESC, app_name",
+        "description": "Selected application for incident drilldown. Impacted apps are sorted first.",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Application",
+        "multi": false,
+        "name": "app",
+        "options": [],
+        "query": "WITH selected_vessel AS ( SELECT id FROM udslocations WHERE imo_nr = '$vessel' ), latest_metrics AS ( SELECT DISTINCT ON (ms.application_instance_id, ms.metric_name) ms.application_instance_id, ms.metric_name, ms.time, ms.value FROM metric_samples ms WHERE ms.imo_nr = '$vessel' ORDER BY ms.application_instance_id, ms.metric_name, ms.time DESC ), active_alerts AS ( SELECT al.application_id, COUNT(*)::int AS active_alert_count FROM alerts al JOIN selected_vessel sv ON sv.id = al.uds_location_id WHERE COALESCE(LOWER(al.status), 'firing') NOT IN ('resolved', 'closed', 'completed', 'cleared') AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY al.application_id ), app_board AS ( SELECT a.external_id AS app_id, a.name AS app_name, CASE WHEN COALESCE(MAX(CASE WHEN lm.metric_name = 'service_up' THEN lm.value END), 1) <= 0 OR COALESCE(MAX(CASE WHEN lm.metric_name = 'health_check_status' THEN lm.value END), 1) <= 0 THEN 'down' WHEN COALESCE(aa.active_alert_count, 0) > 0 THEN 'degraded' WHEN MAX(lm.time) IS NULL THEN 'unknown' ELSE 'healthy' END AS current_status, COALESCE(aa.active_alert_count, 0) AS active_alerts FROM selected_vessel sv JOIN uds_location_application_instances uai ON uai.uds_location_id = sv.id JOIN applications a ON a.id = uai.application_instance_id LEFT JOIN latest_metrics lm ON lm.application_instance_id = a.id LEFT JOIN active_alerts aa ON aa.application_id = a.id GROUP BY a.id, a.external_id, a.name, aa.active_alert_count ) SELECT app_id AS __value, app_name || ' | ' || current_status || ' | alerts=' || active_alerts AS __text FROM app_board ORDER BY CASE current_status WHEN 'down' THEN 0 WHEN 'degraded' THEN 1 WHEN 'unknown' THEN 2 ELSE 3 END, active_alerts DESC, app_name",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "Last 6h",
+          "value": "6 hours"
+        },
+        "datasource": {
+          "type": "postgres",
+          "uid": "timescaledb"
+        },
+        "definition": "SELECT '1 hour' AS __value, 'Last 1h' AS __text UNION ALL SELECT '6 hours' AS __value, 'Last 6h' AS __text UNION ALL SELECT '24 hours' AS __value, 'Last 24h' AS __text",
+        "description": "Incident-focused drilldown window for the selected application",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Incident Window",
+        "multi": false,
+        "name": "incident_window",
+        "options": [],
+        "query": "SELECT '1 hour' AS __value, 'Last 1h' AS __text UNION ALL SELECT '6 hours' AS __value, 'Last 6h' AS __text UNION ALL SELECT '24 hours' AS __value, 'Last 24h' AS __text",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "UDS Incident Monitoring",
+  "uid": "maritime_uds_monitoring",
+  "version": 2
+}

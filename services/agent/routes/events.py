@@ -1,6 +1,6 @@
 """
-GET  /api/v1/events              – list recent events
-POST /api/v1/events/{id}/acknowledge – human-in-the-loop: operator ack
+GET  /api/v1/events              - list recent events
+POST /api/v1/events/{id}/acknowledge - human-in-the-loop: operator ack
 =====================================================================
 """
 
@@ -12,7 +12,7 @@ from db import get_pool
 router = APIRouter(tags=["events"])
 
 
-# ─── GET /events ──────────────────────────────────────────
+# --- GET /events ------------------------------------------------------------
 @router.get("/events")
 async def get_recent_events(
     limit:        int            = Query(default=20, le=100),
@@ -38,7 +38,7 @@ async def get_recent_events(
     return [dict(r) for r in rows]
 
 
-# ─── POST /events/{event_id}/acknowledge ──────────────────
+# --- POST /events/{event_id}/acknowledge ------------------------------------
 @router.post("/events/{event_id}/acknowledge")
 async def acknowledge_event(
     event_id: int,

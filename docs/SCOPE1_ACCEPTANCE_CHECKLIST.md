@@ -1,28 +1,9 @@
 # Scope 1 Acceptance Checklist
 
-Last updated: 2026-03-16
+Last updated: 2026-03-12
 
 Use this checklist when the group wants to verify that Scope 1 still works on a
 fresh stack.
-
-## 0. Demo prep timing
-
-After `docker compose down -v && up -d --build`, the UDS seeder automatically
-backfills 6 hours of historical data (11 seed cycles at 30-min intervals) before
-starting the regular 30-minute loop. This means the Grafana time-series panels
-will have chart history from the very first page load.
-
-Watch the seeder logs to confirm backfill completes:
-
-```bash
-docker compose logs -f uds-seeder
-```
-
-You should see lines like `backfill cycle: -330m`, `backfill cycle: -300m`, etc.,
-followed by `Backfill complete (11 historical cycles inserted)`.
-
-After backfill finishes and the first live seed cycle runs, the dashboard is
-ready to present.
 
 ## 1. Reset and start from a fresh DB
 
@@ -42,7 +23,7 @@ Expected:
 - `ollama-init` pulls `llama3.2` and `nomic-embed-text`
 - the agent retries RAG ingest until embeddings are available
 - the generator starts inserting legacy telemetry/events
-- `uds-seeder` backfills 6h of history, then starts the regular 30-min seed loop
+- `uds-seeder` waits for schema/reference data, then starts inserting rows
 
 ## 2. Confirm UDS schema and reference data exist
 
