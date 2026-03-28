@@ -1,9 +1,33 @@
 # Scope 1 Acceptance Checklist
 
-Last updated: 2026-03-12
+Last updated: 2026-03-28
 
 Use this checklist when the group wants to verify that Scope 1 still works on a
 fresh stack.
+
+## 0. Demo prep timing
+
+After `docker compose down -v` and `docker compose up -d --build`, the UDS
+seeder backfills 6 hours of history before it starts the regular 30-minute seed
+loop. This gives Grafana time-series panels usable history from the first page
+load instead of starting with empty charts.
+
+Watch the seeder logs to confirm backfill completes:
+
+```bash
+docker compose logs -f uds-seeder
+```
+
+Expected backfill output:
+
+- `Fresh database detected - backfilling 6 hours of historical data`
+- `backfill cycle: -330m`
+- `backfill cycle: -300m`
+- ...
+- `Backfill complete (11 historical cycles inserted)`
+
+After the backfill and the first live seed cycle finish, the UDS dashboards are
+ready to present.
 
 ## 1. Reset and start from a fresh DB
 
@@ -23,7 +47,8 @@ Expected:
 - `ollama-init` pulls `llama3.2` and `nomic-embed-text`
 - the agent retries RAG ingest until embeddings are available
 - the generator starts inserting legacy telemetry/events
-- `uds-seeder` waits for schema/reference data, then starts inserting rows
+- `uds-seeder` waits for schema/reference data, backfills 6 hours, then starts
+  the regular seed loop
 
 ## 2. Confirm UDS schema and reference data exist
 
@@ -139,3 +164,50 @@ Scope 1 is good enough for demo/merge when:
 - Grafana shows incident-first vessel/app context
 - MCP tools return matching incident data
 - no new regression is introduced in the validation dashboard or quick analysis
+
+## 8. Scope 2 acceptance (additional checks)
+
+After Scope 2 changes are merged, also verify:
+
+### Fleet overview dashboard
+1. Open `Fleet Overview` dashboard in Grafana
+2. Confirm fleet health cards show all 3 vessels with status
+3. Confirm cross-vessel alert table shows alerts across vessels
+4. Confirm correlation view highlights shared issues
+5. Click a vessel and confirm drilldown navigates to UDS Incident Monitoring
+   with the correct vessel pre-selected
+
+### Scope 2 MCP tools
+Check that these tools return meaningful data:
+
+```bash
+# Fleet status
+curl -X POST http://localhost:8001/tools/get_fleet_status \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: code9-scope1-demo-key" \
+  -d '{}'
+
+# Cross-vessel correlation
+curl -X POST http://localhost:8001/tools/get_cross_vessel_correlation \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: code9-scope1-demo-key" \
+  -d '{"hours": 24}'
+
+# Incident timeline
+curl -X POST http://localhost:8001/tools/get_incident_timeline \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: code9-scope1-demo-key" \
+  -d '{"vessel_id": "IMO9300001"}'
+
+# Operational snapshot
+curl -X POST http://localhost:8001/tools/get_operational_snapshot \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: code9-scope1-demo-key" \
+  -d '{"vessel_id": "IMO9300001"}'
+```
+
+Pass condition:
+- Fleet status shows all 3 vessels with derived status
+- Cross-vessel correlation finds at least one shared issue (data-quality-processor)
+- Incident timeline returns chronological events for the vessel
+- Operational snapshot returns complete vessel state

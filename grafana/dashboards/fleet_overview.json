@@ -1,6 +1,6 @@
 {
   "annotations": {"list": []},
-  "description": "Fleet-wide overview for DevOps engineers. Shows cross-vessel health, correlated issues, and connectivity status. Drilldown to an IMO-based single-vessel UDS dashboard is pending in this branch.",
+  "description": "Fleet-wide overview for DevOps engineers. Shows cross-vessel health, correlated issues, and connectivity status. Click Vessel or IMO to open the single-vessel incident workbench.",
   "editable": true,
   "graphTooltip": 1,
   "id": null,
@@ -162,7 +162,7 @@
       "gridPos": {"h": 3, "w": 24, "x": 0, "y": 5},
       "id": 6,
       "options": {
-        "content": "## Integration note\n\nThis dashboard is built on IMO-based UDS fleet data. The checked-in single-vessel dashboards in this branch still use `vessel_001`-style identifiers, so vessel drilldown is intentionally disabled here until the IMO-based single-vessel UDS dashboard is versioned in the repo.",
+        "content": "## Drilldown\n\nClick `Vessel` or `IMO` to open the Scope 1 incident workbench for that vessel. In the active-alert table, clicking `Application` or `App ID` opens the same vessel with that app preselected.",
         "mode": "markdown"
       },
       "title": "Drilldown Status",
@@ -211,6 +211,30 @@
                 }
               },
               {"id": "custom.displayMode", "value": "color-background-solid"}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Vessel"},
+            "properties": [
+              {"id": "links", "value": [
+                {
+                  "title": "Open vessel incident workbench",
+                  "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__data.fields[\"IMO\"]}&var-incident_window=6%20hours",
+                  "targetBlank": false
+                }
+              ]}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "IMO"},
+            "properties": [
+              {"id": "links", "value": [
+                {
+                  "title": "Open vessel incident workbench",
+                  "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__value.raw}&var-incident_window=6%20hours",
+                  "targetBlank": false
+                }
+              ]}
             ]
           }
         ]
@@ -269,6 +293,54 @@
               },
               {"id": "custom.displayMode", "value": "color-background-solid"}
             ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Vessel"},
+            "properties": [
+              {"id": "links", "value": [
+                {
+                  "title": "Open vessel incident workbench",
+                  "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__data.fields[\"IMO\"]}&var-incident_window=6%20hours",
+                  "targetBlank": false
+                }
+              ]}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "IMO"},
+            "properties": [
+              {"id": "links", "value": [
+                {
+                  "title": "Open vessel incident workbench",
+                  "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__value.raw}&var-incident_window=6%20hours",
+                  "targetBlank": false
+                }
+              ]}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "Application"},
+            "properties": [
+              {"id": "links", "value": [
+                {
+                  "title": "Open incident workbench for this app",
+                  "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__data.fields[\"IMO\"]}&var-app=${__data.fields[\"App ID\"]}&var-incident_window=6%20hours",
+                  "targetBlank": false
+                }
+              ]}
+            ]
+          },
+          {
+            "matcher": {"id": "byName", "options": "App ID"},
+            "properties": [
+              {"id": "links", "value": [
+                {
+                  "title": "Open incident workbench for this app",
+                  "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__data.fields[\"IMO\"]}&var-app=${__value.raw}&var-incident_window=6%20hours",
+                  "targetBlank": false
+                }
+              ]}
+            ]
           }
         ]
       },
@@ -281,7 +353,7 @@
       },
       "targets": [{
         "format": "table",
-        "rawSql": "SELECT u.name AS \"Vessel\", u.imo_nr AS \"IMO\", a.name AS \"Application\", al.alert_name AS \"Alert\", al.severity AS \"Severity\", al.status AS \"Status\", al.alert_type AS \"Type\", to_char(al.starts_at, 'YYYY-MM-DD HH24:MI') AS \"Started\", CASE WHEN al.ends_at IS NOT NULL THEN ROUND(EXTRACT(EPOCH FROM (al.ends_at - al.starts_at)) / 60)::text || ' min' ELSE ROUND(EXTRACT(EPOCH FROM (NOW() - al.starts_at)) / 60)::text || ' min (ongoing)' END AS \"Duration\", COALESCE(al.annotations->>'summary', '') AS \"Summary\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id LEFT JOIN applications a ON a.id = al.application_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) ORDER BY CASE al.severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END ASC, al.starts_at DESC",
+        "rawSql": "SELECT u.name AS \"Vessel\", u.imo_nr AS \"IMO\", a.name AS \"Application\", a.external_id AS \"App ID\", al.alert_name AS \"Alert\", al.severity AS \"Severity\", al.status AS \"Status\", al.alert_type AS \"Type\", to_char(al.starts_at, 'YYYY-MM-DD HH24:MI') AS \"Started\", CASE WHEN al.ends_at IS NOT NULL THEN ROUND(EXTRACT(EPOCH FROM (al.ends_at - al.starts_at)) / 60)::text || ' min' ELSE ROUND(EXTRACT(EPOCH FROM (NOW() - al.starts_at)) / 60)::text || ' min (ongoing)' END AS \"Duration\", COALESCE(al.annotations->>'summary', '') AS \"Summary\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id LEFT JOIN applications a ON a.id = al.application_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) ORDER BY CASE al.severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END ASC, al.starts_at DESC",
         "refId": "A"
       }],
       "title": "Active Alerts Across Fleet",
