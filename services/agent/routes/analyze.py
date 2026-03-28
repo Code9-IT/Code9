@@ -44,6 +44,11 @@ UDS_FULL_TOOL_NAMES = {
     "get_vessel_alerts",
     "get_app_metric_history",
     "get_app_logs",
+    "get_fleet_status",
+    "get_fleet_alerts",
+    "get_cross_vessel_correlation",
+    "get_incident_timeline",
+    "get_operational_snapshot",
 }
 IN_FLIGHT_ANALYSES: set[int] = set()
 
