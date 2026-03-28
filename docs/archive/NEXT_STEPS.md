@@ -8,9 +8,9 @@ the old student split plan.
 Companion docs:
 
 - `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md`
-- `docs/SCOPE1_HANDOFF_NOTES.md`
-- `docs/SCOPE1_REVIEW_FINDINGS.md`
-- `docs/FUTURE_CHECKS.md`
+- `docs/archive/SCOPE1_HANDOFF_NOTES.md`
+- `docs/archive/SCOPE1_REVIEW_FINDINGS.md`
+- `docs/archive/FUTURE_CHECKS.md`
 
 ## Current conclusion
 
@@ -98,7 +98,7 @@ Do not spend time here unless the group finishes early:
 
 - `README.md`
 - `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md`
-- `docs/SCOPE1_HANDOFF_NOTES.md`
-- `docs/SCOPE1_REVIEW_FINDINGS.md`
-- `docs/FUTURE_CHECKS.md`
+- `docs/archive/SCOPE1_HANDOFF_NOTES.md`
+- `docs/archive/SCOPE1_REVIEW_FINDINGS.md`
+- `docs/archive/FUTURE_CHECKS.md`
 - `docs/UDS_dashboard_spec.md`

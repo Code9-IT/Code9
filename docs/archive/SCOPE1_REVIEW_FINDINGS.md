@@ -8,9 +8,9 @@ Scope 1 integration branch.
 Read together with:
 
 - `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md`
-- `docs/SCOPE1_HANDOFF_NOTES.md`
-- `docs/NEXT_STEPS.md`
-- `docs/FUTURE_CHECKS.md`
+- `docs/archive/SCOPE1_HANDOFF_NOTES.md`
+- `docs/archive/NEXT_STEPS.md`
+- `docs/archive/FUTURE_CHECKS.md`
 - `docs/UDS_dashboard_spec.md`
 
 ## Scope 1 target

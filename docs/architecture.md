@@ -2,157 +2,169 @@
 
 ## Purpose
 
-This prototype now contains two related monitoring paths:
+This system provides two monitoring paths for a maritime application platform:
 
-1. Legacy ship telemetry
-   - synthetic sensors
-   - anomaly events
-   - AI analysis on those events
-2. Scope 1 UDS incident monitoring
-   - application health per vessel
-   - UDS metrics, alerts, and app logs
-   - Grafana and MCP access for one-vessel incident handling
+1. **Legacy ship telemetry** -- synthetic sensors, anomaly events, AI analysis
+2. **UDS application monitoring** -- application health per vessel, metrics,
+   alerts, logs, fleet-level overview, and incident investigation tools
 
-The Scope 1 goal is User Story 1:
+The project implements three user stories:
 
-- one vessel
-- all hosted applications on that vessel
-- relevant historical metrics and logs
-- enough context to evaluate the situation and take action
+- **Scope 1** (delivered): single-vessel incident handling
+- **Scope 2** (in progress): multi-vessel fleet overview + NOC support
 
-## High-level component view
+## High-Level Component View
 
 ```text
-generator ------------------------> telemetry / events ----------+
-                                                                  |
-                                                                  v
-                                                         ship_operations.json
-                                                                  |
-                                                                  v
-                                                           agent analyze flow
-                                                                  |
-                                                          +-------+-------+
-                                                          |               |
-                                                          v               v
-                                                      RAG context       MCP tools
+generator ----------------------> telemetry / events -----+
+                                                           |
+                                                           v
+                                                  ship_operations.json
+                                                           |
+                                                     agent analyze
+                                                     /           \
+                                                RAG context    MCP tools (legacy)
 
-004_uds_reference_data.sql ---> UDS reference tables ----+
-                                                         |
-uds-seeder --------------------------------------------> metric_samples / alerts / app_logs
-                                                         |
-                                                         v
-                                                 uds_monitoring.json
-                                                         |
-                                                         v
-                                                     MCP UDS tools
+004_uds_reference_data.sql --> UDS reference tables -------+
+                                                           |
+uds-seeder ------> metric_samples / alerts / app_logs      |
+                          |                                |
+              +-----------+-----------+                    |
+              |           |           |                    |
+       uds_monitoring  fleet_overview  (noc_support)       |
+              |           |           |                    |
+              +-----------+-----------+                    |
+                          |                                |
+                    MCP UDS tools (9 tools) <---------------+
+                          |
+                    agent analyze (UDS events)
 ```
 
-## Main services
+## Main Services
 
 | Service | Responsibility |
 |---------|----------------|
-| `timescaledb` | Stores legacy telemetry/events plus UDS tables |
+| `timescaledb` | Stores legacy telemetry/events plus UDS tables and RAG vectors |
 | `generator` | Produces legacy synthetic ship telemetry and anomaly events |
-| `uds-seeder` | Produces periodic UDS mock metrics, alerts, and app logs |
-| `grafana` | Shows Ship Operations and UDS Incident Monitoring dashboards |
-| `agent` | Runs AI analysis for legacy anomaly events |
-| `mcp` | Exposes both legacy and UDS database tools |
-| `ollama` | Local LLM inference for agent and embeddings |
+| `uds-seeder` | Produces periodic UDS metrics, alerts, and app logs (30-min cycle, 6-hour backfill) |
+| `grafana` | Dashboards: Ship Operations, UDS Incident Monitoring, Fleet Overview |
+| `agent` | AI analysis for events using Ollama + RAG + MCP tool loop |
+| `mcp` | REST adapter exposing 12 database tools (3 legacy + 4 Scope 1 + 5 Scope 2) |
+| `ollama` | Local LLM inference and embeddings |
 | `ollama-init` | Pulls required models on stack startup |
 
-## Data model split
+## Data Model
 
 ### Legacy path
 
-Defined in:
+Defined in `db/init/001_init.sql`.
 
-- `db/init/001_init.sql`
+Tables: `telemetry`, `events`, `ai_analyses`
 
-Tables:
+Used by: `services/generator/`, `services/agent/routes/analyze.py`,
+`grafana/dashboards/ship_operations.json`
 
-- `telemetry`
-- `events`
-- `ai_analyses`
+### UDS path
 
-Used by:
-
-- `services/generator/`
-- `grafana/dashboards/ship_operations.json`
-- `services/agent/routes/analyze.py`
-
-### UDS Scope 1 path
-
-Defined in:
-
-- `db/init/003_uds.sql`
-- `db/init/004_uds_reference_data.sql`
-
-Seeded by:
-
-- `db/seed/uds_seed.sql`
-- `scripts/uds_seed_loop.sh`
+Defined in `db/init/003_uds.sql` and `db/init/004_uds_reference_data.sql`.
 
 Core tables:
+- `owners` -- vessel owners
+- `udslocations` -- vessels (3 demo vessels: IMO9300001, IMO9300002, IMO9300003)
+- `applications` -- platform apps (6 apps per vessel)
+- `uds_location_application_instances` -- vessel-to-app links (18 rows)
+- `metric_samples` -- time-series metrics (TimescaleDB hypertable)
+- `alerts` -- active and resolved alerts
+- `app_logs` -- application logs and alert-driven context
+- `uds_location_owner_history` -- ownership history
+- `monitoring_configs` -- compatibility shim
 
-- `owners`
-- `udslocations`
-- `applications`
-- `uds_location_application_instances`
-- `metric_samples`
-- `alerts`
-- `app_logs`
-- `uds_location_owner_history`
-- `monitoring_configs` as a compatibility shim
+Seeded by: `db/seed/uds_seed.sql` via `scripts/uds_seed_loop.sh`
 
-Used by:
+### RAG path
 
-- `grafana/dashboards/uds_monitoring.json`
-- `services/mcp/main.py`
+Defined in `db/init/002_rag.sql`.
 
-## Scope 1 architecture status
+Table: `knowledge_docs` with pgvector embeddings
 
-What is structurally correct now:
+Knowledge files: `docs/knowledge/` (17 maritime reference files)
 
-- Del A, B, C, and D all target the same UDS schema
-- vessel selection is based on `udslocations.imo_nr`
-- app health is based on linked applications, metrics, alerts, and app logs
-- seeded data respects vessel-to-application links
-- Grafana supports alert -> app -> recent metric/log history drilldown
-- connectivity and freshness are visible through seeded metrics and dashboard
-  panels
+## MCP Tool Architecture
 
-What is still intentionally limited:
+The MCP server (`services/mcp/main.py`) is a FastAPI REST adapter that exposes
+typed database tools. It is not the official MCP protocol (JSON-RPC 2.0 + SSE)
+but follows the same tool definition structure.
 
-- `app_logs` is a lightweight log bridge, not full centralized log ingestion
-- the demo topology is still 3 vessels / 6 applications
-- the legacy analysis path is related to Scope 1, but it is not the main proof
-  point for User Story 1
+Each tool has:
+1. A definition in the `TOOLS` list (name, description, inputSchema)
+2. A Pydantic `BaseModel` for argument validation
+3. An async handler function
+4. An entry in `TOOL_HANDLERS`
+5. A dedicated HTTP POST endpoint
 
-## Important design limitations
+The agent calls tools via HTTP during the analysis loop. Tool access is filtered
+by `UDS_FULL_TOOL_NAMES` in `services/agent/routes/analyze.py`.
+
+### Tool inventory (12 tools)
+
+| Tool | Path | Scope |
+|------|------|-------|
+| `get_telemetry` | Legacy | Scope 0 |
+| `get_events` | Legacy | Scope 0 |
+| `get_analysis` | Legacy | Scope 0 |
+| `get_vessel_app_status` | UDS | Scope 1 |
+| `get_vessel_alerts` | UDS | Scope 1 |
+| `get_app_metric_history` | UDS | Scope 1 |
+| `get_app_logs` | UDS | Scope 1 |
+| `get_fleet_status` | UDS | Scope 2 |
+| `get_fleet_alerts` | UDS | Scope 2 |
+| `get_cross_vessel_correlation` | UDS | Scope 2 |
+| `get_incident_timeline` | UDS | Scope 2 |
+| `get_operational_snapshot` | UDS | Scope 2 |
+
+## Dashboard Architecture
+
+### Scope 1: UDS Incident Monitoring (`uds_monitoring.json`)
+- Single-vessel focus
+- Variables: `vessel`, `app`, `incident_window`
+- Flow: select vessel -> review active alerts -> click app -> drilldown into
+  metrics, logs, connectivity
+- See `docs/UDS_dashboard_spec.md` for panel details
+
+### Scope 2: Fleet Overview (`fleet_overview.json`)
+- Multi-vessel focus (User Story 2)
+- Fleet health cards, cross-vessel alert table, correlation view
+- Drilldown links navigate to UDS Incident Monitoring with vessel pre-selected
+
+### Scope 2: NOC Support (planned: `noc_support.json`)
+- Investigation-focused (User Story 3)
+- Incident timeline, alert history, connectivity history
+- Wider time windows (up to 7 days)
+
+### Legacy: Ship Operations (`ship_operations.json`)
+- Sensor telemetry visualization
+- Separate from the UDS monitoring path
+
+## Design Limitations
 
 ### 1. Fresh DB bias
+The prototype relies on init scripts for schema and reference data. Old local
+volumes can drift. Use `docker compose down -v` for reliable validation.
 
-The prototype still relies on init scripts for both schema and reference data.
-Old local volumes can drift away from code expectations.
-
-### 2. Cold-start timing matters
-
-First start still depends on model pull, RAG ingest, and service readiness.
-That is acceptable for a local prototype, but it means the stack should be
-started a little ahead of any demo.
+### 2. Cold-start timing
+First start depends on model pull, RAG ingest, and service readiness. Allow a
+few minutes before demoing.
 
 ### 3. Security shortcuts
-
-The project is still a local prototype:
-
-- event acknowledge still has a GET alias
+This is a local prototype:
+- Event acknowledge has a GET alias
 - MCP auth is optional if `MCP_API_KEY` is unset
-- convenience-oriented demo credentials still exist
+- Demo credentials are convenience-oriented
 
-### 4. Prototype log bridge, not full log collection
+### 4. Prototype log bridge
+`app_logs` stores seeded and alert-driven log context. It is not a full
+centralized log pipeline.
 
-The current `app_logs` path is intentionally small:
-
-- it stores seeded app log context plus alert-driven incident rows
-- it closes the Scope 1 User Story 1 gap around logs for the prototype
-- it does not replace a future full application log pipeline
+### 5. Fixed demo topology
+3 vessels, 6 applications. Enough for Scope 1 and Scope 2 demo, but does not
+prove full scalability claims.

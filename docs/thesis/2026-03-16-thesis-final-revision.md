@@ -351,7 +351,7 @@ Keep the existing generic paragraphs about anomaly detection, RAG expansion, and
 **Done when:** Section 7.3 explicitly names User Stories 2 and 3 and connects all future work items to the scope model.
 
 ### Task C5: Add individual contributions to section 7.4
-**What:** Section 7.4 (Reflection on teamwork) doesn't mention who did what. The old report mentioned technical ownership areas. The repo's WORK_DISTRIBUTION.md documents this.
+**What:** Section 7.4 (Reflection on teamwork) doesn't mention who did what. The old report mentioned technical ownership areas. The repo's archived `docs/archive/WORK_DISTRIBUTION.md` documents this.
 **Where:** Section 7.4 (lines 556-566).
 **How:** Add one paragraph that briefly states each member's primary area of responsibility:
 - Jonas: project lead, stakeholder coordination, Grafana dashboards
@@ -361,7 +361,7 @@ Keep the existing generic paragraphs about anomaly detection, RAG expansion, and
 
 Keep it factual, one sentence per person. State that all members contributed to integration, testing, and report writing.
 
-**Done when:** Section 7.4 includes a brief statement of individual contributions consistent with WORK_DISTRIBUTION.md.
+**Done when:** Section 7.4 includes a brief statement of individual contributions consistent with `docs/archive/WORK_DISTRIBUTION.md`.
 
 ### Task C6: Add "Lessons learned" back to section 6.2
 **What:** The old report had a "Lessons learned" subsection under 6.2 with genuinely insightful content. The new report dropped it. Some of those insights (constrained model scope, RAG grounding value, time-series data representation, clear scope boundaries) should be preserved.

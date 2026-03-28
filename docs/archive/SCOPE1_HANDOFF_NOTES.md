@@ -5,8 +5,8 @@ This file is the short handoff for the current integrated Scope 1 state.
 For deeper review and remaining findings, also read:
 
 - `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md`
-- `docs/SCOPE1_REVIEW_FINDINGS.md`
-- `docs/NEXT_STEPS.md`
+- `docs/archive/SCOPE1_REVIEW_FINDINGS.md`
+- `docs/archive/NEXT_STEPS.md`
 
 ## Recommended working branch
 
