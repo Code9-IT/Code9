@@ -14,19 +14,19 @@ The project implements three user stories from Geir Borgi (Telenor Maritime):
    When a warning or error arrives from an application on a vessel, show the full
    operational state, historical metrics/logs, and enough context to take action.
 
-2. **Multi-Vessel Incident** (Scope 2 -- in progress):
+2. **Multi-Vessel Incident** (Scope 2 -- delivered):
    When warnings affect multiple vessels, provide a consolidated overview that
    highlights correlated issues and systemic problems.
 
-3. **NOC Support Case** (Scope 2 -- in progress):
+3. **NOC Support Case** (Scope 2 -- delivered):
    When a support ticket arrives, show full vessel state, recent errors, connectivity
    status, and historical context for troubleshooting.
 
 ## Current Status
 
-**Scope 1** is complete and validated. **Scope 2** is in progress with Task 1
-(Fleet Overview Dashboard) and Task 3 (MCP Fleet Tools) done, and Task 2
-(NOC Support Dashboard) pending.
+**Scope 1** and **Scope 2** are complete: all three user stories have dashboard
+and MCP tool coverage. See `docs/ROADMAP.md` for remaining polish items
+(predictive analysis, UDS-side AI integration, etc.).
 
 See `docs/SCOPE2_TASK_SPLIT.md` for task ownership and acceptance criteria.
 
@@ -99,6 +99,7 @@ docker compose up -d --build
 |   |-- dashboards/
 |   |   |-- uds_monitoring.json        # Scope 1: single-vessel incident board
 |   |   |-- fleet_overview.json        # Scope 2: multi-vessel fleet overview
+|   |   |-- noc_support.json           # Scope 2: NOC support investigation board
 |   |   |-- ship_operations.json       # legacy telemetry dashboard
 |   |   `-- uds_app_health.json        # app health snapshot
 |   |-- provisioning/
@@ -140,6 +141,7 @@ The system has two monitoring paths:
 - `services/mcp/main.py` exposes 9 UDS tools (4 single-vessel + 5 fleet/incident)
 - `grafana/dashboards/uds_monitoring.json` for single-vessel incidents
 - `grafana/dashboards/fleet_overview.json` for multi-vessel overview
+- `grafana/dashboards/noc_support.json` for NOC support investigation
 
 ### MCP tools (12 total)
 

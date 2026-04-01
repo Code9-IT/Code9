@@ -11,7 +11,7 @@ This system provides two monitoring paths for a maritime application platform:
 The project implements three user stories:
 
 - **Scope 1** (delivered): single-vessel incident handling
-- **Scope 2** (in progress): multi-vessel fleet overview + NOC support
+- **Scope 2** (delivered): multi-vessel fleet overview + NOC support
 
 ## High-Level Component View
 
@@ -47,7 +47,7 @@ uds-seeder ------> metric_samples / alerts / app_logs      |
 | `timescaledb` | Stores legacy telemetry/events plus UDS tables and RAG vectors |
 | `generator` | Produces legacy synthetic ship telemetry and anomaly events |
 | `uds-seeder` | Produces periodic UDS metrics, alerts, and app logs (30-min cycle, 6-hour backfill) |
-| `grafana` | Dashboards: Ship Operations, UDS Incident Monitoring, Fleet Overview |
+| `grafana` | Dashboards: Ship Operations, UDS Incident Monitoring, Fleet Overview, NOC Support |
 | `agent` | AI analysis for events using Ollama + RAG + MCP tool loop |
 | `mcp` | REST adapter exposing 12 database tools (3 legacy + 4 Scope 1 + 5 Scope 2) |
 | `ollama` | Local LLM inference and embeddings |
@@ -136,10 +136,12 @@ by `UDS_FULL_TOOL_NAMES` in `services/agent/routes/analyze.py`.
 - Fleet health cards, cross-vessel alert table, correlation view
 - Drilldown links navigate to UDS Incident Monitoring with vessel pre-selected
 
-### Scope 2: NOC Support (planned: `noc_support.json`)
+### Scope 2: NOC Support (`noc_support.json`)
 - Investigation-focused (User Story 3)
-- Incident timeline, alert history, connectivity history
-- Wider time windows (up to 7 days)
+- Variables: `vessel`, `time_window` (1h–7d), `app_filter`
+- 16 panels: operational state, incident timeline, error/warning summary,
+  alert history, connectivity history, historical metrics
+- Drilldown links navigate to UDS Incident Monitoring with vessel, app, and time window
 
 ### Legacy: Ship Operations (`ship_operations.json`)
 - Sensor telemetry visualization

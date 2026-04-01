@@ -34,7 +34,7 @@ docker compose logs -f uds-seeder  # wait for "Backfill complete"
 - Agent API: http://localhost:8000/docs
 - MCP API: http://localhost:8001/docs
 
-## Current Status (updated 2026-03-28)
+## Current Status (updated 2026-04-01)
 
 ### Scope 1 - Single Vessel Incident (User Story 1) -- COMPLETE
 - 3 vessels, 6 apps per vessel, 18 vessel-app links
@@ -43,11 +43,11 @@ docker compose logs -f uds-seeder  # wait for "Backfill complete"
 - 4 MCP tools: get_vessel_app_status, get_vessel_alerts, get_app_metric_history, get_app_logs
 - Legacy telemetry path with AI analysis also functional
 
-### Scope 2 - Multi-Vessel + NOC Support (User Stories 2 & 3) -- IN PROGRESS
+### Scope 2 - Multi-Vessel + NOC Support (User Stories 2 & 3) -- COMPLETE
 - Task 1 (Nidal): Fleet Overview Dashboard -- DONE
   - `grafana/dashboards/fleet_overview.json`
-- Task 2 (Jonas): NOC Support Dashboard -- NOT STARTED
-  - Will create `grafana/dashboards/noc_support.json`
+- Task 2 (Jonas): NOC Support Dashboard -- DONE
+  - `grafana/dashboards/noc_support.json`
 - Task 3 (Kristian): MCP Fleet/Incident Tools + Seed -- DONE
   - 5 new MCP tools in `services/mcp/main.py`
   - Cross-vessel seed scenario in `db/seed/uds_seed.sql`
@@ -68,7 +68,7 @@ uds-seeder -----------------------> metric_samples / alerts / app_logs
                                       |
                           +-----------+-----------+
                           |           |           |
-                   uds_monitoring  fleet_overview  (noc_support)
+                   uds_monitoring  fleet_overview  noc_support
                           |           |           |
                           +-----MCP UDS tools-----+
                                (12 tools total)
@@ -89,6 +89,7 @@ uds-seeder -----------------------> metric_samples / alerts / app_logs
 ### Dashboards
 - `grafana/dashboards/uds_monitoring.json` -- Scope 1: single-vessel incident board
 - `grafana/dashboards/fleet_overview.json` -- Scope 2: multi-vessel fleet overview
+- `grafana/dashboards/noc_support.json` -- Scope 2: NOC support investigation board
 - `grafana/dashboards/ship_operations.json` -- legacy telemetry dashboard
 
 ### Documentation

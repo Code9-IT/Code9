@@ -1,6 +1,6 @@
 # Scope 2 - Task Split and Status
 
-Last updated: 2026-03-28
+Last updated: 2026-04-01
 
 Scope 2 implements User Story 2 (multi-vessel incident) and User Story 3 (NOC
 support case). This document defines the task ownership, acceptance criteria, and
@@ -42,7 +42,7 @@ vessel naming, and drilldown behavior everywhere.
 | Task | Owner | Status | Main Files |
 |------|-------|--------|------------|
 | Task 1 - Fleet Overview Dashboard | Nidal | DONE | `grafana/dashboards/fleet_overview.json` |
-| Task 2 - NOC Support Dashboard | Jonas | NOT STARTED | `grafana/dashboards/noc_support.json` (to create) |
+| Task 2 - NOC Support Dashboard | Jonas | DONE | `grafana/dashboards/noc_support.json` |
 | Task 3 - MCP Fleet/Incident Tools | Kristian | DONE | `services/mcp/main.py`, `db/seed/uds_seed.sql`, `services/agent/routes/analyze.py` |
 
 ## Task 1 - Fleet Overview Dashboard (Nidal) -- DONE
@@ -59,22 +59,23 @@ Acceptance:
 - [x] User can identify fleet-level patterns without drilling down
 - [x] Drilldown into single-vessel dashboard works
 
-## Task 2 - NOC Support Dashboard (Jonas) -- NOT STARTED
+## Task 2 - NOC Support Dashboard (Jonas) -- DONE
 
-Will deliver `grafana/dashboards/noc_support.json` with:
-- Vessel selector, time window selector, optional app filter
-- Vessel operational state summary
+Delivers `grafana/dashboards/noc_support.json` with:
+- Vessel selector, time window selector (1h–7d), optional app filter
+- Vessel operational state summary (per-app status, alerts, metrics, connectivity)
 - Incident timeline (combined alerts + logs, chronological)
-- Error/warning summary grouped by app
-- Connectivity history
-- Historical metrics (CPU, memory, latency, error rates)
-- Alert history (firing + resolved)
+- Error/warning summary grouped by app with attention score
+- Connectivity history (sync age time-series + stale/delayed flags)
+- Historical metrics (HTTP/exceptions, CPU/handles, memory, DB latency/errors)
+- Alert history (firing + resolved, with duration)
+- Drilldown to UDS Incident Monitoring with vessel, app, and time window
 
 Acceptance:
-- [ ] NOC user can answer what happened, when, and on which app
-- [ ] Dashboard shows both current state and historical context
-- [ ] Connectivity visible enough to explain gaps
-- [ ] Resolved incidents visible in selected time window
+- [x] NOC user can answer what happened, when, and on which app
+- [x] Dashboard shows both current state and historical context
+- [x] Connectivity visible enough to explain gaps
+- [x] Resolved incidents visible in selected time window
 
 ## Task 3 - MCP Fleet & Incident Tools (Kristian) -- DONE
 
@@ -99,14 +100,14 @@ Acceptance:
 
 ## Integration Checklist (after all tasks merge)
 
-- [ ] Fresh-stack validation passes (docker compose down -v && up -d --build)
-- [ ] Scope 1 dashboard still works
-- [ ] Fleet overview dashboard works
-- [ ] NOC support dashboard works (when Task 2 is done)
-- [ ] All MCP tools respond correctly
-- [ ] Severity colors and status labels are consistent
-- [ ] Drilldown links work between dashboards
-- [ ] Fleet correlation claims are backed by seed data
+- [x] Fresh-stack validation passes (docker compose down -v && up -d --build)
+- [x] Scope 1 dashboard still works
+- [x] Fleet overview dashboard works
+- [x] NOC support dashboard works
+- [x] All MCP tools respond correctly (12 tools, auth enforced)
+- [x] Severity colors and status labels are consistent
+- [ ] Drilldown links work between dashboards (verified structurally; manual click-through recommended)
+- [x] Fleet correlation claims are backed by seed data
 
 ## Important Deadlines
 

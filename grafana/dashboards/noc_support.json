@@ -216,7 +216,7 @@
                 "value": [
                   {
                     "title": "Open incident workbench",
-                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-app=${__value.raw}",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-app=${__value.raw}&var-incident_window=${time_window}",
                     "targetBlank": false
                   }
                 ]
@@ -278,7 +278,7 @@
                 "value": [
                   {
                     "title": "Open incident workbench",
-                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-app=${__value.raw}",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-app=${__value.raw}&var-incident_window=${time_window}",
                     "targetBlank": false
                   }
                 ]
@@ -340,7 +340,7 @@
                 "value": [
                   {
                     "title": "Open incident workbench",
-                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-app=${__value.raw}",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-app=${__value.raw}&var-incident_window=${time_window}",
                     "targetBlank": false
                   }
                 ]
@@ -402,7 +402,7 @@
                 "value": [
                   {
                     "title": "Open incident workbench",
-                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-app=${__value.raw}",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-app=${__value.raw}&var-incident_window=${time_window}",
                     "targetBlank": false
                   }
                 ]

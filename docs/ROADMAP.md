@@ -1,6 +1,6 @@
 # Roadmap - Backlog and Priorities
 
-Last updated: 2026-03-28
+Last updated: 2026-04-01
 
 This file tracks the current backlog. For historical context, see the archived
 Scope 1 docs in `docs/archive/`.
@@ -32,12 +32,14 @@ These items are done and should not be reopened:
 - Alert resolution logic to prevent accumulation across seed cycles
 - Fleet overview dashboard drilldown fix and app-level links
 
-## Current Priority: Scope 2 Remaining Work
+### Scope 2 Task 2 - NOC Support Dashboard (completed 2026-04-01)
+- 16-panel investigation dashboard: `grafana/dashboards/noc_support.json`
+- Vessel selector, time window (1h–7d), optional app filter
+- Incident timeline, error/warning summary, alert history, connectivity history
+- Historical metrics (HTTP, CPU, memory, DB latency)
+- Drilldown to UDS Incident Monitoring with vessel, app, and time window
 
-### Task 2 - NOC Support Dashboard (Jonas) -- NOT STARTED
-- Status: Pending owner availability
-- Deliverable: `grafana/dashboards/noc_support.json`
-- See `docs/SCOPE2_TASK_SPLIT.md` for full spec
+## Current Priority: Integration and Polish
 
 ### Integration pass after all tasks merge
 - Run fresh-stack validation with all dashboards
@@ -49,7 +51,7 @@ These items are done and should not be reopened:
 
 ### 1. Fresh-stack acceptance on final merge candidate
 - Re-run `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md` on the merged main branch
-- Verify all 3 dashboards load and show meaningful data
+- Verify all 4 UDS/fleet dashboards load and show meaningful data
 - Verify all 12 MCP tools return correct results
 
 ### 2. Keep docs aligned with merged code
