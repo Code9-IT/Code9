@@ -74,6 +74,12 @@ uds-seeder -----------------------> metric_samples / alerts / app_logs
                                (12 tools total)
 ```
 
+Task 3 keeps the legacy/UDS bridge lightweight instead of rewriting vessel IDs:
+- `vessel_001` remains the legacy telemetry identifier
+- Presenter-facing mapping: `vessel_001` -> `MV Edge Aurora (IMO9300001)`
+- Main Grafana dashboards share root navigation between Ship Operations,
+  Fleet Overview, UDS Incident Workbench, and NOC Support
+
 ## Key Files To Read
 
 ### Core runtime
@@ -87,10 +93,11 @@ uds-seeder -----------------------> metric_samples / alerts / app_logs
 - `scripts/uds_seed_loop.sh` -- seed loop controller with backfill
 
 ### Dashboards
-- `grafana/dashboards/uds_monitoring.json` -- Scope 1: single-vessel incident board
+- `grafana/dashboards/uds_monitoring.json` -- Scope 1: single-vessel incident workbench
 - `grafana/dashboards/fleet_overview.json` -- Scope 2: multi-vessel fleet overview
 - `grafana/dashboards/noc_support.json` -- Scope 2: NOC support investigation board
-- `grafana/dashboards/ship_operations.json` -- legacy telemetry dashboard
+- `grafana/dashboards/ship_operations.json` -- legacy telemetry dashboard (mapped to MV Edge Aurora / IMO9300001 in the UDS flow)
+- `grafana/dashboards/uds_app_health.json` -- AI pipeline health dashboard (developer-only, not part of the main demo navigation)
 
 ### Documentation
 - `README.md` -- project overview and quick start

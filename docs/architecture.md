@@ -47,7 +47,7 @@ uds-seeder ------> metric_samples / alerts / app_logs      |
 | `timescaledb` | Stores legacy telemetry/events plus UDS tables and RAG vectors |
 | `generator` | Produces legacy synthetic ship telemetry and anomaly events |
 | `uds-seeder` | Produces periodic UDS metrics, alerts, and app logs (30-min cycle, 6-hour backfill) |
-| `grafana` | Dashboards: Ship Operations, UDS Incident Monitoring, Fleet Overview, NOC Support |
+| `grafana` | Dashboards: Ship Operations, UDS Incident Workbench, Fleet Overview, NOC Support |
 | `agent` | AI analysis for events using Ollama + RAG + MCP tool loop |
 | `mcp` | REST adapter exposing 12 database tools (3 legacy + 4 Scope 1 + 5 Scope 2) |
 | `ollama` | Local LLM inference and embeddings |
@@ -124,7 +124,7 @@ by `UDS_FULL_TOOL_NAMES` in `services/agent/routes/analyze.py`.
 
 ## Dashboard Architecture
 
-### Scope 1: UDS Incident Monitoring (`uds_monitoring.json`)
+### Scope 1: UDS Incident Workbench (`uds_monitoring.json`)
 - Single-vessel focus
 - Variables: `vessel`, `app`, `incident_window`
 - Flow: select vessel -> review active alerts -> click app -> drilldown into
@@ -134,18 +134,26 @@ by `UDS_FULL_TOOL_NAMES` in `services/agent/routes/analyze.py`.
 ### Scope 2: Fleet Overview (`fleet_overview.json`)
 - Multi-vessel focus (User Story 2)
 - Fleet health cards, cross-vessel alert table, correlation view
-- Drilldown links navigate to UDS Incident Monitoring with vessel pre-selected
+- Drilldown links navigate to the UDS Incident Workbench with vessel pre-selected
 
 ### Scope 2: NOC Support (`noc_support.json`)
 - Investigation-focused (User Story 3)
 - Variables: `vessel`, `time_window` (1h–7d), `app_filter`
 - 16 panels: operational state, incident timeline, error/warning summary,
   alert history, connectivity history, historical metrics
-- Drilldown links navigate to UDS Incident Monitoring with vessel, app, and time window
+- Drilldown links navigate to the UDS Incident Workbench with vessel, app, and time window
 
 ### Legacy: Ship Operations (`ship_operations.json`)
 - Sensor telemetry visualization
-- Separate from the UDS monitoring path
+- Lightweight bridge to the UDS monitoring path through presenter-facing labels
+  and dashboard links
+- `vessel_001` maps to MV Edge Aurora (`IMO9300001`) in the UDS dashboards
+
+### Shared navigation
+- Main demo dashboards now share root-level navigation between Ship Operations,
+  Fleet Overview, UDS Incident Workbench, and NOC Support
+- `uds_app_health.json` is treated as a developer-only AI pipeline health board,
+  not part of the main demo path
 
 ## Design Limitations
 
