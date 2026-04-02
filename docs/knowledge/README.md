@@ -72,6 +72,9 @@ Short description of what event/sensor patterns this note supports.
 | `p9_maritime_regulations.md` | Regulatory reference table (MSC.302, A.741, IACS UR E22/Z27, etc.) |
 | `p10_incident_analysis_reporting.md` | Marine casualty/incident/near-miss, RCA, event report structure |
 
-### Pending (no content yet)
-- **Point 7** (Application state): depends on IAS scripts from Geir (meeting 03.03.2026)
-- **Point 11** (Color Line/Knowit-specific): depends on documents from Color Line
+### Deferred
+- **Point 7** (Application state): Was waiting on IAS scripts from Geir. Meeting
+  on 03.03.2026 happened but scripts have not been received yet. Create this file
+  when/if Geir provides application-level IAS data.
+- **Point 11** (Color Line/Knowit-specific): Depends on documents from Color Line
+  that have not been provided. Deferred indefinitely.

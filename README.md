@@ -1,60 +1,42 @@
-# Maritime Agentic Observability Starter Kit
+# Maritime Agentic Observability
 
-Bachelor project in collaboration with **Knowit Sorlandet**.
+Bachelor project (UiA) in collaboration with **Knowit Sorlandet**.
 
-This repository now contains two parallel monitoring paths:
+An AI-agent-enhanced monitoring and observability system for maritime application
+platforms. The system monitors applications running on vessels, detects incidents,
+and provides AI-driven analysis using RAG-grounded knowledge and MCP tool access.
 
-1. Legacy ship telemetry
-   - synthetic sensors
-   - anomaly events
-   - AI analysis for telemetry incidents
-2. Scope 1 UDS incident monitoring
-   - application health per vessel
-   - periodic UDS metrics, alerts, and app logs
-   - Grafana and MCP support for single-vessel incident handling
+## User Stories
 
-The current Scope 1 target is User Story 1 from Geir:
+The project implements three user stories from Geir Borgi (Telenor Maritime):
 
-> When a warning or error arrives from an application on a vessel, the team
-> needs a dashboard that shows the full operational state of the vessel's
-> applications, relevant historical metrics and logs, and enough context to
-> evaluate the situation and take action.
+1. **Single Vessel Incident** (Scope 1 -- delivered):
+   When a warning or error arrives from an application on a vessel, show the full
+   operational state, historical metrics/logs, and enough context to take action.
 
-Useful companion docs:
+2. **Multi-Vessel Incident** (Scope 2 -- delivered):
+   When warnings affect multiple vessels, provide a consolidated overview that
+   highlights correlated issues and systemic problems.
 
-- `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md`
-- `docs/SCOPE1_HANDOFF_NOTES.md`
-- `docs/SCOPE1_REVIEW_FINDINGS.md`
-- `docs/NEXT_STEPS.md`
-- `docs/UDS_dashboard_spec.md`
-- `docs/FUTURE_CHECKS.md`
+3. **NOC Support Case** (Scope 2 -- delivered):
+   When a support ticket arrives, show full vessel state, recent errors, connectivity
+   status, and historical context for troubleshooting.
 
-## Current status
+## Current Status
 
-As of 2026-03-12, a fresh-stack Student 4 validation on
-`feat/scope1-student1-2-3-integration` confirmed:
+**Scope 1** and **Scope 2** are complete: all three user stories have dashboard
+and MCP tool coverage. See `docs/ROADMAP.md` for remaining polish items
+(predictive analysis, UDS-side AI integration, etc.).
 
-- tracked UDS schema and reference data load on a fresh DB volume
-- the repo seeds 3 demo vessels, 6 applications, and 18 vessel/application links
-- `uds-seeder` inserts `metric_samples`, `alerts`, and `app_logs`
-- `UDS Incident Monitoring` is provisioned in Grafana
-- MCP UDS tools return vessel status, alerts, metric history, and app logs
-- the validation dashboard loads, and quick legacy-event analysis completes
+See `docs/SCOPE2_TASK_SPLIT.md` for task ownership and acceptance criteria.
 
-The main remaining work is now final merge discipline, documentation hygiene,
-and low-priority hardening.
-
-One important caveat still exists: legacy **full** analysis can take longer than
-the first minute on a cold start, so if you plan to demo that path, warm it up
-and verify it separately. That does not block Scope 1 UDS acceptance.
-
-## Quick start
+## Quick Start
 
 ### Prerequisites
 
 - Docker Desktop
 
-No local PostgreSQL or Python install is required for the normal workflow.
+No local PostgreSQL or Python install is required.
 
 ### Start the stack
 
@@ -65,154 +47,138 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Important first-start behavior:
+First-start behavior:
 
 - `ollama-init` pulls `llama3.2` and `nomic-embed-text`
-- the agent retries RAG ingest until embeddings are available
-- the generator inserts one startup event if the legacy `events` table is empty
-- `uds-seeder` waits until the UDS schema and reference data exist
+- The agent retries RAG ingest until embeddings are available
+- The generator inserts legacy telemetry events
+- `uds-seeder` backfills 6 hours of UDS history, then seeds every 30 minutes
 
-Useful startup logs:
+Watch startup progress:
 
 ```bash
-docker compose logs -f ollama-init agent generator uds-seeder
+docker compose logs -f uds-seeder
 ```
+
+Wait for `Backfill complete (11 historical cycles inserted)` before using dashboards.
 
 ### Open the main services
 
-- Grafana: `http://localhost:3000`
-- Agent docs: `http://localhost:8000/docs`
+- Grafana: `http://localhost:3000` (admin / code9-demo-admin)
+- Agent API: `http://localhost:8000/docs`
+- MCP API: `http://localhost:8001/docs`
 - Validation dashboard: `http://localhost:8000/api/v1/validate/dashboard`
-- MCP docs: `http://localhost:8001/docs`
 
-Default demo Grafana credentials from `.env.example` are:
+### Fresh-stack reset
 
-- user: `admin`
-- password: `code9-demo-admin`
-
-### Important reset rule
-
-The database init scripts only auto-run on a fresh DB volume. For trustworthy
-Scope 1 validation, reset the stack like this:
+The database init scripts only run on a fresh DB volume. For reliable validation:
 
 ```bash
 docker compose down -v
 docker compose up -d --build
 ```
 
-If you test against an old volume, you may hide schema drift or init problems.
-
-### Scope 1 acceptance
-
-Use `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md` as the repeatable acceptance flow.
-That checklist covers:
-
-- fresh DB startup
-- UDS schema and reference data
-- seeding into metrics, alerts, and logs
-- Grafana incident flow
-- MCP sanity checks
-- validation and legacy-analysis sanity checks
-
-## Project layout
+## Project Layout
 
 ```text
 .
+|-- CLAUDE.md                          # AI assistant instructions (read this first)
 |-- docker-compose.yml
 |-- .env.example
 |
 |-- db/
-|   |-- init/001_init.sql
-|   |-- init/002_rag.sql
-|   |-- init/003_uds.sql
-|   |-- init/004_uds_reference_data.sql
-|   `-- seed/uds_seed.sql
+|   |-- init/
+|   |   |-- 001_init.sql               # legacy telemetry schema
+|   |   |-- 002_rag.sql                # pgvector RAG schema
+|   |   |-- 003_uds.sql                # UDS application monitoring schema
+|   |   `-- 004_uds_reference_data.sql # 3 vessels, 6 apps, 18 links
+|   `-- seed/
+|       `-- uds_seed.sql               # periodic seed with scenario flags
 |
 |-- grafana/
 |   |-- dashboards/
-|   |   |-- ship_operations.json
-|   |   `-- uds_monitoring.json
+|   |   |-- uds_monitoring.json        # Scope 1: single-vessel incident board
+|   |   |-- fleet_overview.json        # Scope 2: multi-vessel fleet overview
+|   |   |-- noc_support.json           # Scope 2: NOC support investigation board
+|   |   |-- ship_operations.json       # legacy telemetry dashboard
+|   |   `-- uds_app_health.json        # app health snapshot
 |   |-- provisioning/
-|   `-- queries/uds_queries.sql
+|   `-- queries/
+|       `-- uds_queries.sql            # reference SQL for dashboard panels
 |
 |-- services/
-|   |-- agent/
-|   |-- generator/
-|   `-- mcp/
+|   |-- agent/                         # AI analysis service (FastAPI)
+|   |-- generator/                     # legacy telemetry generator
+|   `-- mcp/                           # MCP REST adapter (12 tools)
 |
 |-- scripts/
-|   |-- reset_db.sh
-|   `-- uds_seed_loop.sh
+|   |-- uds_seed_loop.sh              # seed loop with 6-hour backfill
+|   `-- reset_db.sh                    # database reset utility
 |
 `-- docs/
-    |-- SCOPE1_ACCEPTANCE_CHECKLIST.md
-    |-- SCOPE1_HANDOFF_NOTES.md
-    |-- SCOPE1_REVIEW_FINDINGS.md
-    |-- NEXT_STEPS.md
-    |-- FUTURE_CHECKS.md
-    `-- UDS_dashboard_spec.md
+    |-- architecture.md                # system architecture
+    |-- ROADMAP.md                     # backlog and priorities
+    |-- SCOPE1_ACCEPTANCE_CHECKLIST.md # repeatable validation flow
+    |-- SCOPE2_TASK_SPLIT.md           # Scope 2 task ownership and status
+    |-- UDS_dashboard_spec.md          # dashboard panel specifications
+    |-- knowledge/                     # RAG knowledge base (17 files)
+    |-- thesis/                        # thesis-specific planning docs
+    `-- archive/                       # historical Scope 1 handoff docs
 ```
 
-## Scope 1 path summary
+## Architecture
 
-### Legacy path
+The system has two monitoring paths:
 
-Defined mainly by:
+### Legacy telemetry path
+- `services/generator/` produces synthetic sensor data and anomaly events
+- `services/agent/` runs AI analysis using Ollama + RAG + MCP tools
+- `grafana/dashboards/ship_operations.json` visualizes telemetry
 
-- `db/init/001_init.sql`
-- `services/generator/`
-- `services/agent/routes/analyze.py`
-- `grafana/dashboards/ship_operations.json`
+### UDS application monitoring path
+- `db/init/003_uds.sql` + `004_uds_reference_data.sql` define the schema
+- `uds-seeder` inserts metrics, alerts, and logs every 30 minutes
+- `services/mcp/main.py` exposes 9 UDS tools (4 single-vessel + 5 fleet/incident)
+- `grafana/dashboards/uds_monitoring.json` for single-vessel incidents
+- `grafana/dashboards/fleet_overview.json` for multi-vessel overview
+- `grafana/dashboards/noc_support.json` for NOC support investigation
 
-Tables:
+### MCP tools (12 total)
 
-- `telemetry`
-- `events`
-- `ai_analyses`
+| Tool | Scope | Purpose |
+|------|-------|---------|
+| `get_telemetry` | Legacy | Raw telemetry query |
+| `get_events` | Legacy | Event list with filters |
+| `get_analysis` | Legacy | AI analysis for an event |
+| `get_vessel_app_status` | Scope 1 | All apps on one vessel |
+| `get_vessel_alerts` | Scope 1 | Active alerts for one vessel |
+| `get_app_metric_history` | Scope 1 | Time-series metrics for one app |
+| `get_app_logs` | Scope 1 | Recent logs for one app |
+| `get_fleet_status` | Scope 2 | All vessels with status |
+| `get_fleet_alerts` | Scope 2 | Fleet-wide alerts |
+| `get_cross_vessel_correlation` | Scope 2 | Cross-vessel pattern detection |
+| `get_incident_timeline` | Scope 2 | Chronological event timeline |
+| `get_operational_snapshot` | Scope 2 | Full vessel state for NOC |
 
-### UDS path
+## Scope 1 Acceptance
 
-Defined mainly by:
+Use `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md` for the repeatable validation flow.
 
-- `db/init/003_uds.sql`
-- `db/init/004_uds_reference_data.sql`
-- `db/seed/uds_seed.sql`
-- `scripts/uds_seed_loop.sh`
-- `services/mcp/main.py`
-- `grafana/dashboards/uds_monitoring.json`
+## Known Limitations
 
-Tables:
-
-- `owners`
-- `udslocations`
-- `applications`
-- `uds_location_application_instances`
-- `metric_samples`
-- `alerts`
-- `app_logs`
-- `uds_location_owner_history`
-- `monitoring_configs` (compatibility shim)
-
-## Known limitations
-
-These are still real, but they are not the main Scope 1 blocker anymore:
-
-- `GET /api/v1/events/{event_id}/acknowledge` still mutates state
+- `GET /api/v1/events/{event_id}/acknowledge` still mutates state (should be POST-only)
 - MCP auth is only enforced if `MCP_API_KEY` is non-empty
-- existing DB volumes still rely on reset/runtime-guard behavior instead of a
-  full migration strategy
-- the demo topology is intentionally fixed to 3 vessels and 6 applications
-- `app_logs` is a lightweight prototype bridge, not a full centralized log
-  pipeline
-- cold-start legacy full analysis may need extra warmup time before a demo
+- The demo topology is fixed to 3 vessels and 6 applications
+- `app_logs` is a lightweight prototype bridge, not a full log pipeline
+- Cold-start legacy analysis may need warmup time before demo
+- Fresh DB volumes are the only reliable validation path (no migration strategy)
 
-See `docs/FUTURE_CHECKS.md` for the current backlog.
+See `docs/ROADMAP.md` for the full backlog.
 
-## Group workflow
+## Group Workflow
 
-1. Work from the current integration branch or a short-lived feature branch on top of it.
-2. Keep changes narrow and scoped.
+1. Work from feature branches, never push directly to main.
+2. Keep changes scoped to your task's file ownership.
 3. Update docs in the same PR when behavior changes.
-4. Re-run the Scope 1 acceptance checklist after meaningful merges.
-5. Treat `databasecodeFraGeir/` as local source material, not the runnable
-   source of truth.
+4. Run fresh-stack validation after merges.
+5. See `docs/SCOPE2_TASK_SPLIT.md` for current task assignments.

@@ -122,6 +122,18 @@ provisioning changes are required.
     - grouped by metric name
     - shows min, avg, max, latest, unit, and latest sample time
 
+## Related Dashboards
+
+### Fleet Overview (`fleet_overview.json`) -- Scope 2
+The fleet overview dashboard provides a multi-vessel summary (User Story 2).
+It includes fleet health cards, cross-vessel alert/correlation tables, and
+connectivity status. Clicking a vessel drills down into this single-vessel
+UDS Incident Monitoring dashboard with the vessel pre-selected.
+
+### NOC Support (planned: `noc_support.json`) -- Scope 2
+The NOC support dashboard will provide an investigation-focused view
+(User Story 3) with incident timelines, alert history, and wider time windows.
+
 ## Notes
 - `grafana/queries/uds_queries.sql` mirrors the dashboard queries for review and
   maintenance.
@@ -131,6 +143,3 @@ provisioning changes are required.
 - `app_logs` currently mixes trigger-generated alert logs with seeded
   application/sync logs, which is good enough for the prototype's incident
   context goal.
-- This dashboard now closes the specific Grafana gap from the review:
-  alert -> affected app -> recent metric/log history is visible in Grafana
-  without needing MCP first.

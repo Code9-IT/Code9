@@ -4,7 +4,7 @@ Last updated: 2026-03-12
 
 This file is the backlog for work that still matters after Scope 1 became
 functionally coherent. Keep immediate merge and acceptance work in
-`docs/NEXT_STEPS.md`.
+`docs/archive/NEXT_STEPS.md`.
 
 ## Recently closed on the current integration branch
 
@@ -109,15 +109,15 @@ still missing:
 
 ## P2 - Product and demo quality improvements
 
-### 9. Richer historical backfill immediately after a fresh start
+### 9. Deeper or configurable historical backfill immediately after a fresh start
 
-- Status: OPEN
+- Status: PARTIALLY ADDRESSED
 - Why it matters:
-  - the graphs work now
-  - they will still look stronger if the demo starts with more history already
-    present
+  - the stack now backfills an initial 6-hour history window on a fresh DB
+  - the demo may still benefit from a deeper or configurable warm-up period
 - Future direction:
-  - optionally backfill a few recent windows on fresh startup
+  - make the backfill window configurable
+  - optionally vary scenario mix across the backfill horizon
 
 ### 10. Stronger alert-to-context ergonomics in Grafana
 

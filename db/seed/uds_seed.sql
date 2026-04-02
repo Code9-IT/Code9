@@ -13,6 +13,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- - non-critical incident context
 -- - freshness/connectivity constraints
 -- - more than just ServiceDown alerts
+-- - cross-vessel correlated issues (Scope 2: data-quality-processor
+--   is stale on IMO9300001 AND degraded on IMO9300002)
 
 WITH
 sync_run AS (
@@ -78,6 +80,7 @@ scenario_flags AS (
       WHEN ai.imo_nr = 'IMO9300001' AND ai.app_id = 'uds-edge-data-api' THEN 'delayed'
       WHEN ai.imo_nr = 'IMO9300001' AND ai.app_id = 'data-quality-processor' THEN 'stale'
       WHEN ai.imo_nr = 'IMO9300002' AND ai.app_id = 'uds-edge-parquet-sync' THEN 'down'
+      WHEN ai.imo_nr = 'IMO9300002' AND ai.app_id = 'data-quality-processor' THEN 'degraded'
       WHEN ai.imo_nr = 'IMO9300003' AND ai.app_id = 'time-series-processor' THEN 'degraded'
       WHEN scenario_roll < 0.08 THEN 'down'
       WHEN scenario_roll < 0.24 THEN 'degraded'
@@ -333,6 +336,39 @@ SELECT
 FROM values_calc v
 ON CONFLICT DO NOTHING;
 
+-- Resolve previous firing alerts for all seeded apps before inserting fresh ones.
+-- Each seed cycle should represent the current fleet snapshot, not an ever-growing
+-- backlog of old demo alerts.
+WITH
+sync_run AS (
+  SELECT date_trunc('minute', timezone('UTC', now())) AS sync_time_utc
+),
+seeded_apps AS (
+  SELECT
+    u.id AS uds_location_id,
+    a.id AS application_id
+  FROM uds_location_application_instances uai
+  JOIN udslocations u ON u.id = uai.uds_location_id
+  JOIN applications a ON a.id = uai.application_instance_id
+  WHERE u.imo_nr IN ('IMO9300001', 'IMO9300002', 'IMO9300003')
+    AND a.external_id IN (
+      'time-series-processor',
+      'data-quality-processor',
+      'uds-topic-handler-edge',
+      'uds-edge-data-api',
+      'uds-edge-ingest-source-admin',
+      'uds-edge-parquet-sync'
+    )
+)
+UPDATE alerts
+SET status = 'resolved',
+    ends_at = (SELECT sync_time_utc FROM sync_run)
+WHERE status = 'firing'
+  AND ends_at IS NULL
+  AND (uds_location_id, application_id) IN (
+    SELECT uds_location_id, application_id FROM seeded_apps
+  );
+
 WITH
 sync_run AS (
   SELECT date_trunc('minute', timezone('UTC', now())) AS sync_time_utc
@@ -363,6 +399,7 @@ scenario_flags AS (
       WHEN ai.imo_nr = 'IMO9300001' AND ai.app_id = 'uds-edge-data-api' THEN 'delayed'
       WHEN ai.imo_nr = 'IMO9300001' AND ai.app_id = 'data-quality-processor' THEN 'stale'
       WHEN ai.imo_nr = 'IMO9300002' AND ai.app_id = 'uds-edge-parquet-sync' THEN 'down'
+      WHEN ai.imo_nr = 'IMO9300002' AND ai.app_id = 'data-quality-processor' THEN 'degraded'
       WHEN ai.imo_nr = 'IMO9300003' AND ai.app_id = 'time-series-processor' THEN 'degraded'
       WHEN scenario_roll < 0.08 THEN 'down'
       WHEN scenario_roll < 0.24 THEN 'degraded'
@@ -490,6 +527,7 @@ scenario_flags AS (
       WHEN ai.imo_nr = 'IMO9300001' AND ai.app_id = 'uds-edge-data-api' THEN 'delayed'
       WHEN ai.imo_nr = 'IMO9300001' AND ai.app_id = 'data-quality-processor' THEN 'stale'
       WHEN ai.imo_nr = 'IMO9300002' AND ai.app_id = 'uds-edge-parquet-sync' THEN 'down'
+      WHEN ai.imo_nr = 'IMO9300002' AND ai.app_id = 'data-quality-processor' THEN 'degraded'
       WHEN ai.imo_nr = 'IMO9300003' AND ai.app_id = 'time-series-processor' THEN 'degraded'
       WHEN scenario_roll < 0.08 THEN 'down'
       WHEN scenario_roll < 0.24 THEN 'degraded'
