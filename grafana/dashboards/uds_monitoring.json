@@ -347,6 +347,24 @@
                 ]
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Alert"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "AI Analysis",
+                    "url": "http://localhost:8000/api/v1/uds/analyze/view?vessel=${vessel}&app=${__data.fields[\"App ID\"]}&alert_name=${__value.raw}&severity=${__data.fields.Severity}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -677,6 +695,24 @@
               {
                 "id": "custom.displayMode",
                 "value": "color-background"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Alert"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "AI Analysis",
+                    "url": "http://localhost:8000/api/v1/uds/analyze/view?vessel=${vessel}&app=${app}&alert_name=${__value.raw}&severity=${__data.fields.Severity}",
+                    "targetBlank": true
+                  }
+                ]
               }
             ]
           }

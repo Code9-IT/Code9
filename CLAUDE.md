@@ -53,6 +53,18 @@ docker compose logs -f uds-seeder  # wait for "Backfill complete"
   - Cross-vessel seed scenario in `db/seed/uds_seed.sql`
   - Agent allowlist updated in `services/agent/routes/analyze.py`
 
+### Scope 3 - Final Delivery (Task 1: UDS AI Integration) -- DONE
+- UDS-aware AI analysis endpoint: `GET /api/v1/uds/analyze/view`
+  - Accepts vessel IMO, app external ID, alert name, severity as query params
+  - Reuses the existing tool-calling loop with UDS MCP tools
+  - Persists results keyed by vessel+app+alert for reopening
+  - HTML page shows analysis, suggested actions, tool-call trace, and RAG docs
+- Grafana data links added to UDS dashboards:
+  - `uds_monitoring.json`: "AI Analysis" links on Alert column in Active Incident Queue (Panel 5) and Selected App Recent Alerts (Panel 8)
+  - `noc_support.json`: "AI Analysis" link on alert column in Alert History (Panel 9)
+- Schema: `ai_analyses` table extended with `vessel_imo`, `app_external_id`, `alert_name` columns for UDS context
+- Legacy Ship Operations analysis flow unchanged
+
 ## Architecture Overview
 
 ```

@@ -408,6 +408,24 @@
                 ]
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "alert"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "AI Analysis",
+                    "url": "http://localhost:8000/api/v1/uds/analyze/view?vessel=${vessel}&app=${__data.fields.app_id}&alert_name=${__value.raw}&severity=${__data.fields.severity}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
           }
         ]
       },

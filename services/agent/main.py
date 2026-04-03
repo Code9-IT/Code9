@@ -57,6 +57,30 @@ async def ensure_agent_schema():
             ON ai_analyses(event_id, analysis_mode, timestamp DESC)
             """
         )
+        await conn.execute(
+            """
+            ALTER TABLE ai_analyses
+            ADD COLUMN IF NOT EXISTS vessel_imo TEXT
+            """
+        )
+        await conn.execute(
+            """
+            ALTER TABLE ai_analyses
+            ADD COLUMN IF NOT EXISTS app_external_id TEXT
+            """
+        )
+        await conn.execute(
+            """
+            ALTER TABLE ai_analyses
+            ADD COLUMN IF NOT EXISTS alert_name TEXT
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_analyses_uds_context
+            ON ai_analyses(vessel_imo, app_external_id, alert_name, timestamp DESC)
+            """
+        )
 
 
 async def _run_rag_auto_ingest() -> None:

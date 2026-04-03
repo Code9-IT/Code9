@@ -25,10 +25,15 @@ The project implements three user stories from Geir Borgi (Telenor Maritime):
 ## Current Status
 
 **Scope 1** and **Scope 2** are complete: all three user stories have dashboard
-and MCP tool coverage. See `docs/ROADMAP.md` for remaining polish items
-(predictive analysis, UDS-side AI integration, etc.).
+and MCP tool coverage.
 
-See `docs/SCOPE2_TASK_SPLIT.md` for task ownership and acceptance criteria.
+**Scope 3 Task 1 (UDS AI Integration)** is complete: clicking a UDS alert in
+`uds_monitoring.json` or `noc_support.json` opens an AI analysis page at
+`/api/v1/uds/analyze/view`. The analysis uses UDS MCP tools, RAG context, and
+Ollama, and shows tool-call trace and retrieved documents for traceability.
+
+See `docs/SCOPE3_DELIVERY_TASKS.md` for remaining scope 3 tasks.
+See `docs/SCOPE2_TASK_SPLIT.md` for scope 2 task ownership and acceptance criteria.
 
 ## Quick Start
 
@@ -142,6 +147,12 @@ The system has two monitoring paths:
 - `grafana/dashboards/uds_monitoring.json` for single-vessel incidents
 - `grafana/dashboards/fleet_overview.json` for multi-vessel overview
 - `grafana/dashboards/noc_support.json` for NOC support investigation
+
+### UDS AI analysis
+- `GET /api/v1/uds/analyze/view?vessel=IMO9300001&app=...&alert_name=...&severity=...`
+- Grafana data links on alert columns open this endpoint in a new tab
+- The agent uses UDS MCP tools (get_vessel_app_status, get_incident_timeline, etc.)
+- Results are persisted and keyed by vessel + app + alert name for reopening
 
 ### MCP tools (12 total)
 
