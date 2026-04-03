@@ -25,8 +25,9 @@ The project implements three user stories from Geir Borgi (Telenor Maritime):
 ## Current Status
 
 **Scope 1** and **Scope 2** are complete: all three user stories have dashboard
-and MCP tool coverage. See `docs/ROADMAP.md` for remaining polish items
-(predictive analysis, UDS-side AI integration, etc.).
+and MCP tool coverage. Scope 3 integration/polish is underway, and the agent now
+also exposes a user-facing AI chat page at `/api/v1/chat` for demo-style
+operational questions. See `docs/ROADMAP.md` for the remaining polish items.
 
 See `docs/SCOPE2_TASK_SPLIT.md` for task ownership and acceptance criteria.
 
@@ -67,6 +68,7 @@ Wait for `Backfill complete (11 historical cycles inserted)` before using dashbo
 - Grafana: `http://localhost:3000` (admin / code9-demo-admin)
 - Agent API: `http://localhost:8000/docs`
 - MCP API: `http://localhost:8001/docs`
+- AI Chat page: `http://localhost:8000/api/v1/chat`
 - Validation dashboard: `http://localhost:8000/api/v1/validate/dashboard`
 
 ### Fresh-stack reset
@@ -134,6 +136,11 @@ The system has two monitoring paths:
 - `services/generator/` produces synthetic sensor data and anomaly events
 - `services/agent/` runs AI analysis using Ollama + RAG + MCP tools
 - `grafana/dashboards/ship_operations.json` visualizes telemetry
+
+### User-facing AI chat path
+- `services/agent/routes/chat.py` serves `GET/POST /api/v1/chat`
+- The chat uses the same Ollama + RAG + MCP building blocks as event analysis
+- Intended for demo questions about vessels, alerts, degraded apps, and incidents
 
 ### UDS application monitoring path
 - `db/init/003_uds.sql` + `004_uds_reference_data.sql` define the schema

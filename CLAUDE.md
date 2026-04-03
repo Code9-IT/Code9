@@ -53,6 +53,11 @@ docker compose logs -f uds-seeder  # wait for "Backfill complete"
   - Cross-vessel seed scenario in `db/seed/uds_seed.sql`
   - Agent allowlist updated in `services/agent/routes/analyze.py`
 
+### Scope 3 - Integration / Demo Polish (in progress)
+- User-facing AI chat page available at `GET /api/v1/chat`
+- Chat submission endpoint available at `POST /api/v1/chat`
+- Chat reuses Ollama + RAG + all 12 MCP tools for operational questions
+
 ## Architecture Overview
 
 ```
@@ -80,6 +85,7 @@ uds-seeder -----------------------> metric_samples / alerts / app_logs
 - `docker-compose.yml` -- service definitions
 - `services/mcp/main.py` -- MCP REST adapter, all 12 tool implementations
 - `services/agent/routes/analyze.py` -- AI analysis pipeline + MCP tool filtering
+- `services/agent/routes/chat.py` -- user-facing AI chat page + free-form question route
 - `services/agent/rag/ingest.py` -- RAG knowledge ingestion
 - `db/init/003_uds.sql` -- UDS schema
 - `db/init/004_uds_reference_data.sql` -- reference data (3 vessels, 6 apps, 18 links)
