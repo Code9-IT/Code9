@@ -71,14 +71,14 @@ uds-seeder -----------------------> metric_samples / alerts / app_logs
                    uds_monitoring  fleet_overview  noc_support
                           |           |           |
                           +-----MCP UDS tools-----+
-                               (12 tools total)
+                               (13 tools total)
 ```
 
 ## Key Files To Read
 
 ### Core runtime
 - `docker-compose.yml` -- service definitions
-- `services/mcp/main.py` -- MCP REST adapter, all 12 tool implementations
+- `services/mcp/main.py` -- MCP REST adapter, all 13 tool implementations
 - `services/agent/routes/analyze.py` -- AI analysis pipeline + MCP tool filtering
 - `services/agent/rag/ingest.py` -- RAG knowledge ingestion
 - `db/init/003_uds.sql` -- UDS schema
@@ -91,14 +91,18 @@ uds-seeder -----------------------> metric_samples / alerts / app_logs
 - `grafana/dashboards/fleet_overview.json` -- Scope 2: multi-vessel fleet overview
 - `grafana/dashboards/noc_support.json` -- Scope 2: NOC support investigation board
 - `grafana/dashboards/ship_operations.json` -- legacy telemetry dashboard
+- `grafana/dashboards/alert_trends.json` -- Scope 3: predictive alert trend analysis
 
 ### Documentation
 - `README.md` -- project overview and quick start
 - `docs/architecture.md` -- system architecture
 - `docs/ROADMAP.md` -- backlog and current priorities
 - `docs/SCOPE2_TASK_SPLIT.md` -- Scope 2 task ownership and acceptance criteria
+- `docs/SCOPE3_DELIVERY_TASKS.md` -- Scope 3 final sprint task definitions
 - `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md` -- repeatable validation flow
 - `docs/UDS_dashboard_spec.md` -- dashboard panel specifications
+- `docs/PRODUCTION_GUIDE.md` -- deployment and operations guide
+- `docs/DEMO_SCRIPT.md` -- step-by-step demo walkthrough
 - `docs/knowledge/` -- RAG knowledge base (17 maritime reference files)
 
 ### Historical (in docs/archive/)
@@ -110,7 +114,7 @@ These are kept for reference but are no longer the active project docs:
 - `docs/archive/WORK_DISTRIBUTION.md`
 - `docs/archive/underveisNotater.md`
 
-## MCP Tools (12 total)
+## MCP Tools (13 total)
 
 ### Legacy (3 tools)
 - `get_telemetry` -- raw telemetry query
@@ -129,6 +133,9 @@ These are kept for reference but are no longer the active project docs:
 - `get_cross_vessel_correlation` -- apps/alert types affecting multiple vessels
 - `get_incident_timeline` -- chronological alerts + logs for one vessel
 - `get_operational_snapshot` -- full vessel state for NOC support
+
+### Scope 3 Predictive (1 tool)
+- `get_alert_trend` -- alert frequency trend detection over time buckets (rising/falling/stable)
 
 ## Important Conventions
 

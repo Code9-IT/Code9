@@ -49,6 +49,7 @@ UDS_FULL_TOOL_NAMES = {
     "get_cross_vessel_correlation",
     "get_incident_timeline",
     "get_operational_snapshot",
+    "get_alert_trend",
 }
 IN_FLIGHT_ANALYSES: set[int] = set()
 
@@ -305,9 +306,15 @@ def _render_analysis_html(
 ) -> str:
     """Render analysis response as a readable HTML page."""
     status_norm = (result.status or "").lower()
-    confidence_pct = int(round((result.confidence or 0.0) * 100))
+    confidence_val = result.confidence or 0.0
     if status_norm == "completed":
-        confidence_text = f"{confidence_pct}%"
+        if confidence_val >= 0.75:
+            confidence_text = "High"
+        elif confidence_val >= 0.5:
+            confidence_text = "Medium"
+        else:
+            confidence_text = "Low"
+        confidence_text += " (model confidence)"
     elif status_norm in ("running", "pending"):
         confidence_text = "PENDING"
     else:
@@ -333,7 +340,6 @@ def _render_analysis_html(
 
     view_url = f"http://localhost:8000/api/v1/analyze/{result.event_id}/view"
     refresh_url = f"http://localhost:8000/api/v1/analyze/{result.event_id}/view?refresh=true"
-    rag_tuning_url = "http://localhost:8000/api/v1/validate/dashboard"
 
     notice = ""
     if refresh_started:
@@ -383,7 +389,6 @@ def _render_analysis_html(
     .status.warn {{ color:var(--warn); }}
     a.btn {{ display:inline-block; margin-top:10px; color:#fff; text-decoration:none; background:#2f6fed; padding:10px 12px; border-radius:8px; }}
     a.btn.secondary {{ background:#38536f; margin-left:8px; }}
-    a.btn.tertiary {{ background:#1f8a6d; margin-left:8px; }}
     ul {{ margin-top:8px; }}
   </style>
 </head>
@@ -400,7 +405,6 @@ def _render_analysis_html(
       <div style="margin-top:10px;"><span class="label">Model</span><div class="value">{model}</div></div>
       <a class="btn" href="http://localhost:3000">Back to Grafana</a>
       <a class="btn secondary" href="{refresh_url}">Run Fresh Analysis</a>
-      <a class="btn tertiary" href="{rag_tuning_url}">Open RAG Tuning</a>
     </div>
     {notice}
     {event_info}

@@ -1,0 +1,202 @@
+{
+  "uid": "alert-trends",
+  "title": "Alert Trends",
+  "description": "Predictive alert frequency analysis — rising, stable, or falling trends across the fleet and per vessel.",
+  "tags": ["uds", "predictive", "alerts"],
+  "timezone": "utc",
+  "editable": true,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "templating": {
+    "list": [
+      {
+        "name": "vessel",
+        "type": "query",
+        "label": "Vessel",
+        "query": "SELECT imo_nr AS __value, name || ' (' || imo_nr || ')' AS __text FROM udslocations ORDER BY name;",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb" },
+        "includeAll": true,
+        "allValue": "",
+        "current": { "text": "All", "value": "$__all" },
+        "refresh": 1,
+        "multi": false
+      },
+      {
+        "name": "severity",
+        "type": "custom",
+        "label": "Severity",
+        "query": "critical,warning,info",
+        "includeAll": true,
+        "allValue": "",
+        "current": { "text": "All", "value": "$__all" },
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Alert Frequency Over Time",
+      "description": "Number of new alerts per 4-hour bucket. A rising pattern suggests worsening conditions.",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('4 hours', al.starts_at) AS time,\n  COUNT(*)::int AS \"Alert Count\"\nFROM alerts al\nJOIN udslocations u ON u.id = al.uds_location_id\nWHERE al.starts_at >= $__timeFrom()\n  AND al.starts_at <= $__timeTo()\n  AND ('${vessel}' = '' OR '$__all' = '${vessel}' OR u.imo_nr = '${vessel}')\n  AND ('${severity}' = '' OR '$__all' = '${severity}' OR LOWER(al.severity) = LOWER('${severity}'))\nGROUP BY time\nORDER BY time ASC;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "barAlignment": 0,
+            "gradientMode": "scheme",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "auto"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Alert Frequency by Vessel",
+      "description": "Per-vessel alert counts over time to compare which vessels are trending worse.",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('4 hours', al.starts_at) AS time,\n  u.name AS metric,\n  COUNT(*)::int AS value\nFROM alerts al\nJOIN udslocations u ON u.id = al.uds_location_id\nWHERE al.starts_at >= $__timeFrom()\n  AND al.starts_at <= $__timeTo()\n  AND ('${severity}' = '' OR '$__all' = '${severity}' OR LOWER(al.severity) = LOWER('${severity}'))\nGROUP BY time, u.name\nORDER BY time ASC;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": true
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Alert Severity Breakdown",
+      "description": "Distribution of alert severities over time. Watch for increasing critical alerts.",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('4 hours', al.starts_at) AS time,\n  al.severity AS metric,\n  COUNT(*)::int AS value\nFROM alerts al\nJOIN udslocations u ON u.id = al.uds_location_id\nWHERE al.starts_at >= $__timeFrom()\n  AND al.starts_at <= $__timeTo()\n  AND ('${vessel}' = '' OR '$__all' = '${vessel}' OR u.imo_nr = '${vessel}')\nGROUP BY time, al.severity\nORDER BY time ASC;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "stacking": { "mode": "normal" },
+            "lineWidth": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "critical" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "warning" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "info" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Current Trend Summary",
+      "description": "Quick summary of whether alert activity is rising, stable, or falling in recent windows.",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "WITH buckets AS (\n  SELECT\n    u.name AS vessel,\n    CASE\n      WHEN al.starts_at >= NOW() - INTERVAL '12 hours' THEN 'recent'\n      ELSE 'earlier'\n    END AS period,\n    COUNT(*)::int AS cnt\n  FROM alerts al\n  JOIN udslocations u ON u.id = al.uds_location_id\n  WHERE al.starts_at >= NOW() - INTERVAL '24 hours'\n  GROUP BY u.name, period\n)\nSELECT\n  vessel AS \"Vessel\",\n  COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) AS \"Alerts (12-24h ago)\",\n  COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'), 0) AS \"Alerts (last 12h)\",\n  CASE\n    WHEN COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'), 0) >\n         COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) * 1.25\n    THEN 'RISING'\n    WHEN COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'), 0) <\n         COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) * 0.75\n    THEN 'FALLING'\n    ELSE 'STABLE'\n  END AS \"Trend\"\nFROM buckets\nGROUP BY vessel\nORDER BY vessel;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Trend" },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "RISING": { "color": "red", "text": "⬆ RISING" } } },
+                  { "type": "value", "options": { "FALLING": { "color": "green", "text": "⬇ FALLING" } } },
+                  { "type": "value", "options": { "STABLE": { "color": "blue", "text": "➡ STABLE" } } }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    }
+  ],
+  "schemaVersion": 39
+}

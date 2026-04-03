@@ -101,6 +101,7 @@ docker compose up -d --build
 |   |   |-- fleet_overview.json        # Scope 2: multi-vessel fleet overview
 |   |   |-- noc_support.json           # Scope 2: NOC support investigation board
 |   |   |-- ship_operations.json       # legacy telemetry dashboard
+|   |   |-- alert_trends.json         # Scope 3: predictive alert trend analysis
 |   |   `-- uds_app_health.json        # app health snapshot
 |   |-- provisioning/
 |   `-- queries/
@@ -109,7 +110,7 @@ docker compose up -d --build
 |-- services/
 |   |-- agent/                         # AI analysis service (FastAPI)
 |   |-- generator/                     # legacy telemetry generator
-|   `-- mcp/                           # MCP REST adapter (12 tools)
+|   `-- mcp/                           # MCP REST adapter (13 tools)
 |
 |-- scripts/
 |   |-- uds_seed_loop.sh              # seed loop with 6-hour backfill
@@ -120,7 +121,10 @@ docker compose up -d --build
     |-- ROADMAP.md                     # backlog and priorities
     |-- SCOPE1_ACCEPTANCE_CHECKLIST.md # repeatable validation flow
     |-- SCOPE2_TASK_SPLIT.md           # Scope 2 task ownership and status
+    |-- SCOPE3_DELIVERY_TASKS.md       # Scope 3 final sprint task definitions
     |-- UDS_dashboard_spec.md          # dashboard panel specifications
+    |-- PRODUCTION_GUIDE.md            # deployment and operations guide
+    |-- DEMO_SCRIPT.md                 # step-by-step demo walkthrough
     |-- knowledge/                     # RAG knowledge base (17 files)
     |-- thesis/                        # thesis-specific planning docs
     `-- archive/                       # historical Scope 1 handoff docs
@@ -138,12 +142,12 @@ The system has two monitoring paths:
 ### UDS application monitoring path
 - `db/init/003_uds.sql` + `004_uds_reference_data.sql` define the schema
 - `uds-seeder` inserts metrics, alerts, and logs every 30 minutes
-- `services/mcp/main.py` exposes 9 UDS tools (4 single-vessel + 5 fleet/incident)
+- `services/mcp/main.py` exposes 10 UDS tools (4 single-vessel + 5 fleet/incident + 1 predictive)
 - `grafana/dashboards/uds_monitoring.json` for single-vessel incidents
 - `grafana/dashboards/fleet_overview.json` for multi-vessel overview
 - `grafana/dashboards/noc_support.json` for NOC support investigation
 
-### MCP tools (12 total)
+### MCP tools (13 total)
 
 | Tool | Scope | Purpose |
 |------|-------|---------|
@@ -159,6 +163,17 @@ The system has two monitoring paths:
 | `get_cross_vessel_correlation` | Scope 2 | Cross-vessel pattern detection |
 | `get_incident_timeline` | Scope 2 | Chronological event timeline |
 | `get_operational_snapshot` | Scope 2 | Full vessel state for NOC |
+| `get_alert_trend` | Scope 3 | Alert frequency trend detection (predictive) |
+
+## Dashboards
+
+| Dashboard | File | Purpose |
+|-----------|------|---------|
+| Ship Operations | `ship_operations.json` | Legacy telemetry monitoring |
+| UDS Monitoring | `uds_monitoring.json` | Single-vessel incident investigation |
+| Fleet Overview | `fleet_overview.json` | Multi-vessel operational overview |
+| NOC Support | `noc_support.json` | Full vessel state for support cases |
+| Alert Trends | `alert_trends.json` | Predictive alert frequency analysis |
 
 ## Scope 1 Acceptance
 
@@ -166,7 +181,7 @@ Use `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md` for the repeatable validation flow.
 
 ## Known Limitations
 
-- `GET /api/v1/events/{event_id}/acknowledge` still mutates state (should be POST-only)
+- `GET /api/v1/events/{event_id}/acknowledge` returns an error message directing to POST (no longer mutates state)
 - MCP auth is only enforced if `MCP_API_KEY` is non-empty
 - The demo topology is fixed to 3 vessels and 6 applications
 - `app_logs` is a lightweight prototype bridge, not a full log pipeline
