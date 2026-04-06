@@ -8,10 +8,12 @@ This system provides two monitoring paths for a maritime application platform:
 2. **UDS application monitoring** -- application health per vessel, metrics,
    alerts, logs, fleet-level overview, and incident investigation tools
 
-The project implements three user stories:
+The project implements three user stories plus a Scope 3 final delivery:
 
 - **Scope 1** (delivered): single-vessel incident handling
 - **Scope 2** (delivered): multi-vessel fleet overview + NOC support
+- **Scope 3** (delivered): UDS-aware AI analysis, AI chat, dashboard
+  coherence, and predictive alert trend analysis
 
 ## High-Level Component View
 
@@ -29,15 +31,15 @@ generator ----------------------> telemetry / events -----+
                                                            |
 uds-seeder ------> metric_samples / alerts / app_logs      |
                           |                                |
-              +-----------+-----------+                    |
-              |           |           |                    |
-       uds_monitoring  fleet_overview  (noc_support)       |
-              |           |           |                    |
-              +-----------+-----------+                    |
+       +------+-----------+-----------+--------------+     |
+       |      |           |           |              |     |
+  uds_mon  fleet_overview noc_support alert_trends   |     |
+       |      |           |           |              |     |
+       +------+-----------+-----------+--------------+     |
                           |                                |
-                    MCP UDS tools (9 tools) <---------------+
+                  MCP UDS tools (10 tools) <----------------+
                           |
-                    agent analyze (UDS events)
+                  agent analyze (UDS events) + AI chat
 ```
 
 ## Main Services
@@ -47,9 +49,9 @@ uds-seeder ------> metric_samples / alerts / app_logs      |
 | `timescaledb` | Stores legacy telemetry/events plus UDS tables and RAG vectors |
 | `generator` | Produces legacy synthetic ship telemetry and anomaly events |
 | `uds-seeder` | Produces periodic UDS metrics, alerts, and app logs (30-min cycle, 6-hour backfill) |
-| `grafana` | Dashboards: Ship Operations, UDS Incident Workbench, Fleet Overview, NOC Support |
-| `agent` | AI analysis for events using Ollama + RAG + MCP tool loop |
-| `mcp` | REST adapter exposing 12 database tools (3 legacy + 4 Scope 1 + 5 Scope 2) |
+| `grafana` | Dashboards: Ship Operations, UDS Incident Workbench, Fleet Overview, NOC Support, Alert Trends |
+| `agent` | AI analysis for events plus user-facing AI chat using Ollama + RAG + MCP tool loop |
+| `mcp` | REST adapter exposing 13 database tools (3 legacy + 4 Scope 1 + 5 Scope 2 + 1 Scope 3 predictive) |
 | `ollama` | Local LLM inference and embeddings |
 | `ollama-init` | Pulls required models on stack startup |
 
@@ -105,7 +107,7 @@ Each tool has:
 The agent calls tools via HTTP during the analysis loop. Tool access is filtered
 by `UDS_FULL_TOOL_NAMES` in `services/agent/routes/analyze.py`.
 
-### Tool inventory (12 tools)
+### Tool inventory (13 tools)
 
 | Tool | Path | Scope |
 |------|------|-------|
@@ -121,6 +123,7 @@ by `UDS_FULL_TOOL_NAMES` in `services/agent/routes/analyze.py`.
 | `get_cross_vessel_correlation` | UDS | Scope 2 |
 | `get_incident_timeline` | UDS | Scope 2 |
 | `get_operational_snapshot` | UDS | Scope 2 |
+| `get_alert_trend` | UDS | Scope 3 (predictive) |
 
 ## Dashboard Architecture
 
@@ -149,9 +152,18 @@ by `UDS_FULL_TOOL_NAMES` in `services/agent/routes/analyze.py`.
   and dashboard links
 - `vessel_001` maps to MV Edge Aurora (`IMO9300001`) in the UDS dashboards
 
+### Scope 3: Alert Trends (`alert_trends.json`)
+- UID `maritime_alert_trends`
+- Predictive frequency analysis with vessel and severity template variables
+- Four panels: alert frequency over time, by vessel, severity breakdown, and a
+  trend summary table that respects the dashboard time range and filters
+- Backed by the `get_alert_trend` MCP tool which uses a generate_series spine
+  so quiet periods are not silently dropped, plus a minimum-sample guard
+
 ### Shared navigation
 - Main demo dashboards now share root-level navigation between Ship Operations,
-  Fleet Overview, UDS Incident Workbench, and NOC Support
+  Fleet Overview, UDS Incident Workbench, NOC Support, Alert Trends, and the
+  user-facing AI Chat page
 - `uds_app_health.json` is treated as a developer-only AI pipeline health board,
   not part of the main demo path
 
@@ -167,7 +179,8 @@ few minutes before demoing.
 
 ### 3. Security shortcuts
 This is a local prototype:
-- Event acknowledge has a GET alias
+- Event acknowledge GET returns HTTP 405 (Allow: POST). The Grafana flow uses
+  a dedicated `/acknowledge/confirm` HTML page that issues an explicit POST.
 - MCP auth is optional if `MCP_API_KEY` is unset
 - Demo credentials are convenience-oriented
 

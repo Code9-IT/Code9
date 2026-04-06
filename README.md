@@ -212,7 +212,7 @@ Use `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md` for the repeatable validation flow.
 
 ## Known Limitations
 
-- `GET /api/v1/events/{event_id}/acknowledge` returns an error message directing to POST (no longer mutates state)
+- `GET /api/v1/events/{event_id}/acknowledge` returns HTTP 405 (`Allow: POST`); the Grafana flow uses the new `/acknowledge/confirm` confirmation page that issues an explicit POST
 - MCP auth is only enforced if `MCP_API_KEY` is non-empty
 - The demo topology is fixed to 3 vessels and 6 applications
 - `app_logs` is a lightweight prototype bridge, not a full log pipeline

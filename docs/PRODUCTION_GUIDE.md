@@ -68,7 +68,7 @@ defaults):
 | `MCP_API_KEY` | `code9-scope1-demo-key` | API key for MCP tool access |
 | `OLLAMA_MODEL` | `llama3.2` | LLM model for analysis |
 | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Embedding model for RAG |
-| `OLLAMA_TIMEOUT_SECONDS` | `300` | LLM call timeout |
+| `OLLAMA_TIMEOUT_SECONDS` | `600` | LLM call timeout |
 | `RAG_TOP_K` | `5` | Number of RAG documents to retrieve |
 | `RAG_MIN_SIMILARITY` | `0.60` | Minimum cosine similarity for RAG |
 | `UDS_SEED_INTERVAL_SECONDS` | `1800` | Interval between UDS seed runs |
@@ -113,8 +113,8 @@ uds-seeder -------> UDS metrics/alerts/logs -------> uds_monitoring
 
 The database has four initialization scripts:
 
-1. `001_init.sql` — Legacy telemetry tables (events, telemetry, analyses)
-2. `002_rag.sql` — pgvector RAG schema (document_chunks)
+1. `001_init.sql` — Legacy telemetry tables (events, telemetry, ai_analyses)
+2. `002_rag.sql` — pgvector RAG schema (knowledge_docs)
 3. `003_uds.sql` — UDS application monitoring (udslocations, applications,
    metric_samples, alerts, app_logs)
 4. `004_uds_reference_data.sql` — Reference data (3 vessels, 6 apps, 18 links)
@@ -130,7 +130,8 @@ The database has four initialization scripts:
 | `app_logs` | Application log entries |
 | `events` | Legacy anomaly events |
 | `telemetry` | Legacy sensor readings |
-| `analyses` | Persisted AI analysis results |
+| `ai_analyses` | Persisted AI analysis results (extended with vessel_imo / app_external_id / alert_name for the UDS path) |
+| `knowledge_docs` | RAG knowledge base chunks with pgvector embeddings |
 
 ## MCP Tools (13 total)
 

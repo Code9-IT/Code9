@@ -56,14 +56,15 @@ Open the **Fleet Overview** dashboard.
 - Active alert counts per vessel
 
 **Talking point**: This is the first thing a NOC operator sees. At a glance
-they can tell which vessels need attention. Notice that IMO9300001 has the most
-issues — it has stale and down applications.
+they can tell which vessels need attention. Notice that **MV Edge Aurora
+(IMO9300001)** has the most issues — it has stale and down applications.
 
 ---
 
 ### 3. Single Vessel Incident Investigation (3-4 minutes)
 
-Navigate to the **UDS Monitoring** dashboard. Select vessel **IMO9300001**.
+Navigate to the **UDS Incident Workbench** dashboard. Select vessel
+**MV Edge Aurora (IMO9300001)**.
 
 **Show**:
 - Application health overview — some apps are healthy, some degraded or critical
@@ -80,7 +81,7 @@ incident investigation.
 
 ### 4. NOC Support Investigation (2-3 minutes)
 
-Open the **NOC Support** dashboard. Select vessel **IMO9300001**.
+Open the **NOC Support** dashboard. Select vessel **MV Edge Aurora (IMO9300001)**.
 
 **Show**:
 - Full operational snapshot
@@ -97,58 +98,76 @@ snapshot provides everything needed to respond to the ticket.
 
 **This is the core "agentic observability" demo.**
 
-From the UDS Monitoring or NOC Support dashboard, click an alert row to trigger
-an AI analysis (if Task 1 is complete). Otherwise, demonstrate via the legacy
-path:
+There are two AI analysis paths:
 
-1. Go to **Ship Operations** dashboard
-2. Click an event to open the AI analysis page
+1. **UDS path (preferred for the demo)** — From the **UDS Incident Workbench**
+   or **NOC Support** dashboard, click the **AI Analysis** link in the alert
+   column. This opens
+   `GET /api/v1/uds/analyze/view?vessel=IMO9300001&app=...&alert_name=...&severity=...`
+   which is keyed by vessel + app + alert name and persists the result so
+   reopening the same alert returns the same analysis.
+2. **Legacy telemetry path** — From the **Ship Operations** dashboard, click
+   an event row's **Analyze** link to open the legacy
+   `/api/v1/analyze/{event_id}/view` page.
 
 **Show**:
 - The analysis page with AI-generated text
 - Suggested actions
-- Confidence level (Low / Medium / High — clearly labeled as model confidence)
+- Confidence label: **Low / Medium / High (model confidence)** — both render
+  paths agree on the same label scheme
+- The retrieved RAG documents and the tool-call trace (UDS path)
 - The model used for analysis
 
 **Talking point**: The AI agent uses RAG-grounded maritime knowledge and MCP
 tools to investigate incidents automatically. It retrieves relevant
 documentation, calls data query tools to get current metrics and alerts, and
 produces an actionable analysis. The confidence label is honest — it says
-"model confidence" to make clear this is AI-generated.
+"model confidence" to make clear this is AI-generated, and uses three plain
+buckets instead of a misleading percentage.
 
 ---
 
 ### 6. AI Chat (2-3 minutes)
 
-*If Task 2 is complete:*
-
-Open the **AI Chat** page (linked from dashboard navigation).
+Open the **AI Chat** page from the shared dashboard navigation, or directly at
+http://localhost:8000/api/v1/chat.
 
 Ask example questions:
 - "Which vessels have critical alerts right now?"
 - "What happened on IMO9300001 in the last 6 hours?"
-- "Which app is degraded across multiple vessels?"
+- "Which apps are degraded across multiple vessels?"
+- "Is alert frequency rising or falling on the fleet right now?"
 
 **Talking point**: Operators can ask natural-language questions and get answers
-grounded in real data. The assistant uses the same MCP tools that power the
-dashboards, so the answers reflect the actual state of the system.
+grounded in real data. The assistant uses the same UDS MCP tool subset that
+powers the dashboards, including the predictive `get_alert_trend` tool, so the
+answers reflect the actual state of the system. If a tool call fails, the
+answer is clearly marked as "live tools failed (answer not grounded)" so the
+operator knows not to trust it blindly.
 
 ---
 
 ### 7. Alert Trends — Predictive Analysis (2 minutes)
 
-Open the **Alert Trends** dashboard.
+Open the **Alert Trends** dashboard from the shared nav, or directly at
+http://localhost:3000/d/maritime_alert_trends/alert-trends.
 
 **Show**:
-- Alert frequency over time (bar chart with 4-hour buckets)
+- Alert frequency over time (bar chart with 4-hour buckets, zero-count
+  buckets included via the generate_series spine)
 - Per-vessel alert breakdown
 - Severity distribution stacked chart
-- Trend summary table showing RISING / STABLE / FALLING per vessel
+- Trend summary table showing RISING / STABLE / FALLING / INSUFFICIENT DATA
+  per vessel. The summary honours the dashboard time range and the vessel /
+  severity template variables.
+- Try changing the vessel filter to one IMO and watch all four panels update.
 
 **Talking point**: Beyond reactive monitoring, the system can detect trends.
 If alert frequency is rising on a vessel, that is an early warning before the
 situation becomes critical. The `get_alert_trend` MCP tool provides the same
-analysis programmatically for the AI agent.
+analysis programmatically for the AI agent, including a minimum-sample guard
+that returns "insufficient data" instead of pretending statistical noise is a
+trend.
 
 ---
 
@@ -186,9 +205,9 @@ analysis. The RAG knowledge base contains 17 maritime reference documents.
 
 | Vessel | IMO | Characteristics |
 |--------|-----|----------------|
-| North Sea Explorer | IMO9300001 | Most interesting — has stale and down apps |
-| Baltic Carrier | IMO9300002 | data-quality-processor is degraded |
-| Atlantic Pioneer | IMO9300003 | Mostly healthy |
+| MV Edge Aurora | IMO9300001 | Most interesting — has stale and down apps; mapped to the legacy vessel_001 telemetry feed |
+| MV Edge Borealis | IMO9300002 | data-quality-processor is degraded |
+| MT Nordic Fjord | IMO9300003 | Mostly healthy |
 
 The `data-quality-processor` app is deliberately degraded on both IMO9300001
 and IMO9300002 to demonstrate cross-vessel correlation.
