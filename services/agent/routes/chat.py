@@ -43,6 +43,7 @@ CHAT_TOOL_NAMES = {
     "get_cross_vessel_correlation",
     "get_incident_timeline",
     "get_operational_snapshot",
+    "get_alert_trend",
 }
 
 router = APIRouter(tags=["chat"])

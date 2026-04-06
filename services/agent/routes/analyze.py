@@ -1592,9 +1592,15 @@ def _render_uds_analysis_html(
 ) -> str:
     """Render a UDS analysis as a self-contained HTML page."""
     status_norm = (status or "").lower()
-    confidence_pct = int(round((confidence or 0.0) * 100))
+    confidence_val = confidence or 0.0
     if status_norm == "completed":
-        confidence_text = f"{confidence_pct}%"
+        if confidence_val >= 0.75:
+            confidence_text = "High"
+        elif confidence_val >= 0.5:
+            confidence_text = "Medium"
+        else:
+            confidence_text = "Low"
+        confidence_text += " (model confidence)"
     elif status_norm in ("running", "pending"):
         confidence_text = "PENDING"
     else:

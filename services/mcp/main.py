@@ -593,8 +593,8 @@ TOOLS = [
             "properties": {
                 "hours": {"type": "integer"},
                 "bucket_hours": {"type": "integer"},
-                "vessel_filter": {"type": "string"},
-                "severity_filter": {"type": "string"},
+                "vessel_filter": {"type": ["string", "null"]},
+                "severity_filter": {"type": ["string", "null"]},
                 "trend": {
                     "type": "string",
                     "description": "One of: rising, falling, stable, insufficient_data",
@@ -1878,18 +1878,36 @@ async def _run_get_alert_trend(args: GetAlertTrendArgs) -> dict[str, Any]:
         vessel_info = await _resolve_uds_vessel(args.vessel_id)
         uds_location_id = vessel_info["uds_location_id"]
 
+    # Use a generate_series spine so zero-count buckets are still present.
+    # Otherwise GROUP BY would silently drop quiet periods and bias the trend
+    # detection toward "rising".
     try:
         rows = await pool.fetch(
             """
+            WITH spine AS (
+                SELECT generate_series(
+                    time_bucket($1 * INTERVAL '1 hour',
+                                NOW() - ($2 * INTERVAL '1 hour')),
+                    time_bucket($1 * INTERVAL '1 hour', NOW()),
+                    $1 * INTERVAL '1 hour'
+                ) AS bucket
+            ),
+            counts AS (
+                SELECT
+                    time_bucket($1 * INTERVAL '1 hour', al.starts_at) AS bucket,
+                    COUNT(*)::int AS alert_count
+                FROM alerts al
+                WHERE al.starts_at >= NOW() - ($2 * INTERVAL '1 hour')
+                  AND ($3::uuid IS NULL OR al.uds_location_id = $3::uuid)
+                  AND ($4::text IS NULL OR LOWER(al.severity) = LOWER($4))
+                GROUP BY bucket
+            )
             SELECT
-                time_bucket($1 * INTERVAL '1 hour', al.starts_at) AS bucket,
-                COUNT(*)::int AS alert_count
-            FROM alerts al
-            WHERE al.starts_at >= NOW() - ($2 * INTERVAL '1 hour')
-              AND ($3::uuid IS NULL OR al.uds_location_id = $3::uuid)
-              AND ($4::text IS NULL OR LOWER(al.severity) = LOWER($4))
-            GROUP BY bucket
-            ORDER BY bucket ASC;
+                spine.bucket AS bucket,
+                COALESCE(counts.alert_count, 0)::int AS alert_count
+            FROM spine
+            LEFT JOIN counts USING (bucket)
+            ORDER BY spine.bucket ASC;
             """,
             args.bucket_hours,
             args.hours,
@@ -1908,11 +1926,21 @@ async def _run_get_alert_trend(args: GetAlertTrendArgs) -> dict[str, Any]:
     ]
     total_alerts = sum(b["alert_count"] for b in buckets)
 
-    # Determine trend by comparing the first and second half of the window
+    # Minimum-sample guard: if we have very few alerts in total, the
+    # first/second half comparison is statistical noise rather than a trend.
+    MIN_SAMPLES_FOR_TREND = 4
+
     trend = "insufficient_data"
     trend_description = "Not enough data to determine a trend."
 
-    if len(buckets) >= 2:
+    if total_alerts < MIN_SAMPLES_FOR_TREND:
+        trend = "insufficient_data"
+        trend_description = (
+            f"Only {total_alerts} alerts in the lookback window "
+            f"(need at least {MIN_SAMPLES_FOR_TREND}). Cannot determine a "
+            f"reliable trend."
+        )
+    elif len(buckets) >= 2:
         mid = len(buckets) // 2
         first_half = sum(b["alert_count"] for b in buckets[:mid]) or 0
         second_half = sum(b["alert_count"] for b in buckets[mid:]) or 0
