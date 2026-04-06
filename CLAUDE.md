@@ -53,17 +53,28 @@ docker compose logs -f uds-seeder  # wait for "Backfill complete"
   - Cross-vessel seed scenario in `db/seed/uds_seed.sql`
   - Agent allowlist updated in `services/agent/routes/analyze.py`
 
-### Scope 3 - Final Delivery (Task 1: UDS AI Integration) -- DONE
-- UDS-aware AI analysis endpoint: `GET /api/v1/uds/analyze/view`
-  - Accepts vessel IMO, app external ID, alert name, severity as query params
-  - Reuses the existing tool-calling loop with UDS MCP tools
-  - Persists results keyed by vessel+app+alert for reopening
-  - HTML page shows analysis, suggested actions, tool-call trace, and RAG docs
-- Grafana data links added to UDS dashboards:
-  - `uds_monitoring.json`: "AI Analysis" links on Alert column in Active Incident Queue (Panel 5) and Selected App Recent Alerts (Panel 8)
-  - `noc_support.json`: "AI Analysis" link on alert column in Alert History (Panel 9)
-- Schema: `ai_analyses` table extended with `vessel_imo`, `app_external_id`, `alert_name` columns for UDS context
-- Legacy Ship Operations analysis flow unchanged
+### Scope 3 - Final Delivery -- IN PROGRESS
+- Task 1 (Kristian, UDS AI Integration) -- DONE
+  - UDS-aware AI analysis endpoint: `GET /api/v1/uds/analyze/view`
+    - Accepts vessel IMO, app external ID, alert name, severity as query params
+    - Reuses the existing tool-calling loop with UDS MCP tools
+    - Persists results keyed by vessel+app+alert for reopening
+    - HTML page shows analysis, suggested actions, tool-call trace, and RAG docs
+  - Grafana data links added to UDS dashboards:
+    - `uds_monitoring.json`: "AI Analysis" links on Alert column in Active Incident Queue (Panel 5) and Selected App Recent Alerts (Panel 8)
+    - `noc_support.json`: "AI Analysis" link on alert column in Alert History (Panel 9)
+  - Schema: `ai_analyses` table extended with `vessel_imo`, `app_external_id`, `alert_name` columns for UDS context
+  - Legacy Ship Operations analysis flow unchanged
+- Task 2 (Jonas, AI Chat Interface) -- DONE
+  - User-facing AI chat page at `GET /api/v1/chat`
+  - Chat submission endpoint at `POST /api/v1/chat`
+  - Chat reuses Ollama + RAG + the UDS MCP tool subset for operational questions
+- Task 3 (Onu, Dashboard Coherence) -- DONE
+  - Shared root navigation across Ship Operations, Fleet Overview,
+    UDS Incident Workbench, NOC Support, and AI Chat
+  - Renames: `UDS Incident Monitoring` -> `UDS Incident Workbench`,
+    `UDS App Health` -> `AI Pipeline Health (Developer)` (kept outside main demo nav)
+  - Lightweight legacy/UDS bridge: `vessel_001` -> MV Edge Aurora (IMO9300001)
 
 ## Architecture Overview
 
@@ -98,6 +109,7 @@ Task 3 keeps the legacy/UDS bridge lightweight instead of rewriting vessel IDs:
 - `docker-compose.yml` -- service definitions
 - `services/mcp/main.py` -- MCP REST adapter, all 12 tool implementations
 - `services/agent/routes/analyze.py` -- AI analysis pipeline + MCP tool filtering
+- `services/agent/routes/chat.py` -- user-facing AI chat page + free-form question route
 - `services/agent/rag/ingest.py` -- RAG knowledge ingestion
 - `db/init/003_uds.sql` -- UDS schema
 - `db/init/004_uds_reference_data.sql` -- reference data (3 vessels, 6 apps, 18 links)

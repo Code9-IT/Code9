@@ -32,12 +32,17 @@ and MCP tool coverage.
 `/api/v1/uds/analyze/view`. The analysis uses UDS MCP tools, RAG context, and
 Ollama, and shows tool-call trace and retrieved documents for traceability.
 
+**Scope 3 Task 2 (AI Chat Interface)** is complete: the agent exposes a
+user-facing AI chat page at `/api/v1/chat` that uses the same Ollama + RAG +
+MCP building blocks as event analysis, intended for demo-style operational
+questions about vessels, alerts, degraded apps, and incidents.
+
 **Scope 3 Task 3 (Dashboard Coherence)** is complete: the main Grafana
 dashboards share root navigation between Ship Operations, Fleet Overview,
-UDS Incident Workbench, and NOC Support. The legacy vessel `vessel_001` is
-intentionally bridged to MV Edge Aurora (`IMO9300001`) for the presenter-facing
-demo flow. The previous `UDS App Health` dashboard is renamed to
-`AI Pipeline Health (Developer)` and is intentionally kept outside the main
+UDS Incident Workbench, NOC Support, and AI Chat. The legacy vessel
+`vessel_001` is intentionally bridged to MV Edge Aurora (`IMO9300001`) for the
+presenter-facing demo flow. The previous `UDS App Health` dashboard is renamed
+to `AI Pipeline Health (Developer)` and is intentionally kept outside the main
 demo navigation.
 
 See `docs/SCOPE3_DELIVERY_TASKS.md` for remaining scope 3 tasks.
@@ -80,6 +85,7 @@ Wait for `Backfill complete (11 historical cycles inserted)` before using dashbo
 - Grafana: `http://localhost:3000` (admin / code9-demo-admin)
 - Agent API: `http://localhost:8000/docs`
 - MCP API: `http://localhost:8001/docs`
+- AI Chat page: `http://localhost:8000/api/v1/chat`
 - Validation dashboard: `http://localhost:8000/api/v1/validate/dashboard`
 
 ### Fresh-stack reset
@@ -147,6 +153,11 @@ The system has two monitoring paths:
 - `services/generator/` produces synthetic sensor data and anomaly events
 - `services/agent/` runs AI analysis using Ollama + RAG + MCP tools
 - `grafana/dashboards/ship_operations.json` visualizes telemetry
+
+### User-facing AI chat path
+- `services/agent/routes/chat.py` serves `GET/POST /api/v1/chat`
+- The chat uses the same Ollama + RAG + MCP building blocks as event analysis
+- Intended for demo questions about vessels, alerts, degraded apps, and incidents
 
 ### UDS application monitoring path
 - `db/init/003_uds.sql` + `004_uds_reference_data.sql` define the schema
