@@ -54,6 +54,18 @@
       "tooltip": "Stay in the broader troubleshooting view for the selected vessel",
       "type": "link",
       "url": "/d/maritime_noc_support/noc-support?var-vessel=${vessel}&var-time_window=${time_window}&var-app_filter=${app_filter}"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": true,
+      "title": "AI Chat",
+      "tooltip": "Ask the AI assistant about fleet, incidents, or specific vessels",
+      "type": "link",
+      "url": "http://localhost:8000/api/v1/chat"
     }
   ],
   "panels": [

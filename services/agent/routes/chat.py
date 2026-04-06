@@ -10,7 +10,7 @@ import re
 import httpx
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from llm.ollama_client import chat
 from models import RetrievedDocument, ToolCallTrace
@@ -23,10 +23,17 @@ FALLBACK_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 CHAT_TOP_K = max(int(os.getenv("CHAT_TOP_K", "4")), 1)
 CHAT_MAX_TOOL_CALLS = max(int(os.getenv("CHAT_MAX_TOOL_CALLS", "2")), 1)
 CHAT_NUM_PREDICT = max(int(os.getenv("CHAT_NUM_PREDICT", "320")), 128)
+GRAFANA_PUBLIC_URL = os.getenv("GRAFANA_PUBLIC_URL", "http://localhost:3000").strip()
+
+# Maximum chars of an MCP tool response that the chat tool loop is allowed to
+# feed back into the model context. Mirrors analyze.py's MAX_TOOL_RESULT_CHARS
+# so the chat path cannot blow past llama3.2's context window. The full payload
+# is still kept in the trace for the UI.
+MAX_CHAT_TOOL_RESULT_CHARS = 1500
+# UDS-only allowlist. Kept in sync with analyze.py's UDS_FULL_TOOL_NAMES so the
+# chat assistant exposes the same operational toolset and never picks the
+# legacy telemetry/event tools by mistake.
 CHAT_TOOL_NAMES = {
-    "get_telemetry",
-    "get_events",
-    "get_analysis",
     "get_vessel_app_status",
     "get_vessel_alerts",
     "get_app_metric_history",
@@ -57,6 +64,8 @@ class ChatPipelineResult:
     status: str
     retrieved_documents: list[RetrievedDocument]
     tool_calls: list[ToolCallTrace]
+    live_tools_attempted: bool = False
+    live_tools_failed: bool = False
 
 
 @dataclass
@@ -68,6 +77,17 @@ class DirectToolPlan:
 class ChatRequest(BaseModel):
     question: str = Field(min_length=3, max_length=600)
 
+    @field_validator("question")
+    @classmethod
+    def _normalize_question(cls, value: str) -> str:
+        # Collapse internal whitespace and reject input that is empty after
+        # trimming. min_length=3 only checks the raw value, so "   " would
+        # otherwise reach the pipeline as an empty question.
+        normalized = " ".join((value or "").split()).strip()
+        if len(normalized) < 3:
+            raise ValueError("question must contain at least 3 non-whitespace characters")
+        return normalized
+
 
 class ChatResponse(BaseModel):
     question: str
@@ -75,6 +95,7 @@ class ChatResponse(BaseModel):
     model_used: str
     status: str
     used_live_tools: bool
+    live_tools_failed: bool = False
     retrieved_documents: list[RetrievedDocument] = Field(default_factory=list)
     tool_calls: list[ToolCallTrace] = Field(default_factory=list)
 
@@ -88,7 +109,7 @@ async def chat_page():
 @router.post("/chat", response_model=ChatResponse)
 async def submit_chat(request: ChatRequest):
     """Answer one operational question with MCP tools and optional RAG support."""
-    question = " ".join(request.question.split()).strip()
+    question = request.question  # already normalized by the validator
     result = await run_chat_pipeline(question)
     return ChatResponse(
         question=question,
@@ -96,6 +117,7 @@ async def submit_chat(request: ChatRequest):
         model_used=result.model_used,
         status=result.status,
         used_live_tools=any(tool.succeeded for tool in result.tool_calls),
+        live_tools_failed=result.live_tools_failed,
         retrieved_documents=result.retrieved_documents,
         tool_calls=result.tool_calls,
     )
@@ -133,9 +155,15 @@ async def run_chat_pipeline(question: str) -> ChatPipelineResult:
                 status="completed",
                 retrieved_documents=[_serialize_doc(doc) for doc in docs],
                 tool_calls=tool_calls,
+                live_tools_attempted=True,
+                live_tools_failed=False,
             )
+        # Direct shortcut failed -- fall through to the LLM tool loop so the
+        # model can self-correct, but remember that we already attempted live
+        # tools so the UI surfaces a warning if everything keeps failing.
 
     tools = await _fetch_chat_tools()
+    tool_discovery_failed = not tools
 
     try:
         answer_text, tool_calls = await _run_chat_tool_loop(
@@ -155,12 +183,37 @@ async def run_chat_pipeline(question: str) -> ChatPipelineResult:
         tool_calls = []
         status = "failed"
 
+    live_tools_attempted = (
+        bool(tool_calls)
+        or direct_plan is not None
+        or (not tool_discovery_failed)
+    )
+    live_tools_succeeded = any(t.succeeded for t in tool_calls)
+    # Failure surface: tool discovery returned nothing, OR every tool call we
+    # made errored out, OR the direct shortcut already failed and the LLM
+    # loop never recovered with a successful call.
+    live_tools_failed = (
+        tool_discovery_failed
+        or (bool(tool_calls) and not live_tools_succeeded)
+        or (direct_plan is not None and not live_tools_succeeded)
+    )
+
+    if live_tools_failed and status == "completed":
+        warning = (
+            "[Warning] Live data was unavailable for this question -- the answer "
+            "below is not grounded in current MCP tool output. Verify against the "
+            "dashboards before acting on it.\n\n"
+        )
+        answer_text = warning + answer_text
+
     return ChatPipelineResult(
         answer_text=answer_text,
         model_used=resolved_model,
         status=status,
         retrieved_documents=[_serialize_doc(doc) for doc in docs],
         tool_calls=tool_calls,
+        live_tools_attempted=live_tools_attempted,
+        live_tools_failed=live_tools_failed,
     )
 
 
@@ -185,6 +238,10 @@ async def _run_chat_tool_loop(
             options={
                 "temperature": 0.1,
                 "num_predict": CHAT_NUM_PREDICT,
+                # Match analyze.py: enlarged context window so cold-cache
+                # tool-call rounds (incident timeline, operational snapshot)
+                # do not silently truncate the prompt.
+                "num_ctx": 8192,
             },
         )
         tool_calls = response.get("tool_calls")
@@ -240,7 +297,13 @@ async def _run_chat_tool_loop(
                     response_preview=_preview_text(result),
                 )
             )
-            messages.append({"role": "tool", "name": name, "content": result})
+            # Truncate large MCP payloads before feeding them back to the
+            # model so the prompt does not blow past the context window.
+            # The trace above keeps the full size for the UI.
+            llm_result = result
+            if len(result) > MAX_CHAT_TOOL_RESULT_CHARS:
+                llm_result = result[:MAX_CHAT_TOOL_RESULT_CHARS] + "\n... [truncated]"
+            messages.append({"role": "tool", "name": name, "content": llm_result})
             if not succeeded:
                 messages.append(
                     {
@@ -267,6 +330,7 @@ async def _run_single_pass_chat(question: str, context: str, model_name: str) ->
         options={
             "temperature": 0.1,
             "num_predict": CHAT_NUM_PREDICT,
+            "num_ctx": 8192,
         },
     )
     return (response.get("content") or "").strip() or "No answer generated."
@@ -341,7 +405,11 @@ def _plan_direct_tool_call(question: str) -> DirectToolPlan | None:
     """Route common demo questions to one reliable MCP call."""
     lower = (question or "").lower()
     hours = _extract_hours_from_question(question)
-    vessel_id = _extract_vessel_id(question)
+    # Only direct-route to the UDS-specific shortcuts when we have an IMO
+    # number. Legacy IDs like vessel_001 must fall through to the LLM tool
+    # loop, which can resolve them via the broader tool set instead of being
+    # handed to UDS-only tools that expect IMO format.
+    vessel_id = _extract_imo_vessel_id(question)
 
     if "which vessels" in lower and "alert" in lower:
         severity = None
@@ -368,7 +436,17 @@ def _plan_direct_tool_call(question: str) -> DirectToolPlan | None:
             ),
         )
 
-    if ("across multiple vessels" in lower or "multiple vessels" in lower or "cross-vessel" in lower):
+    # "Which app is degraded across multiple vessels?" is a headline demo
+    # question. get_cross_vessel_correlation is the right MCP tool for it
+    # (it groups apps by COUNT(DISTINCT vessel) > 1) -- the previous bug was
+    # in the *summarizer*, which has now been rewritten to actually frame
+    # the answer as "apps degraded across multiple vessels".
+    if (
+        "across multiple vessels" in lower
+        or "multiple vessels" in lower
+        or "cross-vessel" in lower
+        or "cross vessel" in lower
+    ):
         return DirectToolPlan(
             name="get_cross_vessel_correlation",
             arguments=_normalize_tool_arguments(
@@ -486,10 +564,30 @@ def _extract_hours_from_question(question: str) -> int:
 
 
 def _extract_vessel_id(question: str) -> str | None:
+    """Best-effort extraction of any vessel-shaped identifier in the question.
+
+    Accepts both IMO numbers and legacy ``vessel_NNN`` identifiers. Callers
+    that need an IMO-only value (e.g. UDS direct shortcuts) should use
+    :func:`_extract_imo_vessel_id` instead.
+    """
     match = re.search(r"\b(IMO\d{7}|vessel_\d+)\b", question, re.IGNORECASE)
     if not match:
         return None
     return match.group(1).upper() if match.group(1).upper().startswith("IMO") else match.group(1)
+
+
+def _extract_imo_vessel_id(question: str) -> str | None:
+    """Return an IMO-format vessel id if present in the question, else None.
+
+    Direct-tool shortcuts call UDS-only MCP tools, which expect IMO numbers.
+    Legacy ``vessel_NNN`` identifiers must fall through to the LLM tool loop
+    so the model can resolve them via the broader tool set, instead of being
+    handed straight to a tool that will return 404.
+    """
+    match = re.search(r"\bIMO\d{7}\b", question, re.IGNORECASE)
+    if not match:
+        return None
+    return match.group(0).upper()
 
 
 def _coerce_bounded_int(value, default: int, minimum: int, maximum: int) -> int:
@@ -525,27 +623,53 @@ def _summarize_fleet_alerts(payload: dict) -> str:
 
 
 def _summarize_cross_vessel_correlation(payload: dict) -> str:
+    """Summarize cross-vessel correlation as 'apps degraded across multiple vessels'.
+
+    The MCP tool already groups apps by COUNT(DISTINCT vessel) > 1, so every
+    entry in ``correlated_apps`` is by definition an app with active alerts on
+    at least two vessels. This summarizer frames the answer as a list of
+    those apps, since "Which app is degraded across multiple vessels?" is one
+    of the headline demo questions.
+    """
     apps = list(payload.get("correlated_apps") or [])
     alert_types = list(payload.get("correlated_alert_types") or [])
     hours = payload.get("hours", 24)
-    if not apps and not alert_types:
-        return f"No cross-vessel correlation was returned for the last {hours} hour(s)."
 
-    lines: list[str] = []
-    if apps:
-        top_app = apps[0]
-        lines.append(
-            f"Top correlated app: {top_app.get('app_name', top_app.get('app_id', 'Unknown app'))} "
-            f"on {top_app.get('affected_vessels', 0)} vessels "
-            f"({top_app.get('vessels', 'vessels not listed')})."
+    if not apps:
+        if alert_types:
+            top_alert = alert_types[0]
+            return (
+                f"No single application has active alerts on multiple vessels in the "
+                f"last {hours} hour(s), but {top_alert.get('affected_vessels', 0)} "
+                f"vessels share the alert pattern "
+                f"'{top_alert.get('alert_name', top_alert.get('alert_type', 'unknown alert'))}'."
+            )
+        return (
+            f"No application currently has active alerts spanning multiple vessels "
+            f"in the last {hours} hour(s)."
         )
-    if alert_types:
-        top_alert = alert_types[0]
-        lines.append(
-            f"Top repeated alert pattern: {top_alert.get('alert_name', top_alert.get('alert_type', 'Unknown alert'))} "
-            f"affecting {top_alert.get('affected_vessels', 0)} vessels."
+
+    # Build a compact, presenter-friendly list of degraded apps and the
+    # vessels they are degraded on.
+    app_lines: list[str] = []
+    for entry in apps[:4]:
+        name = entry.get("app_name") or entry.get("app_id") or "Unknown app"
+        affected = entry.get("affected_vessels", 0)
+        vessels = entry.get("vessels") or "vessels not listed"
+        app_lines.append(f"{name} (degraded on {affected} vessels: {vessels})")
+
+    if len(apps) == 1:
+        header = (
+            f"1 application is degraded across multiple vessels in the last "
+            f"{hours} hour(s):"
         )
-    return " ".join(lines)
+    else:
+        header = (
+            f"{len(apps)} applications are degraded across multiple vessels in the "
+            f"last {hours} hour(s):"
+        )
+
+    return header + " " + "; ".join(app_lines) + "."
 
 
 def _summarize_incident_timeline(payload: dict) -> str:
@@ -579,30 +703,66 @@ def _summarize_incident_timeline(payload: dict) -> str:
 
 
 def _summarize_operational_snapshot(payload: dict) -> str:
+    """Summarize ``get_operational_snapshot`` output for the chat UI.
+
+    Field names are aligned with the MCP handler in
+    ``services/mcp/main.py::_run_get_operational_snapshot``:
+
+    * Per-app entries use ``name`` and ``external_id`` (NOT ``app_name`` /
+      ``app_external_id``); the latter shape is only used in the
+      ``active_alerts`` list.
+    * Status values are derived by ``_derive_app_status`` and may include
+      ``healthy`` / ``degraded`` / ``critical`` / ``stale`` / ``down``.
+    """
     vessel = payload.get("vessel") or {}
     apps = list(payload.get("applications") or [])
     alerts = list(payload.get("active_alerts") or [])
     vessel_label = f"{vessel.get('name', 'Unknown vessel')} ({vessel.get('imo_nr', '-')})"
-    critical_apps = []
-    degraded_apps = []
+
+    critical_apps: list[str] = []
+    degraded_apps: list[str] = []
+    down_apps: list[str] = []
+    stale_apps: list[str] = []
+
     for app in apps:
         status = str(app.get("status") or "").lower()
-        app_name = app.get("app_name") or app.get("app_external_id") or "Unknown app"
-        if status == "critical":
+        app_name = (
+            app.get("name")
+            or app.get("external_id")
+            or app.get("app_name")
+            or app.get("app_external_id")
+            or "Unknown app"
+        )
+        if status in ("down", "offline"):
+            down_apps.append(app_name)
+        elif status == "critical":
             critical_apps.append(app_name)
+        elif status == "stale":
+            stale_apps.append(app_name)
         elif status == "degraded":
             degraded_apps.append(app_name)
 
     parts = [
-        f"{vessel_label} snapshot: {len(alerts)} active alert(s).",
-        f"Critical apps: {', '.join(critical_apps[:4]) if critical_apps else 'none'}.",
-        f"Degraded apps: {', '.join(degraded_apps[:4]) if degraded_apps else 'none'}.",
+        f"{vessel_label} snapshot: {len(alerts)} active alert(s) across {len(apps)} app(s).",
     ]
+    if down_apps:
+        parts.append(f"Down apps: {', '.join(down_apps[:4])}.")
+    parts.append(
+        f"Critical apps: {', '.join(critical_apps[:4]) if critical_apps else 'none'}."
+    )
+    parts.append(
+        f"Degraded apps: {', '.join(degraded_apps[:4]) if degraded_apps else 'none'}."
+    )
+    if stale_apps:
+        parts.append(f"Stale apps: {', '.join(stale_apps[:4])}.")
     return " ".join(parts)
 
 
 def _render_chat_html() -> str:
-    return """<!doctype html>
+    return _CHAT_HTML_TEMPLATE.replace("__GRAFANA_PUBLIC_URL__", GRAFANA_PUBLIC_URL)
+
+
+_CHAT_HTML_TEMPLATE = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -821,7 +981,7 @@ def _render_chat_html() -> str:
       <textarea id="question" name="question" placeholder="Ask about vessel status, alerts, degraded apps, recent incidents, or cross-vessel patterns."></textarea>
       <div class="actions">
         <button id="submitBtn" type="button">Ask Assistant</button>
-        <a class="back-link" href="http://localhost:3000">Back to Grafana</a>
+        <a class="back-link" href="__GRAFANA_PUBLIC_URL__">Back to Grafana</a>
       </div>
       <div id="status" class="status">Ready.</div>
     </section>
@@ -972,9 +1132,15 @@ def _render_chat_html() -> str:
         answerEl.textContent = data.answer_text || "No answer generated.";
         answerEl.className = "answer";
         traceStatusEl.textContent = data.status || "unknown";
-        traceModelEl.textContent =
-          (data.model_used || "-") +
-          (data.used_live_tools ? " / live MCP tools used" : " / no live tools used");
+        let liveToolsLabel;
+        if (data.live_tools_failed) {
+          liveToolsLabel = " / live tools failed (answer not grounded)";
+        } else if (data.used_live_tools) {
+          liveToolsLabel = " / live MCP tools used";
+        } else {
+          liveToolsLabel = " / no live tools used";
+        }
+        traceModelEl.textContent = (data.model_used || "-") + liveToolsLabel;
         renderToolTrace(data.tool_calls || []);
         renderDocTrace(data.retrieved_documents || []);
         statusEl.textContent = "Answer ready.";

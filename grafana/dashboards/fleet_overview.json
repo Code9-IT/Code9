@@ -52,6 +52,18 @@
       "tooltip": "Open the investigation dashboard for MV Edge Aurora (IMO9300001)",
       "type": "link",
       "url": "/d/maritime_noc_support/noc-support?var-vessel=${bridge_uds_vessel}&var-time_window=${bridge_default_noc_window}"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": true,
+      "title": "AI Chat",
+      "tooltip": "Ask the AI assistant about fleet, incidents, or specific vessels",
+      "type": "link",
+      "url": "http://localhost:8000/api/v1/chat"
     }
   ],
   "panels": [
