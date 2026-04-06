@@ -32,6 +32,14 @@ and MCP tool coverage.
 `/api/v1/uds/analyze/view`. The analysis uses UDS MCP tools, RAG context, and
 Ollama, and shows tool-call trace and retrieved documents for traceability.
 
+**Scope 3 Task 3 (Dashboard Coherence)** is complete: the main Grafana
+dashboards share root navigation between Ship Operations, Fleet Overview,
+UDS Incident Workbench, and NOC Support. The legacy vessel `vessel_001` is
+intentionally bridged to MV Edge Aurora (`IMO9300001`) for the presenter-facing
+demo flow. The previous `UDS App Health` dashboard is renamed to
+`AI Pipeline Health (Developer)` and is intentionally kept outside the main
+demo navigation.
+
 See `docs/SCOPE3_DELIVERY_TASKS.md` for remaining scope 3 tasks.
 See `docs/SCOPE2_TASK_SPLIT.md` for scope 2 task ownership and acceptance criteria.
 
@@ -102,11 +110,11 @@ docker compose up -d --build
 |
 |-- grafana/
 |   |-- dashboards/
-|   |   |-- uds_monitoring.json        # Scope 1: single-vessel incident board
+|   |   |-- uds_monitoring.json        # Scope 1: single-vessel incident workbench
 |   |   |-- fleet_overview.json        # Scope 2: multi-vessel fleet overview
 |   |   |-- noc_support.json           # Scope 2: NOC support investigation board
-|   |   |-- ship_operations.json       # legacy telemetry dashboard
-|   |   `-- uds_app_health.json        # app health snapshot
+|   |   |-- ship_operations.json       # legacy telemetry dashboard mapped to MV Edge Aurora (IMO9300001)
+|   |   `-- uds_app_health.json        # AI pipeline health dashboard (developer-only)
 |   |-- provisioning/
 |   `-- queries/
 |       `-- uds_queries.sql            # reference SQL for dashboard panels
@@ -144,7 +152,7 @@ The system has two monitoring paths:
 - `db/init/003_uds.sql` + `004_uds_reference_data.sql` define the schema
 - `uds-seeder` inserts metrics, alerts, and logs every 30 minutes
 - `services/mcp/main.py` exposes 9 UDS tools (4 single-vessel + 5 fleet/incident)
-- `grafana/dashboards/uds_monitoring.json` for single-vessel incidents
+- `grafana/dashboards/uds_monitoring.json` for the single-vessel incident workbench
 - `grafana/dashboards/fleet_overview.json` for multi-vessel overview
 - `grafana/dashboards/noc_support.json` for NOC support investigation
 

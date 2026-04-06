@@ -1,10 +1,59 @@
 {
   "annotations": {"list": []},
-  "description": "Fleet-wide overview for DevOps engineers. Shows cross-vessel health, correlated issues, and connectivity status. Click Vessel or IMO to open the single-vessel incident workbench.",
+  "description": "Fleet-wide UDS overview for DevOps engineers. Use the dashboard links to move between fleet, incident, NOC, and the mapped legacy Ship Operations view for MV Edge Aurora (IMO9300001).",
   "editable": true,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Ship Operations (Legacy)",
+      "tooltip": "Legacy telemetry demo mapped to MV Edge Aurora (IMO9300001)",
+      "type": "link",
+      "url": "/d/maritime_ship_ops/ship-operations-legacy-telemetry?var-vessel=${bridge_legacy_vessel}"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Fleet Overview",
+      "tooltip": "Fleet-wide UDS health and correlation view",
+      "type": "link",
+      "url": "/d/maritime_fleet_overview/fleet-overview"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "UDS Incident Workbench",
+      "tooltip": "Open the single-vessel UDS incident flow for MV Edge Aurora (IMO9300001)",
+      "type": "link",
+      "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${bridge_uds_vessel}&var-incident_window=${bridge_default_incident_window}"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "NOC Support",
+      "tooltip": "Open the investigation dashboard for MV Edge Aurora (IMO9300001)",
+      "type": "link",
+      "url": "/d/maritime_noc_support/noc-support?var-vessel=${bridge_uds_vessel}&var-time_window=${bridge_default_noc_window}"
+    }
+  ],
   "panels": [
     {
       "collapsed": false,
@@ -572,11 +621,92 @@
   "schemaVersion": 39,
   "style": "dark",
   "tags": ["maritime", "fleet", "scope2", "multi-vessel"],
-  "templating": {"list": []},
+  "templating": {"list": [
+    {
+      "current": {
+        "selected": true,
+        "text": "vessel_001",
+        "value": "vessel_001"
+      },
+      "hide": 2,
+      "label": "Bridge Legacy Vessel",
+      "name": "bridge_legacy_vessel",
+      "options": [
+        {
+          "selected": true,
+          "text": "vessel_001",
+          "value": "vessel_001"
+        }
+      ],
+      "query": "vessel_001",
+      "skipUrlSync": true,
+      "type": "constant"
+    },
+    {
+      "current": {
+        "selected": true,
+        "text": "IMO9300001",
+        "value": "IMO9300001"
+      },
+      "hide": 2,
+      "label": "Bridge UDS Vessel",
+      "name": "bridge_uds_vessel",
+      "options": [
+        {
+          "selected": true,
+          "text": "IMO9300001",
+          "value": "IMO9300001"
+        }
+      ],
+      "query": "IMO9300001",
+      "skipUrlSync": true,
+      "type": "constant"
+    },
+    {
+      "current": {
+        "selected": true,
+        "text": "6 hours",
+        "value": "6 hours"
+      },
+      "hide": 2,
+      "label": "Default Incident Window",
+      "name": "bridge_default_incident_window",
+      "options": [
+        {
+          "selected": true,
+          "text": "6 hours",
+          "value": "6 hours"
+        }
+      ],
+      "query": "6 hours",
+      "skipUrlSync": true,
+      "type": "constant"
+    },
+    {
+      "current": {
+        "selected": true,
+        "text": "24 hours",
+        "value": "24 hours"
+      },
+      "hide": 2,
+      "label": "Default NOC Window",
+      "name": "bridge_default_noc_window",
+      "options": [
+        {
+          "selected": true,
+          "text": "24 hours",
+          "value": "24 hours"
+        }
+      ],
+      "query": "24 hours",
+      "skipUrlSync": true,
+      "type": "constant"
+    }
+  ]},
   "time": {"from": "now-6h", "to": "now"},
   "timepicker": {},
   "timezone": "browser",
   "title": "Fleet Overview",
   "uid": "maritime_fleet_overview",
-  "version": 1
+  "version": 2
 }

@@ -2,11 +2,60 @@
   "annotations": {
     "list": []
   },
-  "description": "Investigation-focused NOC dashboard for one vessel. Combines operational state, incident timeline, connectivity history, and alert/log context across a wider troubleshooting window.",
+  "description": "Investigation-focused NOC dashboard for one vessel. Use the shared dashboard links to move between NOC support, the incident workbench, fleet view, and the mapped legacy Ship Operations dashboard.",
   "editable": true,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Ship Operations (Legacy)",
+      "tooltip": "Legacy telemetry demo mapped to vessel_001 / MV Edge Aurora",
+      "type": "link",
+      "url": "/d/maritime_ship_ops/ship-operations-legacy-telemetry?var-vessel=${bridge_legacy_vessel}"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Fleet Overview",
+      "tooltip": "Fleet-wide UDS health and correlation view",
+      "type": "link",
+      "url": "/d/maritime_fleet_overview/fleet-overview"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "UDS Incident Workbench",
+      "tooltip": "Incident-first view for the selected vessel (24h window)",
+      "type": "link",
+      "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-incident_window=${bridge_default_noc_window}"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "NOC Support",
+      "tooltip": "Stay in the broader troubleshooting view for the selected vessel",
+      "type": "link",
+      "url": "/d/maritime_noc_support/noc-support?var-vessel=${vessel}&var-time_window=${time_window}&var-app_filter=${app_filter}"
+    }
+  ],
   "panels": [
     {
       "datasource": null,
@@ -846,6 +895,86 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "vessel_001",
+          "value": "vessel_001"
+        },
+        "hide": 2,
+        "label": "Bridge Legacy Vessel",
+        "name": "bridge_legacy_vessel",
+        "options": [
+          {
+            "selected": true,
+            "text": "vessel_001",
+            "value": "vessel_001"
+          }
+        ],
+        "query": "vessel_001",
+        "skipUrlSync": true,
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "IMO9300001",
+          "value": "IMO9300001"
+        },
+        "hide": 2,
+        "label": "Bridge UDS Vessel",
+        "name": "bridge_uds_vessel",
+        "options": [
+          {
+            "selected": true,
+            "text": "IMO9300001",
+            "value": "IMO9300001"
+          }
+        ],
+        "query": "IMO9300001",
+        "skipUrlSync": true,
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "6 hours",
+          "value": "6 hours"
+        },
+        "hide": 2,
+        "label": "Default Incident Window",
+        "name": "bridge_default_incident_window",
+        "options": [
+          {
+            "selected": true,
+            "text": "6 hours",
+            "value": "6 hours"
+          }
+        ],
+        "query": "6 hours",
+        "skipUrlSync": true,
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "24 hours",
+          "value": "24 hours"
+        },
+        "hide": 2,
+        "label": "Default NOC Window",
+        "name": "bridge_default_noc_window",
+        "options": [
+          {
+            "selected": true,
+            "text": "24 hours",
+            "value": "24 hours"
+          }
+        ],
+        "query": "24 hours",
+        "skipUrlSync": true,
+        "type": "constant"
       }
     ]
   },
@@ -857,5 +986,5 @@
   "timezone": "browser",
   "title": "NOC Support",
   "uid": "maritime_noc_support",
-  "version": 1
+  "version": 2
 }
