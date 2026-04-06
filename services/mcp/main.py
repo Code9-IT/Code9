@@ -553,6 +553,68 @@ TOOLS = [
             ],
         },
     },
+    # --- Scope 3: Predictive / Trend Tools ---
+    {
+        "name": "get_alert_trend",
+        "description": (
+            "Analyse alert frequency over recent time buckets to detect rising, "
+            "falling, or stable trends. Useful for predicting whether a vessel or "
+            "the fleet is heading toward a worse state."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "hours": {
+                    "type": "integer",
+                    "description": "Total lookback window in hours (default 24, max 168).",
+                    "default": 24,
+                },
+                "bucket_hours": {
+                    "type": "integer",
+                    "description": "Size of each time bucket in hours (default 4).",
+                    "default": 4,
+                },
+                "vessel_id": {
+                    "type": "string",
+                    "description": (
+                        "Optional vessel filter (imo_nr, external_id, name, or "
+                        "udslocations.id). Omit to see the fleet-wide trend."
+                    ),
+                },
+                "severity": {
+                    "type": "string",
+                    "description": "Optional severity filter (e.g. critical, warning).",
+                },
+            },
+            "required": [],
+        },
+        "outputSchema": {
+            "type": "object",
+            "properties": {
+                "hours": {"type": "integer"},
+                "bucket_hours": {"type": "integer"},
+                "vessel_filter": {"type": "string"},
+                "severity_filter": {"type": "string"},
+                "trend": {
+                    "type": "string",
+                    "description": "One of: rising, falling, stable, insufficient_data",
+                },
+                "trend_description": {"type": "string"},
+                "buckets": {"type": "array"},
+                "total_alerts": {"type": "integer"},
+                "generated_at": {"type": "string", "format": "date-time"},
+            },
+            "required": [
+                "hours",
+                "bucket_hours",
+                "trend",
+                "trend_description",
+                "buckets",
+                "total_alerts",
+                "generated_at",
+            ],
+        },
+    },
 ]
 
 
@@ -664,6 +726,21 @@ class GetOperationalSnapshotArgs(BaseModel):
             "Vessel identifier in UDS schema "
             "(imo_nr, external_id, name, or udslocations.id)"
         ),
+    )
+
+
+class GetAlertTrendArgs(BaseModel):
+    hours: int = Field(24, ge=1, le=168, description="Total lookback window in hours")
+    bucket_hours: int = Field(4, ge=1, le=48, description="Size of each time bucket in hours")
+    vessel_id: Optional[str] = Field(
+        None,
+        description=(
+            "Optional vessel filter (imo_nr, external_id, name, or "
+            "udslocations.id). Omit for fleet-wide trend."
+        ),
+    )
+    severity: Optional[str] = Field(
+        None, description="Optional severity filter (e.g. critical, warning)"
     )
 
 
@@ -1791,6 +1868,98 @@ async def _run_get_operational_snapshot(
     }
 
 
+async def _run_get_alert_trend(args: GetAlertTrendArgs) -> dict[str, Any]:
+    pool = get_pool()
+
+    # Optionally resolve vessel filter
+    vessel_info: dict[str, Any] | None = None
+    uds_location_id: str | None = None
+    if args.vessel_id:
+        vessel_info = await _resolve_uds_vessel(args.vessel_id)
+        uds_location_id = vessel_info["uds_location_id"]
+
+    try:
+        rows = await pool.fetch(
+            """
+            SELECT
+                time_bucket($1 * INTERVAL '1 hour', al.starts_at) AS bucket,
+                COUNT(*)::int AS alert_count
+            FROM alerts al
+            WHERE al.starts_at >= NOW() - ($2 * INTERVAL '1 hour')
+              AND ($3::uuid IS NULL OR al.uds_location_id = $3::uuid)
+              AND ($4::text IS NULL OR LOWER(al.severity) = LOWER($4))
+            GROUP BY bucket
+            ORDER BY bucket ASC;
+            """,
+            args.bucket_hours,
+            args.hours,
+            uds_location_id,
+            args.severity,
+        )
+    except Exception as exc:
+        _normalize_error(exc)
+
+    buckets = [
+        {
+            "bucket_start": _iso(row["bucket"]),
+            "alert_count": row["alert_count"],
+        }
+        for row in rows
+    ]
+    total_alerts = sum(b["alert_count"] for b in buckets)
+
+    # Determine trend by comparing the first and second half of the window
+    trend = "insufficient_data"
+    trend_description = "Not enough data to determine a trend."
+
+    if len(buckets) >= 2:
+        mid = len(buckets) // 2
+        first_half = sum(b["alert_count"] for b in buckets[:mid]) or 0
+        second_half = sum(b["alert_count"] for b in buckets[mid:]) or 0
+
+        if first_half == 0 and second_half == 0:
+            trend = "stable"
+            trend_description = "No alerts in the lookback window."
+        elif first_half == 0 and second_half > 0:
+            trend = "rising"
+            trend_description = (
+                f"Alert activity appeared in the recent half "
+                f"({second_half} alerts) where there were none before."
+            )
+        elif second_half > first_half * 1.25:
+            pct = int(round((second_half - first_half) / max(first_half, 1) * 100))
+            trend = "rising"
+            trend_description = (
+                f"Alert frequency increased ~{pct}% from the first half "
+                f"({first_half} alerts) to the second half ({second_half} alerts)."
+            )
+        elif second_half < first_half * 0.75:
+            pct = int(round((first_half - second_half) / max(first_half, 1) * 100))
+            trend = "falling"
+            trend_description = (
+                f"Alert frequency decreased ~{pct}% from the first half "
+                f"({first_half} alerts) to the second half ({second_half} alerts)."
+            )
+        else:
+            trend = "stable"
+            trend_description = (
+                f"Alert frequency is relatively stable "
+                f"(first half: {first_half}, second half: {second_half})."
+            )
+
+    return {
+        "hours": args.hours,
+        "bucket_hours": args.bucket_hours,
+        "vessel_filter": args.vessel_id,
+        "severity_filter": args.severity,
+        "trend": trend,
+        "trend_description": trend_description,
+        "buckets": buckets,
+        "total_alerts": total_alerts,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 TOOL_HANDLERS = {
     "get_telemetry": (GetTelemetryArgs, _run_get_telemetry),
     "get_events": (GetEventsArgs, _run_get_events),
@@ -1804,6 +1973,7 @@ TOOL_HANDLERS = {
     "get_cross_vessel_correlation": (GetCrossVesselCorrelationArgs, _run_get_cross_vessel_correlation),
     "get_incident_timeline": (GetIncidentTimelineArgs, _run_get_incident_timeline),
     "get_operational_snapshot": (GetOperationalSnapshotArgs, _run_get_operational_snapshot),
+    "get_alert_trend": (GetAlertTrendArgs, _run_get_alert_trend),
 }
 
 
@@ -1919,3 +2089,11 @@ async def get_operational_snapshot(
     _: None = Depends(_require_api_key),
 ):
     return await _run_get_operational_snapshot(args)
+
+
+@app.post("/tools/get_alert_trend")
+async def get_alert_trend(
+    args: GetAlertTrendArgs,
+    _: None = Depends(_require_api_key),
+):
+    return await _run_get_alert_trend(args)

@@ -71,10 +71,20 @@ docker compose logs -f uds-seeder  # wait for "Backfill complete"
   - Chat reuses Ollama + RAG + the UDS MCP tool subset for operational questions
 - Task 3 (Onu, Dashboard Coherence) -- DONE
   - Shared root navigation across Ship Operations, Fleet Overview,
-    UDS Incident Workbench, NOC Support, and AI Chat
+    UDS Incident Workbench, NOC Support, AI Chat, and Alert Trends
   - Renames: `UDS Incident Monitoring` -> `UDS Incident Workbench`,
     `UDS App Health` -> `AI Pipeline Health (Developer)` (kept outside main demo nav)
   - Lightweight legacy/UDS bridge: `vessel_001` -> MV Edge Aurora (IMO9300001)
+- Task 4 (Nidal, Predictive Trend + Handover Docs) -- DONE
+  - New MCP tool `get_alert_trend` for time-bucketed alert frequency analysis
+    with vessel and severity filters
+  - Grafana dashboard `grafana/dashboards/alert_trends.json` (4 panels:
+    Frequency Over Time, By Vessel, Severity Breakdown, Trend Summary)
+  - Confidence labels in AI analysis renderers: `Low` / `Medium` / `High`
+    (replaces raw percentage display)
+  - Acknowledge flow hardened: GET `/acknowledge` returns HTTP 405 with
+    `Allow: POST`; new GET `/acknowledge/confirm` page used by Grafana data link
+  - Handover documentation: `docs/PRODUCTION_GUIDE.md`, `docs/DEMO_SCRIPT.md`
 
 ## Architecture Overview
 
@@ -94,20 +104,20 @@ uds-seeder -----------------------> metric_samples / alerts / app_logs
                    uds_monitoring  fleet_overview  noc_support
                           |           |           |
                           +-----MCP UDS tools-----+
-                               (12 tools total)
+                               (13 tools total)
 ```
 
 Task 3 keeps the legacy/UDS bridge lightweight instead of rewriting vessel IDs:
 - `vessel_001` remains the legacy telemetry identifier
 - Presenter-facing mapping: `vessel_001` -> `MV Edge Aurora (IMO9300001)`
 - Main Grafana dashboards share root navigation between Ship Operations,
-  Fleet Overview, UDS Incident Workbench, and NOC Support
+  Fleet Overview, UDS Incident Workbench, NOC Support, AI Chat, and Alert Trends
 
 ## Key Files To Read
 
 ### Core runtime
 - `docker-compose.yml` -- service definitions
-- `services/mcp/main.py` -- MCP REST adapter, all 12 tool implementations
+- `services/mcp/main.py` -- MCP REST adapter, all 13 tool implementations
 - `services/agent/routes/analyze.py` -- AI analysis pipeline + MCP tool filtering
 - `services/agent/routes/chat.py` -- user-facing AI chat page + free-form question route
 - `services/agent/rag/ingest.py` -- RAG knowledge ingestion
@@ -121,6 +131,7 @@ Task 3 keeps the legacy/UDS bridge lightweight instead of rewriting vessel IDs:
 - `grafana/dashboards/fleet_overview.json` -- Scope 2: multi-vessel fleet overview
 - `grafana/dashboards/noc_support.json` -- Scope 2: NOC support investigation board
 - `grafana/dashboards/ship_operations.json` -- legacy telemetry dashboard (mapped to MV Edge Aurora / IMO9300001 in the UDS flow)
+- `grafana/dashboards/alert_trends.json` -- Scope 3: predictive alert trend analysis
 - `grafana/dashboards/uds_app_health.json` -- AI pipeline health dashboard (developer-only, not part of the main demo navigation)
 
 ### Documentation
@@ -128,8 +139,11 @@ Task 3 keeps the legacy/UDS bridge lightweight instead of rewriting vessel IDs:
 - `docs/architecture.md` -- system architecture
 - `docs/ROADMAP.md` -- backlog and current priorities
 - `docs/SCOPE2_TASK_SPLIT.md` -- Scope 2 task ownership and acceptance criteria
+- `docs/SCOPE3_DELIVERY_TASKS.md` -- Scope 3 final sprint task definitions
 - `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md` -- repeatable validation flow
 - `docs/UDS_dashboard_spec.md` -- dashboard panel specifications
+- `docs/PRODUCTION_GUIDE.md` -- deployment and operations guide
+- `docs/DEMO_SCRIPT.md` -- step-by-step demo walkthrough
 - `docs/knowledge/` -- RAG knowledge base (17 maritime reference files)
 
 ### Historical (in docs/archive/)
@@ -141,7 +155,7 @@ These are kept for reference but are no longer the active project docs:
 - `docs/archive/WORK_DISTRIBUTION.md`
 - `docs/archive/underveisNotater.md`
 
-## MCP Tools (12 total)
+## MCP Tools (13 total)
 
 ### Legacy (3 tools)
 - `get_telemetry` -- raw telemetry query
@@ -160,6 +174,9 @@ These are kept for reference but are no longer the active project docs:
 - `get_cross_vessel_correlation` -- apps/alert types affecting multiple vessels
 - `get_incident_timeline` -- chronological alerts + logs for one vessel
 - `get_operational_snapshot` -- full vessel state for NOC support
+
+### Scope 3 Predictive (1 tool)
+- `get_alert_trend` -- alert frequency trend detection over time buckets (rising/falling/stable)
 
 ## Important Conventions
 

@@ -79,10 +79,13 @@ async def acknowledge_event_get(
     operator: str = Query(default="unknown"),
 ):
     """
-    GET alias for Grafana data links.
-    Reuses the same acknowledge logic as POST /events/{event_id}/acknowledge.
+    GET is not allowed for state-changing operations.
+    Use POST /events/{event_id}/acknowledge instead.
     """
-    return await acknowledge_event(event_id=event_id, operator=operator)
+    return {
+        "error": "Use POST to acknowledge events",
+        "hint": f"POST /api/v1/events/{event_id}/acknowledge?operator={operator}",
+    }
 
 
 # --- private helpers ----------------------------------------------------
