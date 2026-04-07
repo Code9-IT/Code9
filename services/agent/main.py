@@ -24,7 +24,11 @@ from routes.events  import router as events_router
 from routes.validation import router as validation_router
 from rag.ingest import ingest_if_empty
 
-RAG_AUTO_INGEST_RETRIES = int(os.getenv("RAG_AUTO_INGEST_RETRIES", "24"))
+# Default budget: 120 attempts * 15s = 30 minutes total wait. This is sized
+# to survive a cold-start fresh-volume Ollama model pull (llama3.2 ~2 GB +
+# nomic-embed-text), which on a slow connection can run well past the
+# previous 6-minute (24 * 15s) budget and force a manual agent restart.
+RAG_AUTO_INGEST_RETRIES = int(os.getenv("RAG_AUTO_INGEST_RETRIES", "120"))
 RAG_AUTO_INGEST_DELAY_SECONDS = float(os.getenv("RAG_AUTO_INGEST_DELAY_SECONDS", "15"))
 
 

@@ -82,22 +82,6 @@
   ],
   "panels": [
     {
-      "datasource": null,
-      "gridPos": {
-        "h": 3,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 1,
-      "options": {
-        "content": "## NOC investigation flow\n\nUse `time_window` to set the troubleshooting window. Leave `app_filter` on `All Applications` for vessel-wide investigation, or narrow to one app to focus the timeline and metric history. Historical charts aggregate across the selected app set. Click `app_id` in the tables to open the Scope 1 incident workbench for that vessel/app pair.",
-        "mode": "markdown"
-      },
-      "title": "Workflow",
-      "type": "text"
-    },
-    {
       "datasource": {
         "type": "postgres",
         "uid": "timescaledb"
@@ -112,7 +96,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 3
+        "y": 0
       },
       "id": 2,
       "options": {
@@ -154,7 +138,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 3
+        "y": 0
       },
       "id": 3,
       "options": {
@@ -196,7 +180,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 3
+        "y": 0
       },
       "id": 4,
       "options": {
@@ -238,7 +222,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 3
+        "y": 0
       },
       "id": 5,
       "options": {
@@ -302,7 +286,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 4
       },
       "id": 6,
       "options": {
@@ -364,7 +348,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 14
       },
       "id": 7,
       "options": {
@@ -426,7 +410,7 @@
         "h": 8,
         "w": 10,
         "x": 0,
-        "y": 29
+        "y": 26
       },
       "id": 8,
       "options": {
@@ -506,7 +490,7 @@
         "h": 8,
         "w": 14,
         "x": 10,
-        "y": 29
+        "y": 26
       },
       "id": 9,
       "options": {
@@ -553,7 +537,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 37
+        "y": 34
       },
       "id": 10,
       "options": {
@@ -597,7 +581,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 37
+        "y": 34
       },
       "id": 11,
       "options": {
@@ -641,7 +625,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 45
+        "y": 42
       },
       "id": 12,
       "options": {
@@ -685,7 +669,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 45
+        "y": 42
       },
       "id": 13,
       "options": {
@@ -729,7 +713,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 53
+        "y": 50
       },
       "id": 14,
       "options": {
@@ -773,7 +757,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 53
+        "y": 50
       },
       "id": 15,
       "options": {
@@ -813,7 +797,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 61
+        "y": 58
       },
       "id": 16,
       "options": {

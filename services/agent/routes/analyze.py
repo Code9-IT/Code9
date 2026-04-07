@@ -284,7 +284,7 @@ async def analyze_event_view(
             id=0,
             event_id=event_id,
             analysis_mode="full",
-            analysis_text="No analysis yet. A background analysis has started. Refresh this page in 30-60 seconds.",
+            analysis_text="No analysis yet. A background analysis has started. This typically takes 2-5 minutes on a local CPU model. The page will auto-refresh.",
             suggested_actions=[],
             confidence=0.0,
             model_used=FULL_MODEL,
@@ -339,7 +339,7 @@ def _render_analysis_html(
     analysis = html.escape(result.analysis_text or "").replace("\n", "<br>")
     actions = list(result.suggested_actions or [])
     if status_norm in ("running", "pending"):
-        actions = ["Wait 30-60 seconds, then refresh this page to see the completed analysis."]
+        actions = ["Analysis is running. This typically takes 2-5 minutes on a local CPU model. The page will auto-refresh."]
     elif status_norm == "failed" and _is_placeholder_actions(actions):
         actions = _failure_actions(result.analysis_text or "")
     if not actions:
@@ -358,18 +358,23 @@ def _render_analysis_html(
     if refresh_started:
         notice = (
             "<div class=\"card\"><div class=\"label\">Background Analysis</div>"
-            "<div class=\"value\">New analysis started. Refresh in 30-60 seconds.</div></div>"
+            "<div class=\"value\">New analysis started. This typically takes 2-5 minutes on a local CPU model. The page will auto-refresh.</div></div>"
         )
     elif refresh_in_progress:
         notice = (
             "<div class=\"card\"><div class=\"label\">Background Analysis</div>"
-            "<div class=\"value\">Analysis is already running. Refresh in 30-60 seconds.</div></div>"
+            "<div class=\"value\">Analysis is running. This typically takes 2-5 minutes on a local CPU model. The page will auto-refresh.</div></div>"
         )
 
     auto_refresh = ""
     if refresh_started or refresh_in_progress or status_norm in ("running", "pending"):
+        # 20-second auto-refresh interval matches the UDS analysis page so
+        # both render paths feel consistent. A shorter interval would just
+        # hammer the agent without making the user-visible wall-clock shorter
+        # because the underlying llama3.2 inference still takes 2-5 minutes
+        # on a local CPU model.
         auto_refresh = (
-            f"<script>setTimeout(function(){{window.location.href='{view_url}';}},8000);</script>"
+            f"<script>setTimeout(function(){{window.location.href='{view_url}';}},20000);</script>"
         )
 
     event_info = f"""

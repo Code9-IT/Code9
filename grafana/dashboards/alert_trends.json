@@ -98,8 +98,8 @@
         "query": "SELECT name || ' (' || imo_nr || ')' AS __text, imo_nr AS __value FROM udslocations ORDER BY name;",
         "datasource": { "type": "postgres", "uid": "timescaledb" },
         "includeAll": true,
-        "allValue": "",
-        "current": { "text": "All", "value": "$__all" },
+        "allValue": "__all",
+        "current": { "text": "All", "value": "__all" },
         "refresh": 1,
         "multi": false
       },
@@ -109,8 +109,8 @@
         "label": "Severity",
         "query": "critical,warning,info",
         "includeAll": true,
-        "allValue": "",
-        "current": { "text": "All", "value": "$__all" },
+        "allValue": "__all",
+        "current": { "text": "All", "value": "__all" },
         "multi": false
       }
     ]
@@ -125,7 +125,7 @@
       "datasource": { "type": "postgres", "uid": "timescaledb" },
       "targets": [
         {
-          "rawSql": "SELECT\n  time_bucket('4 hours', al.starts_at) AS time,\n  COUNT(*)::int AS \"Alert Count\"\nFROM alerts al\nJOIN udslocations u ON u.id = al.uds_location_id\nWHERE al.starts_at >= $__timeFrom()\n  AND al.starts_at <= $__timeTo()\n  AND ('${vessel:sqlstring}' = '' OR '${vessel:sqlstring}' = '$__all' OR u.imo_nr = '${vessel:sqlstring}')\n  AND ('${severity:sqlstring}' = '' OR '${severity:sqlstring}' = '$__all' OR LOWER(al.severity) = LOWER('${severity:sqlstring}'))\nGROUP BY time\nORDER BY time ASC;",
+          "rawSql": "SELECT\n  time_bucket('4 hours', al.starts_at) AS time,\n  COUNT(*)::int AS \"Alert Count\"\nFROM alerts al\nJOIN udslocations u ON u.id = al.uds_location_id\nWHERE al.starts_at >= $__timeFrom()\n  AND al.starts_at <= $__timeTo()\n  AND ('$vessel' = '__all' OR u.imo_nr = '$vessel')\n  AND ('$severity' = '__all' OR LOWER(al.severity) = LOWER('$severity'))\nGROUP BY time\nORDER BY time ASC;",
           "format": "time_series",
           "refId": "A"
         }
@@ -166,7 +166,7 @@
       "datasource": { "type": "postgres", "uid": "timescaledb" },
       "targets": [
         {
-          "rawSql": "SELECT\n  time_bucket('4 hours', al.starts_at) AS time,\n  u.name AS metric,\n  COUNT(*)::int AS value\nFROM alerts al\nJOIN udslocations u ON u.id = al.uds_location_id\nWHERE al.starts_at >= $__timeFrom()\n  AND al.starts_at <= $__timeTo()\n  AND ('${severity:sqlstring}' = '' OR '${severity:sqlstring}' = '$__all' OR LOWER(al.severity) = LOWER('${severity:sqlstring}'))\nGROUP BY time, u.name\nORDER BY time ASC;",
+          "rawSql": "SELECT\n  time_bucket('4 hours', al.starts_at) AS time,\n  u.name AS metric,\n  COUNT(*)::int AS value\nFROM alerts al\nJOIN udslocations u ON u.id = al.uds_location_id\nWHERE al.starts_at >= $__timeFrom()\n  AND al.starts_at <= $__timeTo()\n  AND ('$vessel' = '__all' OR u.imo_nr = '$vessel')\n  AND ('$severity' = '__all' OR LOWER(al.severity) = LOWER('$severity'))\nGROUP BY time, u.name\nORDER BY time ASC;",
           "format": "time_series",
           "refId": "A"
         }
@@ -198,7 +198,7 @@
       "datasource": { "type": "postgres", "uid": "timescaledb" },
       "targets": [
         {
-          "rawSql": "SELECT\n  time_bucket('4 hours', al.starts_at) AS time,\n  al.severity AS metric,\n  COUNT(*)::int AS value\nFROM alerts al\nJOIN udslocations u ON u.id = al.uds_location_id\nWHERE al.starts_at >= $__timeFrom()\n  AND al.starts_at <= $__timeTo()\n  AND ('${vessel:sqlstring}' = '' OR '${vessel:sqlstring}' = '$__all' OR u.imo_nr = '${vessel:sqlstring}')\nGROUP BY time, al.severity\nORDER BY time ASC;",
+          "rawSql": "SELECT\n  time_bucket('4 hours', al.starts_at) AS time,\n  al.severity AS metric,\n  COUNT(*)::int AS value\nFROM alerts al\nJOIN udslocations u ON u.id = al.uds_location_id\nWHERE al.starts_at >= $__timeFrom()\n  AND al.starts_at <= $__timeTo()\n  AND ('$vessel' = '__all' OR u.imo_nr = '$vessel')\nGROUP BY time, al.severity\nORDER BY time ASC;",
           "format": "time_series",
           "refId": "A"
         }
@@ -242,7 +242,7 @@
       "datasource": { "type": "postgres", "uid": "timescaledb" },
       "targets": [
         {
-          "rawSql": "WITH window AS (\n  SELECT\n    $__timeFrom()::timestamptz AS t_from,\n    $__timeTo()::timestamptz   AS t_to\n),\nbuckets AS (\n  SELECT\n    u.name AS vessel,\n    CASE\n      WHEN al.starts_at >= (SELECT t_from + (t_to - t_from) / 2 FROM window) THEN 'recent'\n      ELSE 'earlier'\n    END AS period,\n    COUNT(*)::int AS cnt\n  FROM alerts al\n  JOIN udslocations u ON u.id = al.uds_location_id\n  WHERE al.starts_at >= (SELECT t_from FROM window)\n    AND al.starts_at <= (SELECT t_to   FROM window)\n    AND ('${vessel:sqlstring}' = '' OR '${vessel:sqlstring}' = '$__all' OR u.imo_nr = '${vessel:sqlstring}')\n    AND ('${severity:sqlstring}' = '' OR '${severity:sqlstring}' = '$__all' OR LOWER(al.severity) = LOWER('${severity:sqlstring}'))\n  GROUP BY u.name, period\n)\nSELECT\n  vessel AS \"Vessel\",\n  COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) AS \"Alerts (earlier half)\",\n  COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'),  0) AS \"Alerts (recent half)\",\n  CASE\n    WHEN COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'),  0) +\n         COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) < 4\n      THEN 'INSUFFICIENT_DATA'\n    WHEN COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'),  0) >\n         COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) * 1.25\n      THEN 'RISING'\n    WHEN COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'),  0) <\n         COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) * 0.75\n      THEN 'FALLING'\n    ELSE 'STABLE'\n  END AS \"Trend\"\nFROM buckets\nGROUP BY vessel\nORDER BY vessel;",
+          "rawSql": "WITH window AS (\n  SELECT\n    $__timeFrom()::timestamptz AS t_from,\n    $__timeTo()::timestamptz   AS t_to\n),\nbuckets AS (\n  SELECT\n    u.name AS vessel,\n    CASE\n      WHEN al.starts_at >= (SELECT t_from + (t_to - t_from) / 2 FROM window) THEN 'recent'\n      ELSE 'earlier'\n    END AS period,\n    COUNT(*)::int AS cnt\n  FROM alerts al\n  JOIN udslocations u ON u.id = al.uds_location_id\n  WHERE al.starts_at >= (SELECT t_from FROM window)\n    AND al.starts_at <= (SELECT t_to   FROM window)\n    AND ('$vessel' = '__all' OR u.imo_nr = '$vessel')\n    AND ('$severity' = '__all' OR LOWER(al.severity) = LOWER('$severity'))\n  GROUP BY u.name, period\n)\nSELECT\n  vessel AS \"Vessel\",\n  COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) AS \"Alerts (earlier half)\",\n  COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'),  0) AS \"Alerts (recent half)\",\n  CASE\n    WHEN COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'),  0) +\n         COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) < 4\n      THEN 'INSUFFICIENT_DATA'\n    WHEN COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'),  0) >\n         COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) * 1.25\n      THEN 'RISING'\n    WHEN COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'),  0) <\n         COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) * 0.75\n      THEN 'FALLING'\n    ELSE 'STABLE'\n  END AS \"Trend\"\nFROM buckets\nGROUP BY vessel\nORDER BY vessel;",
           "format": "table",
           "refId": "A"
         }

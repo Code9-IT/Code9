@@ -55,7 +55,13 @@ HOUR_WINDOW_TOOLS = {
     "get_fleet_alerts",
     "get_cross_vessel_correlation",
     "get_incident_timeline",
+    "get_alert_trend",
 }
+
+# String values the LLM sometimes emits when it means "no filter". The MCP
+# tools expect either an actual JSON null or an omitted field, so these are
+# normalized to Python None before the call.
+PSEUDO_NULL_STRINGS = {"null", "none", "nil", "undefined", "n/a", "na", ""}
 
 
 @dataclass
@@ -522,12 +528,27 @@ def _normalize_tool_arguments(name: str, arguments: dict, question: str) -> dict
     """Repair common argument-shape mistakes before calling MCP."""
     normalized = dict(arguments)
 
+    # Drop pseudo-null strings the LLM emits ("null", "none", "", ...) so they
+    # do not reach the MCP layer where they would be rejected as invalid
+    # values for nullable filter fields. Real None values are left untouched.
+    for key, value in list(normalized.items()):
+        if isinstance(value, str) and value.strip().lower() in PSEUDO_NULL_STRINGS:
+            normalized[key] = None
+
     if name in HOUR_WINDOW_TOOLS:
         normalized["hours"] = _coerce_bounded_int(
             normalized.get("hours"),
             default=_default_hours_for_question(question),
             minimum=1,
             maximum=168,
+        )
+
+    if name == "get_alert_trend":
+        normalized["bucket_hours"] = _coerce_bounded_int(
+            normalized.get("bucket_hours"),
+            default=4,
+            minimum=1,
+            maximum=24,
         )
 
     if name == "get_telemetry":
@@ -805,13 +826,6 @@ _CHAT_HTML_TEMPLATE = """<!doctype html>
       padding:18px;
       box-shadow:0 18px 40px rgba(0,0,0,0.18);
     }
-    .eyebrow {
-      color:#7db4ff;
-      text-transform:uppercase;
-      letter-spacing:.12em;
-      font-size:12px;
-      margin-bottom:10px;
-    }
     h1 { margin:0 0 10px 0; font-size:34px; line-height:1.08; }
     p { margin:0; color:var(--muted); line-height:1.55; }
     .examples {
@@ -960,7 +974,6 @@ _CHAT_HTML_TEMPLATE = """<!doctype html>
   <div class="wrap">
     <section class="hero">
       <div class="card">
-        <div class="eyebrow">Scope 3 / Task 2</div>
         <h1>AI Operations Chat</h1>
         <p>
           Ask operational questions about vessels, alerts, incidents, and app health.

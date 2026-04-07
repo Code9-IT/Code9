@@ -71,6 +71,8 @@ defaults):
 | `OLLAMA_TIMEOUT_SECONDS` | `600` | LLM call timeout |
 | `RAG_TOP_K` | `5` | Number of RAG documents to retrieve |
 | `RAG_MIN_SIMILARITY` | `0.60` | Minimum cosine similarity for RAG |
+| `RAG_AUTO_INGEST_RETRIES` | `120` | Agent startup RAG auto-ingest attempts (survives cold Ollama model pull) |
+| `RAG_AUTO_INGEST_DELAY_SECONDS` | `15` | Delay between RAG auto-ingest retries |
 | `UDS_SEED_INTERVAL_SECONDS` | `1800` | Interval between UDS seed runs |
 | `ANOMALY_PROBABILITY` | `0.00008` | Legacy anomaly generation rate |
 
@@ -189,6 +191,26 @@ docker restart maritime_ollama
 - Check Ollama is running and responsive
 - Increase `OLLAMA_TIMEOUT_SECONDS` if the model is slow
 - Check agent logs: `docker logs maritime_agent`
+
+### RAG knowledge base is empty after a fresh-volume start
+
+The agent retries RAG auto-ingest while waiting for the Ollama embeddings
+endpoint to come up. The default retry budget is `120 attempts * 15s = 30
+minutes`, sized to survive a cold-start `llama3.2 + nomic-embed-text` pull.
+On a slow link the model pull can still exceed that window. If
+`docker logs maritime_agent` shows
+`RAG auto-ingest skipped after N attempts`, do one of the following:
+
+```bash
+# 1. Confirm Ollama is healthy and the embeddings model is present:
+docker exec maritime_ollama ollama list
+
+# 2. Restart the agent so the startup hook re-runs ingest_if_empty():
+docker compose restart agent
+
+# 3. Or extend the retry budget for the next cold start:
+#    RAG_AUTO_INGEST_RETRIES=240 RAG_AUTO_INGEST_DELAY_SECONDS=15 docker compose up -d
+```
 
 ### Reset everything
 
