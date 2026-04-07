@@ -2,11 +2,84 @@
   "annotations": {
     "list": []
   },
-  "description": "Real-time operational view for vessel crew. KPI strip at top, detail rows collapsed below.",
+  "description": "Real-time legacy telemetry view for vessel crew. The demo legacy vessel `vessel_001` maps to MV Edge Aurora (IMO9300001) in the UDS dashboards.",
   "editable": true,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Ship Operations (Legacy)",
+      "tooltip": "Legacy telemetry view for vessel_001",
+      "type": "link",
+      "url": "/d/maritime_ship_ops/ship-operations-legacy-telemetry?var-vessel=${vessel}"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Fleet Overview",
+      "tooltip": "Fleet-wide UDS health and correlation view",
+      "type": "link",
+      "url": "/d/maritime_fleet_overview/fleet-overview"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": false,
+      "title": "UDS Incident Workbench",
+      "tooltip": "Mapped UDS vessel: MV Edge Aurora (IMO9300001)",
+      "type": "link",
+      "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${bridge_uds_vessel}&var-incident_window=${bridge_default_incident_window}"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": false,
+      "title": "NOC Support",
+      "tooltip": "Mapped UDS troubleshooting view for MV Edge Aurora (IMO9300001)",
+      "type": "link",
+      "url": "/d/maritime_noc_support/noc-support?var-vessel=${bridge_uds_vessel}&var-time_window=${bridge_default_noc_window}"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Alert Trends",
+      "tooltip": "Predictive alert frequency analysis (rising / falling / stable)",
+      "type": "link",
+      "url": "/d/maritime_alert_trends/alert-trends"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": true,
+      "title": "AI Chat",
+      "tooltip": "Ask the AI assistant about fleet, incidents, or specific vessels",
+      "type": "link",
+      "url": "http://localhost:8000/api/v1/chat"
+    }
+  ],
   "panels": [
     {
       "collapsed": false,
@@ -17,7 +90,7 @@
         "y": 0
       },
       "id": 100,
-      "title": "Main View",
+      "title": "Legacy Sensor View -> MV Edge Aurora (IMO9300001)",
       "type": "row"
     },
     {
@@ -816,7 +889,12 @@
                   },
                   {
                     "title": "Acknowledge",
-                    "url": "http://localhost:8000/api/v1/events/${__value.raw}/acknowledge?operator=grafana",
+                    "url": "http://localhost:8000/api/v1/events/${__value.raw}/acknowledge/confirm?operator=grafana",
+                    "targetBlank": true
+                  },
+                  {
+                    "title": "Open mapped UDS workbench",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${bridge_uds_vessel}&var-incident_window=${bridge_default_incident_window}",
                     "targetBlank": true
                   }
                 ]
@@ -1476,6 +1554,86 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "vessel_001",
+          "value": "vessel_001"
+        },
+        "hide": 2,
+        "label": "Bridge Legacy Vessel",
+        "name": "bridge_legacy_vessel",
+        "options": [
+          {
+            "selected": true,
+            "text": "vessel_001",
+            "value": "vessel_001"
+          }
+        ],
+        "query": "vessel_001",
+        "skipUrlSync": true,
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "IMO9300001",
+          "value": "IMO9300001"
+        },
+        "hide": 2,
+        "label": "Bridge UDS Vessel",
+        "name": "bridge_uds_vessel",
+        "options": [
+          {
+            "selected": true,
+            "text": "IMO9300001",
+            "value": "IMO9300001"
+          }
+        ],
+        "query": "IMO9300001",
+        "skipUrlSync": true,
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "6 hours",
+          "value": "6 hours"
+        },
+        "hide": 2,
+        "label": "Default Incident Window",
+        "name": "bridge_default_incident_window",
+        "options": [
+          {
+            "selected": true,
+            "text": "6 hours",
+            "value": "6 hours"
+          }
+        ],
+        "query": "6 hours",
+        "skipUrlSync": true,
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "24 hours",
+          "value": "24 hours"
+        },
+        "hide": 2,
+        "label": "Default NOC Window",
+        "name": "bridge_default_noc_window",
+        "options": [
+          {
+            "selected": true,
+            "text": "24 hours",
+            "value": "24 hours"
+          }
+        ],
+        "query": "24 hours",
+        "skipUrlSync": true,
+        "type": "constant"
       }
     ]
   },
@@ -1485,7 +1643,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Ship Operations \u2013 Crew / Chief Engineer",
+  "title": "Ship Operations - Legacy Telemetry",
   "uid": "maritime_ship_ops",
   "version": 2
 }

@@ -2,28 +2,85 @@
   "annotations": {
     "list": []
   },
-  "description": "Investigation-focused NOC dashboard for one vessel. Combines operational state, incident timeline, connectivity history, and alert/log context across a wider troubleshooting window.",
+  "description": "Investigation-focused NOC dashboard for one vessel. Use the shared dashboard links to move between NOC support, the incident workbench, fleet view, and the mapped legacy Ship Operations dashboard.",
   "editable": true,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
-  "panels": [
+  "links": [
     {
-      "datasource": null,
-      "gridPos": {
-        "h": 3,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 1,
-      "options": {
-        "content": "## NOC investigation flow\n\nUse `time_window` to set the troubleshooting window. Leave `app_filter` on `All Applications` for vessel-wide investigation, or narrow to one app to focus the timeline and metric history. Historical charts aggregate across the selected app set. Click `app_id` in the tables to open the Scope 1 incident workbench for that vessel/app pair.",
-        "mode": "markdown"
-      },
-      "title": "Workflow",
-      "type": "text"
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Ship Operations (Legacy)",
+      "tooltip": "Legacy telemetry demo mapped to vessel_001 / MV Edge Aurora",
+      "type": "link",
+      "url": "/d/maritime_ship_ops/ship-operations-legacy-telemetry?var-vessel=${bridge_legacy_vessel}"
     },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Fleet Overview",
+      "tooltip": "Fleet-wide UDS health and correlation view",
+      "type": "link",
+      "url": "/d/maritime_fleet_overview/fleet-overview"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "UDS Incident Workbench",
+      "tooltip": "Incident-first view for the selected vessel (24h window)",
+      "type": "link",
+      "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-incident_window=${bridge_default_noc_window}"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "NOC Support",
+      "tooltip": "Stay in the broader troubleshooting view for the selected vessel",
+      "type": "link",
+      "url": "/d/maritime_noc_support/noc-support?var-vessel=${vessel}&var-time_window=${time_window}&var-app_filter=${app_filter}"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Alert Trends",
+      "tooltip": "Predictive alert frequency analysis (rising / falling / stable)",
+      "type": "link",
+      "url": "/d/maritime_alert_trends/alert-trends"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": true,
+      "title": "AI Chat",
+      "tooltip": "Ask the AI assistant about fleet, incidents, or specific vessels",
+      "type": "link",
+      "url": "http://localhost:8000/api/v1/chat"
+    }
+  ],
+  "panels": [
     {
       "datasource": {
         "type": "postgres",
@@ -39,7 +96,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 3
+        "y": 0
       },
       "id": 2,
       "options": {
@@ -81,7 +138,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 3
+        "y": 0
       },
       "id": 3,
       "options": {
@@ -123,7 +180,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 3
+        "y": 0
       },
       "id": 4,
       "options": {
@@ -165,7 +222,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 3
+        "y": 0
       },
       "id": 5,
       "options": {
@@ -229,7 +286,7 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 4
       },
       "id": 6,
       "options": {
@@ -291,7 +348,7 @@
         "h": 12,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 14
       },
       "id": 7,
       "options": {
@@ -353,7 +410,7 @@
         "h": 8,
         "w": 10,
         "x": 0,
-        "y": 29
+        "y": 26
       },
       "id": 8,
       "options": {
@@ -408,6 +465,24 @@
                 ]
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "alert"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "AI Analysis",
+                    "url": "http://localhost:8000/api/v1/uds/analyze/view?vessel=${vessel}&app=${__data.fields.app_id}&alert_name=${__value.raw}&severity=${__data.fields.severity}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -415,7 +490,7 @@
         "h": 8,
         "w": 14,
         "x": 10,
-        "y": 29
+        "y": 26
       },
       "id": 9,
       "options": {
@@ -462,7 +537,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 37
+        "y": 34
       },
       "id": 10,
       "options": {
@@ -506,7 +581,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 37
+        "y": 34
       },
       "id": 11,
       "options": {
@@ -550,7 +625,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 45
+        "y": 42
       },
       "id": 12,
       "options": {
@@ -594,7 +669,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 45
+        "y": 42
       },
       "id": 13,
       "options": {
@@ -638,7 +713,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 53
+        "y": 50
       },
       "id": 14,
       "options": {
@@ -682,7 +757,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 53
+        "y": 50
       },
       "id": 15,
       "options": {
@@ -722,7 +797,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 61
+        "y": 58
       },
       "id": 16,
       "options": {
@@ -828,6 +903,86 @@
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "vessel_001",
+          "value": "vessel_001"
+        },
+        "hide": 2,
+        "label": "Bridge Legacy Vessel",
+        "name": "bridge_legacy_vessel",
+        "options": [
+          {
+            "selected": true,
+            "text": "vessel_001",
+            "value": "vessel_001"
+          }
+        ],
+        "query": "vessel_001",
+        "skipUrlSync": true,
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "IMO9300001",
+          "value": "IMO9300001"
+        },
+        "hide": 2,
+        "label": "Bridge UDS Vessel",
+        "name": "bridge_uds_vessel",
+        "options": [
+          {
+            "selected": true,
+            "text": "IMO9300001",
+            "value": "IMO9300001"
+          }
+        ],
+        "query": "IMO9300001",
+        "skipUrlSync": true,
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "6 hours",
+          "value": "6 hours"
+        },
+        "hide": 2,
+        "label": "Default Incident Window",
+        "name": "bridge_default_incident_window",
+        "options": [
+          {
+            "selected": true,
+            "text": "6 hours",
+            "value": "6 hours"
+          }
+        ],
+        "query": "6 hours",
+        "skipUrlSync": true,
+        "type": "constant"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "24 hours",
+          "value": "24 hours"
+        },
+        "hide": 2,
+        "label": "Default NOC Window",
+        "name": "bridge_default_noc_window",
+        "options": [
+          {
+            "selected": true,
+            "text": "24 hours",
+            "value": "24 hours"
+          }
+        ],
+        "query": "24 hours",
+        "skipUrlSync": true,
+        "type": "constant"
       }
     ]
   },
@@ -839,5 +994,5 @@
   "timezone": "browser",
   "title": "NOC Support",
   "uid": "maritime_noc_support",
-  "version": 1
+  "version": 2
 }

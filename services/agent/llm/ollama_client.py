@@ -8,7 +8,7 @@ agentic loop in analyze.py.
 Configuration:
   OLLAMA_URL              Base URL of Ollama. Default: http://ollama:11434
   OLLAMA_MODEL            Default model to use. Default: llama3.2
-  OLLAMA_TIMEOUT_SECONDS  Chat timeout in seconds. Default: 300
+  OLLAMA_TIMEOUT_SECONDS  Chat timeout in seconds. Default: 600
   STUB_MODE               Set to "true" to skip Ollama and return a
                           placeholder response. Default: false
 """
@@ -20,7 +20,7 @@ import httpx
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
 STUB_MODE = os.getenv("STUB_MODE", "false").lower() == "true"
-OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "300"))
+OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "600"))
 
 # Local LLMs can be slow, especially on CPU-only Docker setups.
 TIMEOUT = OLLAMA_TIMEOUT_SECONDS

@@ -19,11 +19,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from db import init_pool, close_pool
 from routes.analyze import router as analyze_router
+from routes.chat import router as chat_router
 from routes.events  import router as events_router
 from routes.validation import router as validation_router
 from rag.ingest import ingest_if_empty
 
-RAG_AUTO_INGEST_RETRIES = int(os.getenv("RAG_AUTO_INGEST_RETRIES", "24"))
+# Default budget: 120 attempts * 15s = 30 minutes total wait. This is sized
+# to survive a cold-start fresh-volume Ollama model pull (llama3.2 ~2 GB +
+# nomic-embed-text), which on a slow connection can run well past the
+# previous 6-minute (24 * 15s) budget and force a manual agent restart.
+RAG_AUTO_INGEST_RETRIES = int(os.getenv("RAG_AUTO_INGEST_RETRIES", "120"))
 RAG_AUTO_INGEST_DELAY_SECONDS = float(os.getenv("RAG_AUTO_INGEST_DELAY_SECONDS", "15"))
 
 
@@ -55,6 +60,30 @@ async def ensure_agent_schema():
             """
             CREATE INDEX IF NOT EXISTS idx_analyses_event_mode
             ON ai_analyses(event_id, analysis_mode, timestamp DESC)
+            """
+        )
+        await conn.execute(
+            """
+            ALTER TABLE ai_analyses
+            ADD COLUMN IF NOT EXISTS vessel_imo TEXT
+            """
+        )
+        await conn.execute(
+            """
+            ALTER TABLE ai_analyses
+            ADD COLUMN IF NOT EXISTS app_external_id TEXT
+            """
+        )
+        await conn.execute(
+            """
+            ALTER TABLE ai_analyses
+            ADD COLUMN IF NOT EXISTS alert_name TEXT
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_analyses_uds_context
+            ON ai_analyses(vessel_imo, app_external_id, alert_name, timestamp DESC)
             """
         )
 
@@ -127,6 +156,7 @@ app.add_middleware(
 
 # --- Routers --------------------------------------------------------------
 app.include_router(analyze_router, prefix="/api/v1")
+app.include_router(chat_router, prefix="/api/v1")
 app.include_router(events_router,  prefix="/api/v1")
 app.include_router(validation_router, prefix="/api/v1")
 
