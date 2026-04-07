@@ -46,7 +46,7 @@ to `AI Pipeline Health (Developer)` and is intentionally kept outside the main
 demo navigation.
 
 See `docs/SCOPE3_DELIVERY_TASKS.md` for remaining scope 3 tasks.
-See `docs/SCOPE2_TASK_SPLIT.md` for scope 2 task ownership and acceptance criteria.
+Historical task-planning docs are kept under `docs/archive/`.
 
 ## Quick Start
 
@@ -139,14 +139,13 @@ docker compose up -d --build
     |-- architecture.md                # system architecture
     |-- ROADMAP.md                     # backlog and priorities
     |-- SCOPE1_ACCEPTANCE_CHECKLIST.md # repeatable validation flow
-    |-- SCOPE2_TASK_SPLIT.md           # Scope 2 task ownership and status
     |-- SCOPE3_DELIVERY_TASKS.md       # Scope 3 final sprint task definitions
     |-- UDS_dashboard_spec.md          # dashboard panel specifications
     |-- PRODUCTION_GUIDE.md            # deployment and operations guide
     |-- DEMO_SCRIPT.md                 # step-by-step demo walkthrough
     |-- knowledge/                     # RAG knowledge base (17 files)
     |-- thesis/                        # thesis-specific planning docs
-    `-- archive/                       # historical Scope 1 handoff docs
+    `-- archive/                       # historical planning, handoff, and task docs
 ```
 
 ## Architecture
@@ -227,4 +226,4 @@ See `docs/ROADMAP.md` for the full backlog.
 2. Keep changes scoped to your task's file ownership.
 3. Update docs in the same PR when behavior changes.
 4. Run fresh-stack validation after merges.
-5. See `docs/SCOPE2_TASK_SPLIT.md` for current task assignments.
+5. Use `docs/ROADMAP.md` for current backlog and follow-up priorities.

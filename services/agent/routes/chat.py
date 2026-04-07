@@ -30,10 +30,10 @@ GRAFANA_PUBLIC_URL = os.getenv("GRAFANA_PUBLIC_URL", "http://localhost:3000").st
 # so the chat path cannot blow past llama3.2's context window. The full payload
 # is still kept in the trace for the UI.
 MAX_CHAT_TOOL_RESULT_CHARS = 1500
-# UDS-only allowlist. Kept in sync with analyze.py's UDS_FULL_TOOL_NAMES so the
-# chat assistant exposes the same operational toolset and never picks the
-# legacy telemetry/event tools by mistake.
-CHAT_TOOL_NAMES = {
+# UDS chat tools. Kept in sync with analyze.py's UDS_FULL_TOOL_NAMES so the
+# direct UDS routes and the broader chat tool loop share the same operational
+# vocabulary.
+UDS_CHAT_TOOL_NAMES = {
     "get_vessel_app_status",
     "get_vessel_alerts",
     "get_app_metric_history",
@@ -45,6 +45,18 @@ CHAT_TOOL_NAMES = {
     "get_operational_snapshot",
     "get_alert_trend",
 }
+# Legacy telemetry/event tools used for vessel_001 demo questions.
+LEGACY_CHAT_TOOL_NAMES = {
+    "get_telemetry",
+    "get_events",
+    "get_analysis",
+}
+CHAT_TOOL_NAMES = UDS_CHAT_TOOL_NAMES | LEGACY_CHAT_TOOL_NAMES
+UNGROUNDED_WARNING = (
+    "[Warning] Live data was unavailable for this question -- the answer "
+    "below is not grounded in current MCP tool output. Verify against the "
+    "dashboards before acting on it.\n\n"
+)
 
 router = APIRouter(tags=["chat"])
 
@@ -135,6 +147,10 @@ async def run_chat_pipeline(question: str) -> ChatPipelineResult:
     resolved_model = CHAT_MODEL or FALLBACK_MODEL
     docs = await retrieve_context_for_query(question, top_k=CHAT_TOP_K)
     prompt_context = format_context_for_prompt(docs)
+    legacy_direct_result, legacy_direct_failed = await _run_legacy_direct_flow(question, docs)
+    if legacy_direct_result is not None:
+        return _finalize_grounding_result(legacy_direct_result)
+
     direct_plan = _plan_direct_tool_call(question)
 
     if direct_plan is not None:
@@ -152,18 +168,20 @@ async def run_chat_pipeline(question: str) -> ChatPipelineResult:
             )
         ]
         if succeeded:
-            return ChatPipelineResult(
-                answer_text=_summarize_direct_tool_result(
-                    question,
-                    direct_plan.name,
-                    direct_result,
-                ),
-                model_used="direct-mcp-summary",
-                status="completed",
-                retrieved_documents=[_serialize_doc(doc) for doc in docs],
-                tool_calls=tool_calls,
-                live_tools_attempted=True,
-                live_tools_failed=False,
+            return _finalize_grounding_result(
+                ChatPipelineResult(
+                    answer_text=_summarize_direct_tool_result(
+                        question,
+                        direct_plan.name,
+                        direct_result,
+                    ),
+                    model_used="direct-mcp-summary",
+                    status="completed",
+                    retrieved_documents=[_serialize_doc(doc) for doc in docs],
+                    tool_calls=tool_calls,
+                    live_tools_attempted=True,
+                    live_tools_failed=False,
+                )
             )
         # Direct shortcut failed -- fall through to the LLM tool loop so the
         # model can self-correct, but remember that we already attempted live
@@ -192,6 +210,7 @@ async def run_chat_pipeline(question: str) -> ChatPipelineResult:
 
     live_tools_attempted = (
         bool(tool_calls)
+        or legacy_direct_failed
         or direct_plan is not None
         or (not tool_discovery_failed)
     )
@@ -203,24 +222,19 @@ async def run_chat_pipeline(question: str) -> ChatPipelineResult:
         tool_discovery_failed
         or (bool(tool_calls) and not live_tools_succeeded)
         or (direct_plan is not None and not live_tools_succeeded)
+        or (legacy_direct_failed and not live_tools_succeeded)
     )
 
-    if live_tools_failed and status == "completed":
-        warning = (
-            "[Warning] Live data was unavailable for this question -- the answer "
-            "below is not grounded in current MCP tool output. Verify against the "
-            "dashboards before acting on it.\n\n"
+    return _finalize_grounding_result(
+        ChatPipelineResult(
+            answer_text=answer_text,
+            model_used=resolved_model,
+            status=status,
+            retrieved_documents=[_serialize_doc(doc) for doc in docs],
+            tool_calls=tool_calls,
+            live_tools_attempted=live_tools_attempted,
+            live_tools_failed=live_tools_failed,
         )
-        answer_text = warning + answer_text
-
-    return ChatPipelineResult(
-        answer_text=answer_text,
-        model_used=resolved_model,
-        status=status,
-        retrieved_documents=[_serialize_doc(doc) for doc in docs],
-        tool_calls=tool_calls,
-        live_tools_attempted=live_tools_attempted,
-        live_tools_failed=live_tools_failed,
     )
 
 
@@ -344,7 +358,7 @@ async def _run_single_pass_chat(question: str, context: str, model_name: str) ->
 
 
 async def _fetch_chat_tools() -> list[dict]:
-    """Fetch MCP tools and expose the stable 12-tool set to the chat page."""
+    """Fetch MCP tools and expose the supported UDS + legacy chat toolset."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(f"{MCP_URL}/tools", headers=_mcp_headers())
@@ -396,6 +410,10 @@ def _chat_system_prompt(context: str) -> str:
         "Answer the user's question directly and concisely.\n"
         "Use live MCP tools when the question depends on current or historical system data.\n"
         "If a tool call fails, correct the arguments and retry before answering.\n"
+        "For legacy telemetry questions about vessel ids like vessel_001, use the legacy "
+        "event and telemetry tools.\n"
+        "For IMO-based UDS questions about vessels, apps, alerts, fleet state, or incidents, "
+        "use the UDS tools.\n"
         "For questions like 'right now', 'currently', or 'at the moment', use the smallest valid "
         "time window accepted by the tool. Never use zero-hour windows.\n"
         "Use retrieved documentation only as supporting context, not as a substitute for live data.\n"
@@ -472,6 +490,73 @@ def _plan_direct_tool_call(question: str) -> DirectToolPlan | None:
     return None
 
 
+async def _run_legacy_direct_flow(
+    question: str,
+    docs,
+) -> tuple[ChatPipelineResult | None, bool]:
+    """Handle the headline legacy demo question via existing legacy MCP tools."""
+    legacy_vessel_id = _plan_legacy_latest_event_question(question)
+    if legacy_vessel_id is None:
+        return None, False
+
+    event_args = _normalize_tool_arguments(
+        "get_events",
+        {"vessel_id": legacy_vessel_id, "acknowledged": None},
+        question,
+    )
+    events_result, events_succeeded = await _call_chat_tool("get_events", event_args)
+    tool_calls = [
+        ToolCallTrace(
+            name="get_events",
+            arguments=event_args,
+            succeeded=events_succeeded,
+            response_size_chars=len(events_result),
+            response_preview=_preview_text(events_result),
+        )
+    ]
+    if not events_succeeded:
+        return None, True
+
+    latest_event = _extract_latest_legacy_event(events_result)
+    if latest_event is None:
+        return ChatPipelineResult(
+            answer_text=f"No legacy anomaly events were returned for {legacy_vessel_id}.",
+            model_used="direct-mcp-summary",
+            status="completed",
+            retrieved_documents=[_serialize_doc(doc) for doc in docs],
+            tool_calls=tool_calls,
+            live_tools_attempted=True,
+            live_tools_failed=False,
+        ), False
+
+    analysis_args = {"event_id": latest_event["id"]}
+    analysis_result, analysis_succeeded = await _call_chat_tool("get_analysis", analysis_args)
+    tool_calls.append(
+        ToolCallTrace(
+            name="get_analysis",
+            arguments=analysis_args,
+            succeeded=analysis_succeeded,
+            response_size_chars=len(analysis_result),
+            response_preview=_preview_text(analysis_result),
+        )
+    )
+
+    answer_text = _summarize_legacy_event_with_analysis(
+        latest_event,
+        analysis_result if analysis_succeeded else None,
+        analysis_lookup_failed=not analysis_succeeded,
+    )
+    return ChatPipelineResult(
+        answer_text=answer_text,
+        model_used="direct-mcp-summary",
+        status="completed",
+        retrieved_documents=[_serialize_doc(doc) for doc in docs],
+        tool_calls=tool_calls,
+        live_tools_attempted=True,
+        live_tools_failed=not analysis_succeeded,
+    ), False
+
+
 def _summarize_direct_tool_result(question: str, tool_name: str, result_text: str) -> str:
     """Return a fast grounded answer for the most common demo questions."""
     try:
@@ -489,6 +574,13 @@ def _summarize_direct_tool_result(question: str, tool_name: str, result_text: st
         return _summarize_operational_snapshot(payload)
 
     return f"Live data was retrieved for: {question}"
+
+
+def _finalize_grounding_result(result: ChatPipelineResult) -> ChatPipelineResult:
+    if result.live_tools_failed and result.status == "completed":
+        if not result.answer_text.startswith(UNGROUNDED_WARNING):
+            result.answer_text = UNGROUNDED_WARNING + result.answer_text
+    return result
 
 
 def _serialize_doc(doc) -> RetrievedDocument:
@@ -534,6 +626,10 @@ def _normalize_tool_arguments(name: str, arguments: dict, question: str) -> dict
     for key, value in list(normalized.items()):
         if isinstance(value, str) and value.strip().lower() in PSEUDO_NULL_STRINGS:
             normalized[key] = None
+
+    legacy_vessel_id = _extract_legacy_vessel_id(question)
+    if name in {"get_events", "get_telemetry"} and not normalized.get("vessel_id") and legacy_vessel_id:
+        normalized["vessel_id"] = legacy_vessel_id
 
     if name in HOUR_WINDOW_TOOLS:
         normalized["hours"] = _coerce_bounded_int(
@@ -598,6 +694,13 @@ def _extract_vessel_id(question: str) -> str | None:
     return match.group(1).upper() if match.group(1).upper().startswith("IMO") else match.group(1)
 
 
+def _extract_legacy_vessel_id(question: str) -> str | None:
+    match = re.search(r"\b(vessel_\d+)\b", question, re.IGNORECASE)
+    if not match:
+        return None
+    return match.group(1)
+
+
 def _extract_imo_vessel_id(question: str) -> str | None:
     """Return an IMO-format vessel id if present in the question, else None.
 
@@ -612,12 +715,105 @@ def _extract_imo_vessel_id(question: str) -> str | None:
     return match.group(0).upper()
 
 
+def _plan_legacy_latest_event_question(question: str) -> str | None:
+    lower = (question or "").lower()
+    legacy_vessel_id = _extract_legacy_vessel_id(question)
+    if legacy_vessel_id is None:
+        return None
+    if "event" not in lower:
+        return None
+    if not any(token in lower for token in ("latest", "most recent", "newest")):
+        return None
+    if not any(token in lower for token in ("why", "happening", "cause", "reason")):
+        return None
+    return legacy_vessel_id
+
+
 def _coerce_bounded_int(value, default: int, minimum: int, maximum: int) -> int:
     try:
         resolved = int(value)
     except (TypeError, ValueError):
         resolved = default
     return max(minimum, min(resolved, maximum))
+
+
+def _extract_latest_legacy_event(result_text: str) -> dict | None:
+    try:
+        payload = json.loads(result_text)
+    except json.JSONDecodeError:
+        return None
+
+    events = payload.get("events") or []
+    if not events:
+        return None
+    latest_event = events[0]
+    if not isinstance(latest_event, dict):
+        return None
+    return latest_event
+
+
+def _summarize_legacy_event_with_analysis(
+    latest_event: dict,
+    analysis_result_text: str | None,
+    *,
+    analysis_lookup_failed: bool,
+) -> str:
+    event_id = latest_event.get("id", "-")
+    vessel_id = latest_event.get("vessel_id", "unknown vessel")
+    timestamp = latest_event.get("timestamp", "-")
+    severity = str(latest_event.get("severity") or "unknown").lower()
+    event_type = latest_event.get("event_type") or "event"
+    sensor_name = latest_event.get("sensor_name") or "unknown sensor"
+    details = latest_event.get("details")
+
+    parts = [
+        f"The latest event for {vessel_id} is event {event_id}: {severity} {event_type} "
+        f"on {sensor_name} at {timestamp}."
+    ]
+    if details:
+        parts.append(f"Event details: {details}.")
+
+    analysis_payload = None
+    if analysis_result_text:
+        try:
+            analysis_payload = json.loads(analysis_result_text)
+        except json.JSONDecodeError:
+            analysis_payload = None
+
+    analysis = (analysis_payload or {}).get("analysis") if analysis_payload else None
+    if analysis_lookup_failed:
+        parts.append(
+            "The live analysis lookup failed, so I cannot ground the cause of this event right now."
+        )
+        return " ".join(parts)
+
+    if not analysis:
+        parts.append(
+            "No stored AI analysis is available yet, so the exact cause is not currently grounded."
+        )
+        return " ".join(parts)
+
+    analysis_text = (analysis.get("analysis_text") or "").strip()
+    if analysis_text:
+        parts.append(f"Latest AI analysis: {analysis_text}")
+    else:
+        parts.append(
+            "An analysis record exists for this event, but it does not include a cause explanation."
+        )
+
+    suggested_actions = [
+        str(action).strip()
+        for action in (analysis.get("suggested_actions") or [])
+        if str(action).strip()
+    ]
+    if suggested_actions:
+        parts.append(f"Suggested actions: {'; '.join(suggested_actions[:3])}.")
+
+    confidence = analysis.get("confidence")
+    if confidence is not None:
+        parts.append(f"Confidence: {confidence}.")
+
+    return " ".join(parts)
 
 
 def _summarize_fleet_alerts(payload: dict) -> str:
@@ -981,7 +1177,7 @@ _CHAT_HTML_TEMPLATE = """<!doctype html>
         </p>
       </div>
       <div class="card">
-        <div class="label">Example Questions</div>
+        <div class="label">Suggested Questions</div>
         <div class="examples">
           <button class="example-btn" type="button" data-question="Which vessels have critical alerts right now?">Which vessels have critical alerts right now?</button>
           <button class="example-btn" type="button" data-question="What happened on IMO9300001 in the last 6 hours?">What happened on IMO9300001 in the last 6 hours?</button>
