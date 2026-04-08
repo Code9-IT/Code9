@@ -91,7 +91,7 @@ services:
       OLLAMA_QUICK_MODEL: ${OLLAMA_QUICK_MODEL:-}
       OLLAMA_VALIDATION_MODEL: ${OLLAMA_VALIDATION_MODEL:-}
       OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
-      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-300}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-600}
       QUICK_ANALYSIS_TOP_K: ${QUICK_ANALYSIS_TOP_K:-1}
       QUICK_ANALYSIS_MAX_CONTEXT_CHARS: ${QUICK_ANALYSIS_MAX_CONTEXT_CHARS:-900}
       QUICK_ANALYSIS_NUM_PREDICT: ${QUICK_ANALYSIS_NUM_PREDICT:-180}
@@ -186,6 +186,10 @@ services:
   ollama:
     image: ollama/ollama:latest
     container_name: maritime_ollama
+    environment:
+      # Only keep 1 model loaded at a time so llama3.2 gets full 8192
+      # context when both chat and embedding models are used.
+      OLLAMA_MAX_LOADED_MODELS: "1"
     ports:
       - "${OLLAMA_PORT:-11434}:11434"
     volumes:

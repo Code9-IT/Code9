@@ -7,6 +7,7 @@ import html
 import json
 import os
 import re
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
@@ -15,7 +16,7 @@ from fastapi.responses import HTMLResponse
 from db import get_pool
 from llm.ollama_client import chat
 from models import AnalyzeRequest, AnalyzeResponse
-from rag.client import format_context_for_prompt, retrieve_context
+from rag.client import format_context_for_prompt, retrieve_context, retrieve_context_for_query
 
 MCP_URL = os.getenv("MCP_URL", "http://mcp:8001")
 MCP_API_KEY = os.getenv("MCP_API_KEY", "").strip()
@@ -49,8 +50,21 @@ UDS_FULL_TOOL_NAMES = {
     "get_cross_vessel_correlation",
     "get_incident_timeline",
     "get_operational_snapshot",
+    "get_alert_trend",
+}
+# Focused subset for single-vessel alert analysis — excludes fleet-wide
+# tools (get_fleet_status, get_fleet_alerts, get_cross_vessel_correlation)
+# that dilute context and waste LLM tokens on a single-vessel path.
+UDS_SINGLE_VESSEL_TOOL_NAMES = {
+    "get_vessel_app_status",
+    "get_vessel_alerts",
+    "get_app_metric_history",
+    "get_app_logs",
+    "get_incident_timeline",
+    "get_operational_snapshot",
 }
 IN_FLIGHT_ANALYSES: set[int] = set()
+IN_FLIGHT_UDS_ANALYSES: set[str] = set()
 
 router = APIRouter(tags=["analyze"])
 
@@ -270,7 +284,7 @@ async def analyze_event_view(
             id=0,
             event_id=event_id,
             analysis_mode="full",
-            analysis_text="No analysis yet. A background analysis has started. Refresh this page in 30-60 seconds.",
+            analysis_text="No analysis yet. A background analysis has started. This typically takes 2-5 minutes on a local CPU model. The page will auto-refresh.",
             suggested_actions=[],
             confidence=0.0,
             model_used=FULL_MODEL,
@@ -305,9 +319,15 @@ def _render_analysis_html(
 ) -> str:
     """Render analysis response as a readable HTML page."""
     status_norm = (result.status or "").lower()
-    confidence_pct = int(round((result.confidence or 0.0) * 100))
+    confidence_val = result.confidence or 0.0
     if status_norm == "completed":
-        confidence_text = f"{confidence_pct}%"
+        if confidence_val >= 0.75:
+            confidence_text = "High"
+        elif confidence_val >= 0.5:
+            confidence_text = "Medium"
+        else:
+            confidence_text = "Low"
+        confidence_text += " (model confidence)"
     elif status_norm in ("running", "pending"):
         confidence_text = "PENDING"
     else:
@@ -319,7 +339,7 @@ def _render_analysis_html(
     analysis = html.escape(result.analysis_text or "").replace("\n", "<br>")
     actions = list(result.suggested_actions or [])
     if status_norm in ("running", "pending"):
-        actions = ["Wait 30-60 seconds, then refresh this page to see the completed analysis."]
+        actions = ["Analysis is running. This typically takes 2-5 minutes on a local CPU model. The page will auto-refresh."]
     elif status_norm == "failed" and _is_placeholder_actions(actions):
         actions = _failure_actions(result.analysis_text or "")
     if not actions:
@@ -333,24 +353,28 @@ def _render_analysis_html(
 
     view_url = f"http://localhost:8000/api/v1/analyze/{result.event_id}/view"
     refresh_url = f"http://localhost:8000/api/v1/analyze/{result.event_id}/view?refresh=true"
-    rag_tuning_url = "http://localhost:8000/api/v1/validate/dashboard"
 
     notice = ""
     if refresh_started:
         notice = (
             "<div class=\"card\"><div class=\"label\">Background Analysis</div>"
-            "<div class=\"value\">New analysis started. Refresh in 30-60 seconds.</div></div>"
+            "<div class=\"value\">New analysis started. This typically takes 2-5 minutes on a local CPU model. The page will auto-refresh.</div></div>"
         )
     elif refresh_in_progress:
         notice = (
             "<div class=\"card\"><div class=\"label\">Background Analysis</div>"
-            "<div class=\"value\">Analysis is already running. Refresh in 30-60 seconds.</div></div>"
+            "<div class=\"value\">Analysis is running. This typically takes 2-5 minutes on a local CPU model. The page will auto-refresh.</div></div>"
         )
 
     auto_refresh = ""
     if refresh_started or refresh_in_progress or status_norm in ("running", "pending"):
+        # 20-second auto-refresh interval matches the UDS analysis page so
+        # both render paths feel consistent. A shorter interval would just
+        # hammer the agent without making the user-visible wall-clock shorter
+        # because the underlying llama3.2 inference still takes 2-5 minutes
+        # on a local CPU model.
         auto_refresh = (
-            f"<script>setTimeout(function(){{window.location.href='{view_url}';}},8000);</script>"
+            f"<script>setTimeout(function(){{window.location.href='{view_url}';}},20000);</script>"
         )
 
     event_info = f"""
@@ -383,7 +407,6 @@ def _render_analysis_html(
     .status.warn {{ color:var(--warn); }}
     a.btn {{ display:inline-block; margin-top:10px; color:#fff; text-decoration:none; background:#2f6fed; padding:10px 12px; border-radius:8px; }}
     a.btn.secondary {{ background:#38536f; margin-left:8px; }}
-    a.btn.tertiary {{ background:#1f8a6d; margin-left:8px; }}
     ul {{ margin-top:8px; }}
   </style>
 </head>
@@ -400,7 +423,6 @@ def _render_analysis_html(
       <div style="margin-top:10px;"><span class="label">Model</span><div class="value">{model}</div></div>
       <a class="btn" href="http://localhost:3000">Back to Grafana</a>
       <a class="btn secondary" href="{refresh_url}">Run Fresh Analysis</a>
-      <a class="btn tertiary" href="{rag_tuning_url}">Open RAG Tuning</a>
     </div>
     {notice}
     {event_info}
@@ -714,16 +736,22 @@ def _tool_names_for_event(event: dict) -> set[str]:
     return set(LEGACY_FULL_TOOL_NAMES)
 
 
-async def _fetch_mcp_tools(event: dict | None = None) -> list[dict]:
+async def _fetch_mcp_tools(
+    event: dict | None = None,
+    allowed_names: set[str] | None = None,
+) -> list[dict]:
     """Fetch MCP tool definitions and convert them to Ollama's tool format."""
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(f"{MCP_URL}/tools", headers=_mcp_headers())
             resp.raise_for_status()
             mcp_tools = resp.json().get("tools", [])
-        allowed_tool_names = (
-            _tool_names_for_event(event) if event is not None else LEGACY_FULL_TOOL_NAMES | UDS_FULL_TOOL_NAMES
-        )
+        if allowed_names is not None:
+            allowed_tool_names = allowed_names
+        else:
+            allowed_tool_names = (
+                _tool_names_for_event(event) if event is not None else LEGACY_FULL_TOOL_NAMES | UDS_FULL_TOOL_NAMES
+            )
         mcp_tools = [
             tool for tool in mcp_tools if tool.get("name") in allowed_tool_names
         ]
@@ -741,6 +769,28 @@ async def _fetch_mcp_tools(event: dict | None = None) -> list[dict]:
     except Exception as exc:
         print(f"[agent] Could not fetch MCP tools: {exc}")
         return []
+
+
+def _sanitize_tool_arguments(name: str, arguments: dict) -> dict:
+    """Coerce LLM-produced tool arguments to valid types/ranges.
+
+    The local LLM often sends hours as a string or as 0, both of which
+    cause 400 Bad Request from the MCP Pydantic validation layer.
+    """
+    args = dict(arguments)  # shallow copy
+    if "hours" in args:
+        try:
+            h = int(args["hours"])
+        except (TypeError, ValueError):
+            h = 6  # safe default
+        args["hours"] = max(h, 1)  # MCP requires >= 1
+    if "limit" in args:
+        try:
+            lim = int(args["limit"])
+        except (TypeError, ValueError):
+            lim = 50
+        args["limit"] = max(lim, 1)
+    return args
 
 
 async def _call_mcp_tool(name: str, arguments: dict) -> tuple[str, bool]:
@@ -784,20 +834,30 @@ async def _run_tool_loop(
     context: str,
     tools: list[dict],
     model_name: str | None = None,
+    custom_messages: list[dict] | None = None,
+    max_tool_rounds: int | None = None,
 ) -> tuple[str, list[ToolExecutionTrace]]:
     """
     Core agentic loop where the LLM decides whether to call tools.
     Returns final text plus the tool-call trace used to reach it.
+    Pass custom_messages to override the default system/user prompt pair.
     """
-    messages: list[dict] = [
-        {"role": "system", "content": _full_system_prompt(context)},
-        {"role": "user", "content": _user_message(event)},
-    ]
+    if custom_messages is not None:
+        messages: list[dict] = list(custom_messages)
+    else:
+        messages: list[dict] = [
+            {"role": "system", "content": _full_system_prompt(context)},
+            {"role": "user", "content": _user_message(event)},
+        ]
     tool_traces: list[ToolExecutionTrace] = []
     pseudo_tool_retries = 0
+    rounds = max_tool_rounds if max_tool_rounds is not None else MAX_TOOL_CALLS
 
-    for _ in range(MAX_TOOL_CALLS + 1):
-        response = await chat(messages, tools=tools or None, model=model_name)
+    for _ in range(rounds + 1):
+        response = await chat(
+            messages, tools=tools or None, model=model_name,
+            options={"num_ctx": 8192, "temperature": 0.2},
+        )
         tool_calls = response.get("tool_calls")
         content = response.get("content", "")
         if not tool_calls:
@@ -817,7 +877,19 @@ async def _run_tool_loop(
                     )
                     continue
 
-                fallback = await _run_single_pass_analysis(event, context, model_name or FULL_MODEL)
+                if custom_messages is not None:
+                    # UDS or other custom-message path: re-run initial
+                    # messages without tools instead of legacy fallback
+                    resp = await chat(
+                        list(custom_messages),
+                        model=model_name or FULL_MODEL,
+                        options={"num_ctx": 8192, "temperature": 0.2},
+                    )
+                    fallback = resp.get("content", "No analysis generated.")
+                else:
+                    fallback = await _run_single_pass_analysis(
+                        event, context, model_name or FULL_MODEL,
+                    )
                 return fallback, tool_traces
 
             return content or "No analysis generated.", tool_traces
@@ -841,6 +913,7 @@ async def _run_tool_loop(
                     args = {}
             if not isinstance(args, dict):
                 args = {}
+            args = _sanitize_tool_arguments(name, args)
 
             result, succeeded = await _call_mcp_tool(name, args)
             tool_traces.append(
@@ -852,7 +925,14 @@ async def _run_tool_loop(
                     response_preview=_preview_text(result),
                 )
             )
-            messages.append({"role": "tool", "name": name, "content": result})
+            # Truncate large tool responses to prevent Ollama prompt
+            # overflow (llama3.2 context is 4096 tokens).  The trace
+            # keeps the full size; only the LLM sees the trimmed text.
+            MAX_TOOL_RESULT_CHARS = 1500
+            llm_result = result
+            if len(result) > MAX_TOOL_RESULT_CHARS:
+                llm_result = result[:MAX_TOOL_RESULT_CHARS] + "\n... [truncated]"
+            messages.append({"role": "tool", "name": name, "content": llm_result})
 
     return (
         "Analysis incomplete: maximum tool calls reached without a final answer.",
@@ -1172,3 +1252,554 @@ def _failure_actions(error_text: str) -> list[str]:
         "Review agent logs: docker compose logs --tail 120 agent.",
         "Review Ollama logs: docker compose logs --tail 120 ollama.",
     ]
+
+
+# ---------------------------------------------------------------------------
+# UDS AI Analysis -- endpoint, pipeline, persistence, and HTML rendering
+# ---------------------------------------------------------------------------
+
+
+def _uds_analysis_key(vessel_imo: str, app_external_id: str | None, alert_name: str | None = None) -> str:
+    """Unique key for in-flight deduplication."""
+    return f"{vessel_imo}|{app_external_id or ''}|{alert_name or ''}"
+
+
+def _uds_system_prompt(context: str) -> str:
+    rag_section = ""
+    if context and "not yet implemented" not in context:
+        rag_section = f"\nRelevant documentation:\n{context}\n"
+
+    return (
+        "You are a maritime application monitoring analyst.\n"
+        "Use tools to check vessel state, then write your analysis.\n"
+        "Tool rules: hours parameter must be integer >= 1 (use 6). "
+        "Do not repeat failed calls.\n"
+        + rag_section
+        + "\nRespond in this format:\n\n"
+        "**ANALYSIS:**\n[Current state, active alerts, likely causes, impact]\n\n"
+        "**CONFIDENCE:** [0-100]%\n\n"
+        "**SUGGESTED ACTIONS:**\n1. [Action]\n2. [Action]\n3. [Action]\n"
+    )
+
+
+def _uds_user_message(
+    vessel_imo: str,
+    app_external_id: str | None = None,
+    alert_name: str | None = None,
+    severity: str | None = None,
+) -> str:
+    parts = [f"Investigate the current state of vessel {vessel_imo}."]
+    if app_external_id:
+        parts.append(f"Focus on the application: {app_external_id}.")
+    if alert_name:
+        parts.append(f"A '{alert_name}' alert has been raised.")
+    if severity:
+        parts.append(f"Alert severity: {severity}.")
+    parts.append(
+        "\nUse the available tools to check the vessel's application status, "
+        "active alerts, incident timeline, and operational snapshot. "
+        "Then provide your analysis."
+    )
+    return "\n".join(parts)
+
+
+async def run_uds_analysis_pipeline(
+    vessel_imo: str,
+    app_external_id: str | None = None,
+    alert_name: str | None = None,
+    severity: str | None = None,
+    model_name: str | None = None,
+) -> AnalysisPipelineResult:
+    """Full tool-enabled analysis pipeline for UDS context."""
+    resolved_model = model_name or FULL_MODEL
+
+    # RAG retrieval with UDS-specific query
+    query_parts = ["application monitoring", vessel_imo]
+    if app_external_id:
+        query_parts.append(app_external_id)
+    if alert_name:
+        query_parts.append(alert_name)
+    context_docs = await retrieve_context_for_query(" ".join(query_parts))
+    context_text = format_context_for_prompt(context_docs)
+
+    # Fetch UDS tools only -- no legacy get_telemetry/get_events
+    tools = await _fetch_mcp_tools(allowed_names=UDS_SINGLE_VESSEL_TOOL_NAMES)
+
+    # Build UDS-tailored messages and run through the shared tool loop
+    messages = [
+        {"role": "system", "content": _uds_system_prompt(context_text)},
+        {"role": "user", "content": _uds_user_message(
+            vessel_imo, app_external_id, alert_name, severity,
+        )},
+    ]
+
+    try:
+        analysis_text, tool_calls = await _run_tool_loop(
+            {}, context_text, tools,
+            model_name=resolved_model,
+            custom_messages=messages,
+            max_tool_rounds=3,
+        )
+        if not _is_structured_analysis(analysis_text):
+            analysis_text = _coerce_analysis_format(analysis_text)
+        status = "completed"
+        suggested_actions = _parse_suggested_actions(analysis_text)
+        confidence = _parse_confidence(analysis_text)
+    except Exception as exc:
+        error_text = str(exc).strip() or exc.__class__.__name__
+        analysis_text = f"Analysis failed: {error_text}"
+        status = "failed"
+        tool_calls = []
+        suggested_actions = _failure_actions(error_text)
+        confidence = 0.0
+
+    return AnalysisPipelineResult(
+        analysis_text=analysis_text,
+        suggested_actions=suggested_actions,
+        confidence=confidence,
+        model_used=resolved_model,
+        status=status,
+        context_docs=context_docs,
+        tool_calls=tool_calls,
+    )
+
+
+# -- UDS persistence helpers ------------------------------------------------
+
+
+async def _create_pending_uds_analysis(
+    vessel_imo: str,
+    app_external_id: str | None,
+    alert_name: str | None,
+    model_used: str,
+) -> int:
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        return await conn.fetchval(
+            """
+            INSERT INTO ai_analyses
+                (vessel_imo, app_external_id, alert_name, analysis_mode,
+                 analysis_text, suggested_actions, confidence, model_used,
+                 status, retrieved_documents, tool_calls)
+            VALUES ($1, $2, $3, 'full', '', ARRAY[]::text[], 0.0, $4, 'pending',
+                    '[]'::jsonb, '[]'::jsonb)
+            RETURNING id
+            """,
+            vessel_imo,
+            app_external_id,
+            alert_name,
+            model_used,
+        )
+
+
+async def _fetch_latest_uds_analysis(
+    vessel_imo: str,
+    app_external_id: str | None,
+    alert_name: str | None = None,
+    statuses: tuple[str, ...] | None = None,
+):
+    pool = get_pool()
+    base = """
+        SELECT id, vessel_imo, app_external_id, alert_name, analysis_mode,
+               analysis_text, suggested_actions, confidence,
+               model_used, status, retrieved_documents, tool_calls
+        FROM ai_analyses
+        WHERE vessel_imo = $1
+    """
+    params: list = [vessel_imo]
+    idx = 2
+
+    if app_external_id:
+        base += f" AND app_external_id = ${idx}"
+        params.append(app_external_id)
+        idx += 1
+    else:
+        base += " AND app_external_id IS NULL"
+
+    if alert_name:
+        base += f" AND alert_name = ${idx}"
+        params.append(alert_name)
+        idx += 1
+    else:
+        base += " AND alert_name IS NULL"
+
+    if statuses:
+        base += f" AND status = ANY(${idx}::text[])"
+        params.append(list(statuses))
+
+    base += " ORDER BY timestamp DESC, id DESC LIMIT 1"
+
+    async with pool.acquire() as conn:
+        return await conn.fetchrow(base, *params)
+
+
+async def _run_uds_analysis_background(
+    vessel_imo: str,
+    app_external_id: str | None = None,
+    alert_name: str | None = None,
+    severity: str | None = None,
+) -> None:
+    """Run a UDS analysis in the background; guard against duplicate jobs."""
+    key = _uds_analysis_key(vessel_imo, app_external_id, alert_name)
+    if key in IN_FLIGHT_UDS_ANALYSES:
+        return
+    IN_FLIGHT_UDS_ANALYSES.add(key)
+    analysis_id: int | None = None
+    try:
+        latest = await _fetch_latest_uds_analysis(
+            vessel_imo, app_external_id, alert_name,
+            statuses=("pending", "running"),
+        )
+        if latest is not None:
+            return
+
+        analysis_id = await _create_pending_uds_analysis(
+            vessel_imo, app_external_id, alert_name, FULL_MODEL,
+        )
+        await _update_analysis_status(analysis_id, "running")
+        result = await run_uds_analysis_pipeline(
+            vessel_imo, app_external_id, alert_name, severity,
+            model_name=FULL_MODEL,
+        )
+        await _update_analysis_result(analysis_id, result)
+    except Exception as exc:
+        print(f"[agent] UDS analysis failed for {vessel_imo}/{app_external_id}: {exc}")
+        if analysis_id is not None:
+            error_text = str(exc).strip() or exc.__class__.__name__
+            await _update_analysis_result(
+                analysis_id,
+                AnalysisPipelineResult(
+                    analysis_text=f"Analysis failed: {error_text}",
+                    suggested_actions=_failure_actions(error_text),
+                    confidence=0.0,
+                    model_used=FULL_MODEL,
+                    status="failed",
+                    context_docs=[],
+                    tool_calls=[],
+                ),
+            )
+    finally:
+        IN_FLIGHT_UDS_ANALYSES.discard(key)
+
+
+# -- UDS view endpoint (Grafana data link target) ---------------------------
+
+
+@router.get("/uds/analyze/view", response_class=HTMLResponse)
+async def uds_analyze_view(
+    background_tasks: BackgroundTasks,
+    vessel: str = Query(..., description="Vessel IMO number"),
+    app: str | None = Query(default=None, description="Application external ID"),
+    alert_name: str | None = Query(default=None, description="Alert name for context"),
+    severity: str | None = Query(default=None, description="Alert severity for context"),
+    refresh: bool = Query(default=False),
+):
+    """Browser-friendly UDS analysis page linked from Grafana dashboards."""
+    vessel_imo = vessel.strip()
+    app_external_id = app.strip() if app else None
+    alert_name_clean = alert_name.strip() if alert_name else None
+
+    key = _uds_analysis_key(vessel_imo, app_external_id, alert_name_clean)
+    refresh_started = False
+
+    active = await _fetch_latest_uds_analysis(
+        vessel_imo, app_external_id, alert_name_clean,
+        statuses=("pending", "running"),
+    )
+    refresh_in_progress = key in IN_FLIGHT_UDS_ANALYSES or active is not None
+
+    if refresh and not refresh_in_progress:
+        background_tasks.add_task(
+            _run_uds_analysis_background, vessel_imo, app_external_id,
+            alert_name_clean, severity,
+        )
+        refresh_started = True
+        refresh_in_progress = True
+
+    latest = active
+    if latest is None:
+        latest = await _fetch_latest_uds_analysis(
+            vessel_imo, app_external_id, alert_name_clean,
+            statuses=("completed", "failed"),
+        )
+
+    # Auto-trigger a new analysis when there is no result yet or only
+    # a failed one from a previous attempt.
+    should_auto_trigger = latest is None or (
+        latest is not None and latest["status"] == "failed"
+    )
+    if should_auto_trigger:
+        if not refresh_in_progress:
+            background_tasks.add_task(
+                _run_uds_analysis_background, vessel_imo, app_external_id,
+                alert_name_clean, severity,
+            )
+            refresh_started = True
+            refresh_in_progress = True
+
+        if latest is None or latest["status"] == "failed":
+            return HTMLResponse(_render_uds_analysis_html(
+                analysis_id=0,
+                vessel_imo=vessel_imo,
+                app_external_id=app_external_id,
+                alert_name=alert_name,
+                severity=severity,
+                analysis_text="A new background analysis has started. "
+                              "This typically takes 2-5 minutes. The page will auto-refresh.",
+                suggested_actions=[],
+                confidence=0.0,
+                model_used=FULL_MODEL,
+                status="running",
+                retrieved_documents=[],
+                tool_calls=[],
+                refresh_started=refresh_started,
+                refresh_in_progress=refresh_in_progress,
+            ))
+
+    row = dict(latest)
+    return HTMLResponse(_render_uds_analysis_html(
+        analysis_id=row["id"],
+        vessel_imo=vessel_imo,
+        app_external_id=app_external_id or row.get("app_external_id"),
+        alert_name=alert_name,
+        severity=severity,
+        analysis_text=row.get("analysis_text") or "",
+        suggested_actions=list(row.get("suggested_actions") or []),
+        confidence=float(row.get("confidence") or 0.0),
+        model_used=row.get("model_used") or FULL_MODEL,
+        status=row.get("status") or "pending",
+        retrieved_documents=_deserialize_retrieved_documents(row.get("retrieved_documents")),
+        tool_calls=_deserialize_tool_calls(row.get("tool_calls")),
+        refresh_started=refresh_started,
+        refresh_in_progress=refresh_in_progress,
+    ))
+
+
+# -- UDS HTML rendering -----------------------------------------------------
+
+
+def _render_uds_analysis_html(
+    *,
+    analysis_id: int,
+    vessel_imo: str,
+    app_external_id: str | None,
+    alert_name: str | None,
+    severity: str | None,
+    analysis_text: str,
+    suggested_actions: list[str],
+    confidence: float,
+    model_used: str,
+    status: str,
+    retrieved_documents: list,
+    tool_calls: list,
+    refresh_started: bool = False,
+    refresh_in_progress: bool = False,
+) -> str:
+    """Render a UDS analysis as a self-contained HTML page."""
+    status_norm = (status or "").lower()
+    confidence_val = confidence or 0.0
+    if status_norm == "completed":
+        if confidence_val >= 0.75:
+            confidence_text = "High"
+        elif confidence_val >= 0.5:
+            confidence_text = "Medium"
+        else:
+            confidence_text = "Low"
+        confidence_text += " (model confidence)"
+    elif status_norm in ("running", "pending"):
+        confidence_text = "PENDING"
+    else:
+        confidence_text = "N/A"
+
+    status_label = html.escape((status or "unknown").upper())
+    status_class = "ok" if status_norm == "completed" else "warn"
+    model_text = html.escape(model_used or "unknown")
+    analysis_escaped = html.escape(analysis_text or "").replace("\n", "<br>")
+
+    actions = list(suggested_actions or [])
+    if status_norm in ("running", "pending"):
+        actions = ["Analysis is running. This typically takes 2-5 minutes. The page will auto-refresh."]
+    elif status_norm == "failed" and _is_placeholder_actions(actions):
+        actions = _failure_actions(analysis_text or "")
+    if not actions:
+        actions = ["Investigate further"]
+    actions_html = "".join(f"<li>{html.escape(a)}</li>" for a in actions)
+
+    # Build query string for page URLs
+    qs: dict[str, str] = {"vessel": vessel_imo}
+    if app_external_id:
+        qs["app"] = app_external_id
+    if alert_name:
+        qs["alert_name"] = alert_name
+    if severity:
+        qs["severity"] = severity
+    base_qs = urlencode(qs)
+    view_url = f"http://localhost:8000/api/v1/uds/analyze/view?{base_qs}"
+    refresh_url = f"{view_url}&refresh=true"
+
+    vessel_display = html.escape(vessel_imo)
+    app_display = html.escape(app_external_id or "All applications")
+    alert_display = html.escape(alert_name or "-")
+    severity_display = html.escape(severity or "-")
+
+    # Notice banner
+    notice = ""
+    if refresh_started:
+        notice = (
+            '<div class="card"><div class="label">Background Analysis</div>'
+            '<div class="value">New analysis started. This typically takes 2-5 minutes.</div></div>'
+        )
+    elif refresh_in_progress:
+        notice = (
+            '<div class="card"><div class="label">Background Analysis</div>'
+            '<div class="value">Analysis is running. This typically takes 2-5 minutes.</div></div>'
+        )
+
+    # Auto-refresh while analysis is pending
+    auto_refresh = ""
+    if refresh_started or refresh_in_progress or status_norm in ("running", "pending"):
+        auto_refresh = (
+            f'<script>setTimeout(function(){{window.location.href="{view_url}";}},20000);</script>'
+        )
+
+    # Tool-call trace table
+    tool_calls_html = _render_tool_calls_section(tool_calls)
+
+    # Retrieved documents section
+    docs_html = _render_retrieved_docs_section(retrieved_documents)
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UDS Analysis #{analysis_id} &mdash; {vessel_display}</title>
+  <style>
+    :root {{ --bg:#0b1220; --card:#131e33; --ink:#e9eef8; --muted:#9fb0cf; --ok:#1fbf75; --warn:#f0ad4e; --line:#24314f; }}
+    body {{ margin:0; font-family:Segoe UI, Arial, sans-serif; background:linear-gradient(180deg,#0b1220,#0d1729); color:var(--ink); }}
+    .wrap {{ max-width:960px; margin:24px auto; padding:0 16px; }}
+    .card {{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px; }}
+    .meta {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }}
+    .label {{ color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }}
+    .value {{ margin-top:4px; font-size:15px; }}
+    .status.ok {{ color:var(--ok); }}
+    .status.warn {{ color:var(--warn); }}
+    a.btn {{ display:inline-block; margin-top:10px; color:#fff; text-decoration:none; background:#2f6fed; padding:10px 12px; border-radius:8px; font-size:14px; }}
+    a.btn.secondary {{ background:#38536f; margin-left:8px; }}
+    ul {{ margin-top:8px; }}
+    table.trace {{ width:100%; border-collapse:collapse; margin-top:8px; font-size:13px; }}
+    table.trace th, table.trace td {{ padding:6px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }}
+    table.trace th {{ color:var(--muted); }}
+    .doc-item {{ margin-bottom:8px; padding:8px; border:1px solid var(--line); border-radius:6px; }}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h2 style="margin:0 0 10px 0;">UDS AI Analysis</h2>
+      <div class="meta">
+        <div><div class="label">Analysis ID</div><div class="value">{analysis_id}</div></div>
+        <div><div class="label">Confidence</div><div class="value">{confidence_text}</div></div>
+        <div><div class="label">Status</div><div class="value status {status_class}">{status_label}</div></div>
+        <div><div class="label">Model</div><div class="value">{model_text}</div></div>
+      </div>
+      <a class="btn" href="http://localhost:3000">Back to Grafana</a>
+      <a class="btn secondary" href="{refresh_url}">Run Fresh Analysis</a>
+    </div>
+    {notice}
+    <div class="card">
+      <div class="label">UDS Context</div>
+      <div class="meta" style="margin-top:10px;">
+        <div><div class="label">Vessel</div><div class="value">{vessel_display}</div></div>
+        <div><div class="label">Application</div><div class="value">{app_display}</div></div>
+        <div><div class="label">Alert</div><div class="value">{alert_display}</div></div>
+        <div><div class="label">Severity</div><div class="value">{severity_display}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="label">Analysis</div>
+      <div class="value" style="line-height:1.45;">{analysis_escaped}</div>
+    </div>
+    <div class="card">
+      <div class="label">Suggested Actions</div>
+      <ul>{actions_html}</ul>
+    </div>
+    {tool_calls_html}
+    {docs_html}
+  </div>
+  {auto_refresh}
+</body>
+</html>"""
+
+
+def _render_tool_calls_section(tool_calls: list) -> str:
+    """Render the MCP tool-call trace as an HTML card."""
+    if not tool_calls:
+        return (
+            '<div class="card"><div class="label">MCP Tool Calls</div>'
+            '<div class="value" style="color:var(--muted)">'
+            'No tools were called during this analysis.</div></div>'
+        )
+
+    rows: list[str] = []
+    for tc in tool_calls:
+        if isinstance(tc, dict):
+            name = html.escape(tc.get("name", ""))
+            args = html.escape(json.dumps(tc.get("arguments", {}), ensure_ascii=True))
+            ok = tc.get("succeeded", False)
+            preview = html.escape((tc.get("response_preview", "") or "")[:200])
+            size = tc.get("response_size_chars", 0)
+        else:
+            name = html.escape(tc.name)
+            args = html.escape(json.dumps(tc.arguments, ensure_ascii=True))
+            ok = tc.succeeded
+            preview = html.escape(tc.response_preview[:200])
+            size = tc.response_size_chars
+        icon = '<span style="color:var(--ok)">OK</span>' if ok else '<span style="color:#e74c3c">FAIL</span>'
+        rows.append(
+            f"<tr><td>{name}</td><td style='font-size:12px'>{args}</td>"
+            f"<td>{icon}</td><td>{size}</td>"
+            f"<td style='font-size:12px'>{preview}</td></tr>"
+        )
+    return (
+        f'<div class="card">'
+        f'<div class="label">MCP Tool Calls ({len(tool_calls)} calls)</div>'
+        f'<table class="trace"><tr><th>Tool</th><th>Arguments</th>'
+        f'<th>Status</th><th>Size</th><th>Preview</th></tr>'
+        f'{"".join(rows)}</table></div>'
+    )
+
+
+def _render_retrieved_docs_section(documents: list) -> str:
+    """Render retrieved RAG documents as an HTML card."""
+    if not documents:
+        return (
+            '<div class="card"><div class="label">Retrieved Documents</div>'
+            '<div class="value" style="color:var(--muted)">'
+            'No documents were retrieved.</div></div>'
+        )
+
+    items: list[str] = []
+    for doc in documents:
+        if isinstance(doc, dict):
+            title = html.escape(doc.get("title", ""))
+            source = html.escape(doc.get("source", ""))
+            sim = doc.get("similarity", 0)
+            preview = html.escape(doc.get("content_preview", ""))
+        else:
+            title = html.escape(getattr(doc, "title", ""))
+            source = html.escape(getattr(doc, "source", ""))
+            sim = getattr(doc, "similarity", 0)
+            preview = html.escape(getattr(doc, "content_preview", getattr(doc, "content", ""))[:240])
+        items.append(
+            f'<div class="doc-item">'
+            f'<div style="font-weight:600">{title}</div>'
+            f'<div style="font-size:12px;color:var(--muted)">Source: {source} &middot; '
+            f'Similarity: {sim:.2f}</div>'
+            f'<div style="font-size:13px;margin-top:4px">{preview}</div></div>'
+        )
+    return (
+        f'<div class="card">'
+        f'<div class="label">Retrieved Documents ({len(documents)} docs)</div>'
+        f'<div style="margin-top:8px">{"".join(items)}</div></div>'
+    )

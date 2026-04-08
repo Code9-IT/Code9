@@ -58,7 +58,11 @@ CREATE TABLE IF NOT EXISTS ai_analyses (
     model_used          TEXT,                   -- e.g. 'ollama/llama3' or 'stub'
     status              TEXT        NOT NULL DEFAULT 'pending', -- pending | running | completed | failed
     retrieved_documents JSONB       NOT NULL DEFAULT '[]'::jsonb,
-    tool_calls          JSONB       NOT NULL DEFAULT '[]'::jsonb
+    tool_calls          JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    -- UDS analysis context (NULL for legacy event-based analyses)
+    vessel_imo          TEXT,
+    app_external_id     TEXT,
+    alert_name          TEXT
 );
 
 -- --- INDEXES ---------------------------------------------------------------
@@ -68,3 +72,4 @@ CREATE INDEX IF NOT EXISTS idx_events_vessel_time     ON events     (vessel_id, 
 CREATE INDEX IF NOT EXISTS idx_events_unacked         ON events     (acknowledged) WHERE acknowledged = FALSE;
 CREATE INDEX IF NOT EXISTS idx_analyses_event         ON ai_analyses(event_id);
 CREATE INDEX IF NOT EXISTS idx_analyses_event_mode    ON ai_analyses(event_id, analysis_mode, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_analyses_uds_context ON ai_analyses(vessel_imo, app_external_id, alert_name, timestamp DESC);

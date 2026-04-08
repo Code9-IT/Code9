@@ -1,7 +1,8 @@
 # Archive
 
-These documents are historical records from Scope 1 development. They are kept
-for reference but are no longer the active project documentation.
+These documents are historical records from earlier scope work, task planning,
+and delivery coordination. They are kept for reference but are no longer the
+active project documentation.
 
 For current docs, see the parent `docs/` directory and `CLAUDE.md` at the repo root.
 
@@ -14,4 +15,6 @@ For current docs, see the parent `docs/` directory and `CLAUDE.md` at the repo r
 | `NEXT_STEPS.md` | Post-Scope-1 finalization plan (replaced by `docs/ROADMAP.md`) |
 | `FUTURE_CHECKS.md` | Security/gaps backlog (replaced by `docs/ROADMAP.md`) |
 | `WORK_DISTRIBUTION.md` | Original 4-person parallel work guide (replaced by `docs/SCOPE2_TASK_SPLIT.md`) |
+| `SCOPE2_TASK_SPLIT.md` | Scope 2 ownership, acceptance criteria, and completion status |
+| `SCOPE3_TASK3_IMPLEMENTATION_CHECKLIST.md` | Detailed implementation checklist for Scope 3 Task 3 |
 | `underveisNotater.md` | Technical decisions log in Norwegian (LLM choice, MCP implementation) |

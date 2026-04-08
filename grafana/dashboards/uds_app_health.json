@@ -1,6 +1,6 @@
 {
   "annotations": {"list": []},
-  "description": "UDS application health dashboard. Shows AI pipeline metrics, events, telemetry ingestion and unacknowledged alarms.",
+  "description": "Developer-only AI pipeline health dashboard. Shows analysis latency, error rate, telemetry ingestion, and unacknowledged legacy alarms. This dashboard is intentionally outside the main demo navigation.",
   "editable": true,
   "graphTooltip": 1,
   "id": null,
@@ -10,7 +10,7 @@
       "collapsed": false,
       "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
       "id": 100,
-      "title": "UDS App Health",
+      "title": "AI Pipeline Health (Developer)",
       "type": "row"
     },
     {
@@ -79,14 +79,14 @@
   "refresh": "10s",
   "schemaVersion": 39,
   "style": "dark",
-  "tags": ["maritime","uds-health","agentic-observability"],
+  "tags": ["maritime","uds-health","agentic-observability","developer"],
   "templating": {"list": [
     {"current":{"selected":true,"text":"vessel_001","value":"vessel_001"},"datasource":{"type":"postgres","uid":"timescaledb"},"definition":"SELECT DISTINCT vessel_id FROM telemetry ORDER BY vessel_id","description":"Filter panels by vessel id","hide":0,"includeAll":false,"label":"Vessel","multi":false,"name":"vessel","options":[],"query":"SELECT DISTINCT vessel_id FROM telemetry ORDER BY vessel_id","refresh":2,"regex":"","skipUrlSync":false,"sort":1,"type":"query"}
   ]},
   "time": {"from": "now-1h","to": "now"},
   "timepicker": {},
   "timezone": "browser",
-  "title": "UDS App Health",
+  "title": "AI Pipeline Health (Developer)",
   "uid": "maritime_uds_app_health",
-  "version": 1
+  "version": 2
 }

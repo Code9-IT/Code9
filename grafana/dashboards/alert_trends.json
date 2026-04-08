@@ -1,0 +1,281 @@
+{
+  "uid": "maritime_alert_trends",
+  "title": "Alert Trends",
+  "description": "Predictive alert frequency analysis -- rising, stable, or falling trends across the fleet and per vessel.",
+  "tags": ["uds", "predictive", "alerts"],
+  "timezone": "utc",
+  "editable": true,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "refresh": "5m",
+  "schemaVersion": 39,
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Ship Operations (Legacy)",
+      "tooltip": "Legacy telemetry demo mapped to vessel_001 / MV Edge Aurora",
+      "type": "link",
+      "url": "/d/maritime_ship_ops/ship-operations-legacy-telemetry"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Fleet Overview",
+      "tooltip": "Fleet-wide UDS health and correlation view",
+      "type": "link",
+      "url": "/d/maritime_fleet_overview/fleet-overview"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "UDS Incident Workbench",
+      "tooltip": "Single-vessel incident-first UDS view",
+      "type": "link",
+      "url": "/d/maritime_uds_monitoring/uds-incident-workbench"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "NOC Support",
+      "tooltip": "Broader troubleshooting view used by NOC operators",
+      "type": "link",
+      "url": "/d/maritime_noc_support/noc-support"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Alert Trends",
+      "tooltip": "Predictive alert frequency analysis (current view)",
+      "type": "link",
+      "url": "/d/maritime_alert_trends/alert-trends"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": true,
+      "title": "AI Chat",
+      "tooltip": "Ask the AI assistant about fleet, incidents, or specific vessels",
+      "type": "link",
+      "url": "http://localhost:8000/api/v1/chat"
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "vessel",
+        "type": "query",
+        "label": "Vessel",
+        "query": "SELECT name || ' (' || imo_nr || ')' AS __text, imo_nr AS __value FROM udslocations ORDER BY name;",
+        "datasource": { "type": "postgres", "uid": "timescaledb" },
+        "includeAll": true,
+        "allValue": "__all",
+        "current": { "text": "All", "value": "__all" },
+        "refresh": 1,
+        "multi": false
+      },
+      {
+        "name": "severity",
+        "type": "custom",
+        "label": "Severity",
+        "query": "critical,warning,info",
+        "includeAll": true,
+        "allValue": "__all",
+        "current": { "text": "All", "value": "__all" },
+        "multi": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Alert Frequency Over Time",
+      "description": "Number of new alerts per 4-hour bucket. A rising pattern suggests worsening conditions.",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('4 hours', al.starts_at) AS time,\n  COUNT(*)::int AS \"Alert Count\"\nFROM alerts al\nJOIN udslocations u ON u.id = al.uds_location_id\nWHERE al.starts_at >= $__timeFrom()\n  AND al.starts_at <= $__timeTo()\n  AND ('$vessel' = '__all' OR u.imo_nr = '$vessel')\n  AND ('$severity' = '__all' OR LOWER(al.severity) = LOWER('$severity'))\nGROUP BY time\nORDER BY time ASC;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 60,
+            "barAlignment": 0,
+            "gradientMode": "scheme",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "showPoints": "auto"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red", "value": 10 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 2,
+      "title": "Alert Frequency by Vessel",
+      "description": "Per-vessel alert counts over time to compare which vessels are trending worse.",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 10 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('4 hours', al.starts_at) AS time,\n  u.name AS metric,\n  COUNT(*)::int AS value\nFROM alerts al\nJOIN udslocations u ON u.id = al.uds_location_id\nWHERE al.starts_at >= $__timeFrom()\n  AND al.starts_at <= $__timeTo()\n  AND ('$vessel' = '__all' OR u.imo_nr = '$vessel')\n  AND ('$severity' = '__all' OR LOWER(al.severity) = LOWER('$severity'))\nGROUP BY time, u.name\nORDER BY time ASC;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "pointSize": 5,
+            "showPoints": "auto",
+            "spanNulls": true
+          }
+        }
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 3,
+      "title": "Alert Severity Breakdown",
+      "description": "Distribution of alert severities over time. Watch for increasing critical alerts.",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "SELECT\n  time_bucket('4 hours', al.starts_at) AS time,\n  al.severity AS metric,\n  COUNT(*)::int AS value\nFROM alerts al\nJOIN udslocations u ON u.id = al.uds_location_id\nWHERE al.starts_at >= $__timeFrom()\n  AND al.starts_at <= $__timeTo()\n  AND ('$vessel' = '__all' OR u.imo_nr = '$vessel')\nGROUP BY time, al.severity\nORDER BY time ASC;",
+          "format": "time_series",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 70,
+            "stacking": { "mode": "normal" },
+            "lineWidth": 0
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "critical" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "warning" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "info" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue", "mode": "fixed" } }]
+          }
+        ]
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Current Trend Summary",
+      "description": "Per-vessel rising / stable / falling judgement. Compares the most recent half of the dashboard time window against the earlier half. Honours the vessel and severity filters.",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "postgres", "uid": "timescaledb" },
+      "targets": [
+        {
+          "rawSql": "WITH window AS (\n  SELECT\n    $__timeFrom()::timestamptz AS t_from,\n    $__timeTo()::timestamptz   AS t_to\n),\nbuckets AS (\n  SELECT\n    u.name AS vessel,\n    CASE\n      WHEN al.starts_at >= (SELECT t_from + (t_to - t_from) / 2 FROM window) THEN 'recent'\n      ELSE 'earlier'\n    END AS period,\n    COUNT(*)::int AS cnt\n  FROM alerts al\n  JOIN udslocations u ON u.id = al.uds_location_id\n  WHERE al.starts_at >= (SELECT t_from FROM window)\n    AND al.starts_at <= (SELECT t_to   FROM window)\n    AND ('$vessel' = '__all' OR u.imo_nr = '$vessel')\n    AND ('$severity' = '__all' OR LOWER(al.severity) = LOWER('$severity'))\n  GROUP BY u.name, period\n)\nSELECT\n  vessel AS \"Vessel\",\n  COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) AS \"Alerts (earlier half)\",\n  COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'),  0) AS \"Alerts (recent half)\",\n  CASE\n    WHEN COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'),  0) +\n         COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) < 4\n      THEN 'INSUFFICIENT_DATA'\n    WHEN COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'),  0) >\n         COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) * 1.25\n      THEN 'RISING'\n    WHEN COALESCE(MAX(cnt) FILTER (WHERE period = 'recent'),  0) <\n         COALESCE(MAX(cnt) FILTER (WHERE period = 'earlier'), 0) * 0.75\n      THEN 'FALLING'\n    ELSE 'STABLE'\n  END AS \"Trend\"\nFROM buckets\nGROUP BY vessel\nORDER BY vessel;",
+          "format": "table",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Trend" },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "RISING":            { "color": "red",   "text": "RISING" } } },
+                  { "type": "value", "options": { "FALLING":           { "color": "green", "text": "FALLING" } } },
+                  { "type": "value", "options": { "STABLE":            { "color": "blue",  "text": "STABLE" } } },
+                  { "type": "value", "options": { "INSUFFICIENT_DATA": { "color": "text",  "text": "INSUFFICIENT DATA" } } }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
+    }
+  ]
+}
