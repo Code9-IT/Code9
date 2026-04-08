@@ -575,6 +575,16 @@ Do not ask your AI to:
 
 # WORKSTREAM B: Orchestrator + API
 
+## Status
+
+- Status: `DONE`
+- Verified: `2026-04-09`
+- Acceptance met:
+  - `POST /api/v1/dynamic/trigger` produces dashboard UID `maritime_dynamic_incident` in Grafana
+  - `GET /api/v1/dynamic/status` responds successfully
+  - `explicit_context` and `latest_firing_alert` were both exercised
+  - MCP-backed context collection, scenario selection, and Grafana upsert were verified end-to-end
+
 ## Context
 
 This workstream owns the new dynamic flow inside the existing `agent` service.

@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from db import init_pool, close_pool
 from routes.analyze import router as analyze_router
 from routes.chat import router as chat_router
+from routes.dynamic_dashboard import router as dynamic_dashboard_router
 from routes.events  import router as events_router
 from routes.validation import router as validation_router
 from rag.ingest import ingest_if_empty
@@ -84,6 +85,37 @@ async def ensure_agent_schema():
             """
             CREATE INDEX IF NOT EXISTS idx_analyses_uds_context
             ON ai_analyses(vessel_imo, app_external_id, alert_name, timestamp DESC)
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS dynamic_dashboard_runs (
+                id BIGSERIAL PRIMARY KEY,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('UTC', now()),
+                trigger_mode TEXT NOT NULL,
+                source_alert_fingerprint VARCHAR(255),
+                vessel_imo VARCHAR(255) NOT NULL,
+                app_external_id VARCHAR(255),
+                alert_name VARCHAR(255),
+                severity VARCHAR(50),
+                scenario_key VARCHAR(100) NOT NULL,
+                dashboard_uid VARCHAR(255) NOT NULL,
+                summary TEXT NOT NULL DEFAULT '',
+                used_tools_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+                dashboard_json JSONB NOT NULL DEFAULT '{}'::jsonb
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_dynamic_dashboard_runs_created_at
+            ON dynamic_dashboard_runs(created_at DESC)
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_dynamic_dashboard_runs_vessel_app
+            ON dynamic_dashboard_runs(vessel_imo, app_external_id, created_at DESC)
             """
         )
 
@@ -157,6 +189,7 @@ app.add_middleware(
 # --- Routers --------------------------------------------------------------
 app.include_router(analyze_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
+app.include_router(dynamic_dashboard_router, prefix="/api/v1")
 app.include_router(events_router,  prefix="/api/v1")
 app.include_router(validation_router, prefix="/api/v1")
 
