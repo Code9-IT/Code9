@@ -63,12 +63,16 @@ class RetrievalValidationCaseResult(BaseModel):
     expected_sources: List[str]
     matched_expected_source: bool
     retrieved_documents: List[RetrievedDocument]
+    rag_available: bool = True
+    rag_error: Optional[str] = None
 
 
 class RetrievalValidationResponse(BaseModel):
     """Aggregated retrieval validation summary."""
     total_cases: int
     matched_cases: int
+    rag_available: bool = True
+    rag_error: Optional[str] = None
     requested_top_k: Optional[int] = None
     requested_min_similarity: Optional[float] = None
     results: List[RetrievalValidationCaseResult]

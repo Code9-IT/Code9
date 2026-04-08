@@ -29,6 +29,16 @@ class RAGDocument:
     similarity: float = 0.0
 
 
+@dataclass
+class RAGRetrievalResult:
+    """Structured retrieval result that distinguishes infra failures from empty results."""
+
+    documents: List[RAGDocument]
+    available: bool  # True when RAG infra (embedding model + DB) is reachable
+    error: str | None = None  # Human-readable error when available is False
+    error_stage: str | None = None  # 'embedding' | 'query' | None
+
+
 async def retrieve_context(
     event_type: str,
     sensor_name: str,
@@ -53,7 +63,23 @@ async def retrieve_context_for_query(
     top_k: int | None = None,
     min_similarity: float | None = None,
 ) -> List[RAGDocument]:
-    """Retrieve top knowledge chunks for a free-form query."""
+    """Retrieve top knowledge chunks for a free-form query.
+
+    Backward-compatible wrapper: returns [] on infra failure (same as before).
+    Use retrieve_context_for_query_with_status() for structured error info.
+    """
+    result = await retrieve_context_for_query_with_status(
+        query, top_k=top_k, min_similarity=min_similarity
+    )
+    return result.documents
+
+
+async def retrieve_context_for_query_with_status(
+    query: str,
+    top_k: int | None = None,
+    min_similarity: float | None = None,
+) -> RAGRetrievalResult:
+    """Retrieve top knowledge chunks with explicit availability/error reporting."""
     resolved_top_k = max(int(top_k or RAG_TOP_K), 1)
     resolved_min_similarity = (
         RAG_MIN_SIMILARITY if min_similarity is None else float(min_similarity)
@@ -63,7 +89,12 @@ async def retrieve_context_for_query(
         embedding = await _embed_text(query)
     except Exception as exc:
         print(f"[rag] Embedding failed: {exc}")
-        return []
+        return RAGRetrievalResult(
+            documents=[],
+            available=False,
+            error=f"Embedding model unavailable: {exc}",
+            error_stage="embedding",
+        )
 
     vector_literal = _to_pgvector_literal(embedding)
     pool = get_pool()
@@ -85,7 +116,12 @@ async def retrieve_context_for_query(
             )
     except Exception as exc:
         print(f"[rag] Retrieval query failed: {exc}")
-        return []
+        return RAGRetrievalResult(
+            documents=[],
+            available=False,
+            error=f"Knowledge DB query failed: {exc}",
+            error_stage="query",
+        )
 
     docs: List[RAGDocument] = []
     for row in rows:
@@ -100,7 +136,7 @@ async def retrieve_context_for_query(
                 similarity=similarity,
             )
         )
-    return docs
+    return RAGRetrievalResult(documents=docs, available=True)
 
 
 def format_context_for_prompt(documents: List[RAGDocument]) -> str:

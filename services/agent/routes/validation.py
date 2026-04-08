@@ -27,6 +27,7 @@ from models import (
 from rag.client import (
     RAG_MIN_SIMILARITY,
     retrieve_context_for_query,
+    retrieve_context_for_query_with_status,
 )
 from routes.analyze import QUICK_ANALYSIS_TOP_K, run_quick_analysis_pipeline
 
@@ -45,6 +46,8 @@ async def validate_retrieval(request: RetrievalValidationRequest):
     """Run representative or user-supplied retrieval checks."""
     cases = request.cases or _default_retrieval_cases()
     results: list[RetrievalValidationCaseResult] = []
+    any_unavailable = False
+    last_rag_error: str | None = None
 
     for case in cases:
         resolved_top_k = case.top_k if case.top_k is not None else request.top_k
@@ -54,28 +57,38 @@ async def validate_retrieval(request: RetrievalValidationRequest):
             else request.min_similarity
         )
         query = f"{case.event_type} {case.sensor_name} {case.vessel_id}"
-        docs = await retrieve_context_for_query(
+        rag_result = await retrieve_context_for_query_with_status(
             query,
             top_k=resolved_top_k,
             min_similarity=resolved_min_similarity,
         )
+
+        if not rag_result.available:
+            any_unavailable = True
+            last_rag_error = rag_result.error
+
         results.append(
             RetrievalValidationCaseResult(
                 name=case.name,
                 query=query,
                 expected_sources=case.expected_sources,
                 matched_expected_source=_matched_expected_source(
-                    docs,
+                    rag_result.documents,
                     case.expected_sources,
-                ),
-                retrieved_documents=[_serialize_doc(doc) for doc in docs],
+                ) if rag_result.available else False,
+                retrieved_documents=[_serialize_doc(doc) for doc in rag_result.documents],
+                rag_available=rag_result.available,
+                rag_error=rag_result.error,
             )
         )
 
     matched_cases = sum(1 for result in results if result.matched_expected_source)
+    rag_available = not any_unavailable
     return RetrievalValidationResponse(
         total_cases=len(results),
         matched_cases=matched_cases,
+        rag_available=rag_available,
+        rag_error=last_rag_error if not rag_available else None,
         requested_top_k=request.top_k,
         requested_min_similarity=request.min_similarity,
         results=results,
@@ -557,6 +570,10 @@ def _dashboard_html() -> str:
           <button class="primary" id="runRetrieval">Run benchmark</button>
         </div>
         <div class="status" id="retrievalStatus"></div>
+        <div id="ragUnavailableBanner" style="display:none; background:rgba(179,58,58,0.10); border:1px solid var(--bad); border-radius:14px; padding:14px 16px; margin-bottom:14px;">
+          <strong style="color:var(--bad);">&#9888; RAG Unavailable</strong>
+          <span id="ragUnavailableMsg" style="color:var(--bad); margin-left:8px;"></span>
+        </div>
         <div class="cards">
           <div class="card">
             <div class="metric" id="retrievalCardMatched">-</div>
@@ -804,7 +821,20 @@ def _dashboard_html() -> str:
       const tbody = document.querySelector("#retrievalTable tbody");
       tbody.innerHTML = "";
 
+      /* --- RAG availability banner --- */
+      const banner = document.getElementById("ragUnavailableBanner");
+      const bannerMsg = document.getElementById("ragUnavailableMsg");
+      if (data.rag_available === false) {
+        banner.style.display = "block";
+        bannerMsg.textContent = data.rag_error
+          || "RAG infrastructure is not reachable. Results below are NOT valid relevance scores.";
+      } else {
+        banner.style.display = "none";
+        bannerMsg.textContent = "";
+      }
+
       const topHitCases = data.results.filter((result) => {
+        if (!result.rag_available) return false;
         const topDoc = result.retrieved_documents[0];
         if (!topDoc) {
           return false;
@@ -813,33 +843,54 @@ def _dashboard_html() -> str:
       }).length;
 
       const expectedHits = data.results.reduce((count, result) => {
+        if (!result.rag_available) return count;
         const expected = normalizeExpected(result);
         return count + result.retrieved_documents.filter((doc) => isExpectedSource(doc.source, expected)).length;
       }, 0);
 
-      const avgUniqueSources = average(data.results.map((result) => {
+      const availableResults = data.results.filter((r) => r.rag_available !== false);
+      const avgUniqueSources = average(availableResults.map((result) => {
         return new Set(result.retrieved_documents.map((doc) => doc.source)).size;
       }));
-      const avgDocs = average(data.results.map((result) => result.retrieved_documents.length));
+      const avgDocs = average(availableResults.map((result) => result.retrieved_documents.length));
 
-      document.getElementById("matchedCases").value = `${data.matched_cases}/${data.total_cases}`;
-      document.getElementById("topHitCases").value = `${topHitCases}/${data.total_cases}`;
-      document.getElementById("retrievalCardMatched").textContent = `${data.matched_cases}/${data.total_cases}`;
-      document.getElementById("retrievalCardExpectedHits").textContent = String(expectedHits);
-      document.getElementById("retrievalCardSources").textContent = avgUniqueSources.toFixed(2);
-      document.getElementById("retrievalCardDocs").textContent = avgDocs.toFixed(2);
+      const matchLabel = data.rag_available === false
+        ? "UNAVAILABLE"
+        : `${data.matched_cases}/${data.total_cases}`;
+      const topHitLabel = data.rag_available === false
+        ? "UNAVAILABLE"
+        : `${topHitCases}/${data.total_cases}`;
+
+      document.getElementById("matchedCases").value = matchLabel;
+      document.getElementById("topHitCases").value = topHitLabel;
+      document.getElementById("retrievalCardMatched").textContent = matchLabel;
+      document.getElementById("retrievalCardExpectedHits").textContent =
+        data.rag_available === false ? "-" : String(expectedHits);
+      document.getElementById("retrievalCardSources").textContent =
+        data.rag_available === false ? "-" : avgUniqueSources.toFixed(2);
+      document.getElementById("retrievalCardDocs").textContent =
+        data.rag_available === false ? "-" : avgDocs.toFixed(2);
 
       for (const result of data.results) {
         const row = document.createElement("tr");
         const topDoc = result.retrieved_documents[0];
         const sources = [...new Set(result.retrieved_documents.map((doc) => doc.source))].join(", ");
-        row.innerHTML = `
-          <td class="mono">${result.name}</td>
-          <td><span class="pill ${result.matched_expected_source ? "good" : "bad"}">${result.matched_expected_source ? "yes" : "no"}</span></td>
-          <td class="mono">${topDoc ? topDoc.source : "-"}</td>
-          <td>${topDoc ? topDoc.similarity.toFixed(3) : "-"}</td>
-          <td class="mono">${sources || "-"}</td>
-        `;
+
+        if (result.rag_available === false) {
+          row.innerHTML = `
+            <td class="mono">${result.name}</td>
+            <td><span class="pill bad">error</span></td>
+            <td class="mono" colspan="3" style="color:var(--bad)">${result.rag_error || "RAG unavailable"}</td>
+          `;
+        } else {
+          row.innerHTML = `
+            <td class="mono">${result.name}</td>
+            <td><span class="pill ${result.matched_expected_source ? "good" : "bad"}">${result.matched_expected_source ? "yes" : "no"}</span></td>
+            <td class="mono">${topDoc ? topDoc.source : "-"}</td>
+            <td>${topDoc ? topDoc.similarity.toFixed(3) : "-"}</td>
+            <td class="mono">${sources || "-"}</td>
+          `;
+        }
         tbody.appendChild(row);
       }
     }
@@ -918,7 +969,11 @@ def _dashboard_html() -> str:
         if (minSimilarity !== null) payload.min_similarity = minSimilarity;
         const data = await postJson("/api/v1/validate/retrieval", payload);
         renderRetrieval(data);
-        setStatus(statusEl, `Completed benchmark: ${data.matched_cases}/${data.total_cases} cases matched.`, "good");
+        if (data.rag_available === false) {
+          setStatus(statusEl, `RAG unavailable: ${data.rag_error || "infrastructure error"}. Results are not valid.`, "bad");
+        } else {
+          setStatus(statusEl, `Completed benchmark: ${data.matched_cases}/${data.total_cases} cases matched.`, "good");
+        }
       } catch (error) {
         setStatus(statusEl, `Benchmark failed: ${error.message}`, "bad");
       }
