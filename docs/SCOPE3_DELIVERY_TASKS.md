@@ -19,7 +19,7 @@ For background, read these first:
 - `CLAUDE.md`
 - `docs/architecture.md`
 - `docs/ROADMAP.md`
-- `docs/SCOPE2_TASK_SPLIT.md`
+- `docs/archive/SCOPE2_TASK_SPLIT.md`
 
 ## Why These Tasks Exist
 
