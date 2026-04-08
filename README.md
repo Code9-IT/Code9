@@ -33,6 +33,11 @@ via the Grafana HTTP API. The single working document is
 This week's milestone: `POST /api/v1/dynamic/trigger` produces a dashboard
 under the stable UID `maritime_dynamic_incident`.
 
+Read in this order:
+- [`docs/ARNT_GEIR_FEEDBACK_2026-04-07.md`](docs/ARNT_GEIR_FEEDBACK_2026-04-07.md) for the pivot rationale
+- [`docs/DYNAMIC_DASHBOARD_TASK_PLAN.md`](docs/DYNAMIC_DASHBOARD_TASK_PLAN.md) for the 4 workstreams and execution plan
+- [`docs/architecture.md`](docs/architecture.md) and [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) for the shared story and demo flow
+
 ## Current Status
 
 **Scope 1** and **Scope 2** are complete: all three user stories have dashboard
@@ -56,8 +61,12 @@ presenter-facing demo flow. The previous `UDS App Health` dashboard is renamed
 to `AI Pipeline Health (Developer)` and is intentionally kept outside the main
 demo navigation.
 
-See `docs/SCOPE3_DELIVERY_TASKS.md` for remaining scope 3 tasks.
-Historical task-planning docs are kept under `docs/archive/`.
+**Scope 3 Task 4 (Predictive Trend + Handover Docs)** is complete: the
+prototype also includes predictive alert-trend analysis, the `Alert Trends`
+dashboard, and the current handover/demo documentation.
+
+The current sprint work is the **dynamic dashboard pivot** layered on top of
+that foundation. Historical scope-task definitions are kept under `docs/archive/`.
 
 ## Quick Start
 
@@ -148,9 +157,10 @@ docker compose up -d --build
 |
 `-- docs/
     |-- architecture.md                # system architecture
+    |-- ARNT_GEIR_FEEDBACK_2026-04-07.md # supervisor feedback and pivot rationale
+    |-- DYNAMIC_DASHBOARD_TASK_PLAN.md # current sprint execution plan
     |-- ROADMAP.md                     # backlog and priorities
     |-- SCOPE1_ACCEPTANCE_CHECKLIST.md # repeatable validation flow
-    |-- SCOPE3_DELIVERY_TASKS.md       # Scope 3 final sprint task definitions
     |-- UDS_dashboard_spec.md          # dashboard panel specifications
     |-- PRODUCTION_GUIDE.md            # deployment and operations guide
     |-- DEMO_SCRIPT.md                 # step-by-step demo walkthrough
@@ -237,4 +247,4 @@ See `docs/ROADMAP.md` for the full backlog.
 2. Keep changes scoped to your task's file ownership.
 3. Update docs in the same PR when behavior changes.
 4. Run fresh-stack validation after merges.
-5. Use `docs/ROADMAP.md` for current backlog and follow-up priorities.
+5. Use `docs/DYNAMIC_DASHBOARD_TASK_PLAN.md` for this week's execution work and `docs/ROADMAP.md` for follow-up priorities.

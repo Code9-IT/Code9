@@ -48,7 +48,12 @@ the stable UID `maritime_dynamic_incident`.
 The Scope 1-3 prototype below is the foundation. Do not rewrite it; build the
 dynamic flow alongside it.
 
-## Current Status (updated 2026-04-01)
+Read in this order when starting a new task:
+1. `docs/ARNT_GEIR_FEEDBACK_2026-04-07.md` for the pivot rationale
+2. `docs/DYNAMIC_DASHBOARD_TASK_PLAN.md` for the execution plan
+3. The specific runtime files for your workstream
+
+## Current Status (updated 2026-04-08)
 
 ### Scope 1 - Single Vessel Incident (User Story 1) -- COMPLETE
 - 3 vessels, 6 apps per vessel, 18 vessel-app links
@@ -67,7 +72,7 @@ dynamic flow alongside it.
   - Cross-vessel seed scenario in `db/seed/uds_seed.sql`
   - Agent allowlist updated in `services/agent/routes/analyze.py`
 
-### Scope 3 - Final Delivery -- IN PROGRESS
+### Scope 3 - Implemented Prototype Foundation -- COMPLETE
 - Task 1 (Kristian, UDS AI Integration) -- DONE
   - UDS-aware AI analysis endpoint: `GET /api/v1/uds/analyze/view`
     - Accepts vessel IMO, app external ID, alert name, severity as query params
@@ -99,6 +104,13 @@ dynamic flow alongside it.
   - Acknowledge flow hardened: GET `/acknowledge` returns HTTP 405 with
     `Allow: POST`; new GET `/acknowledge/confirm` page used by Grafana data link
   - Handover documentation: `docs/PRODUCTION_GUIDE.md`, `docs/DEMO_SCRIPT.md`
+
+### Current Sprint Extension - Dynamic Dashboard Pivot -- IN PROGRESS
+- Current working doc: `docs/DYNAMIC_DASHBOARD_TASK_PLAN.md`
+- Goal: add one generated Grafana dashboard flow for User Story 1
+- Primary milestone: `POST /api/v1/dynamic/trigger` produces
+  `maritime_dynamic_incident`
+- Keep the existing Scope 1-3 prototype intact and layer the new flow on top
 
 ## Architecture Overview
 
@@ -151,9 +163,9 @@ Task 3 keeps the legacy/UDS bridge lightweight instead of rewriting vessel IDs:
 ### Documentation
 - `README.md` -- project overview and quick start
 - `docs/architecture.md` -- system architecture
+- `docs/ARNT_GEIR_FEEDBACK_2026-04-07.md` -- supervisor feedback and pivot rationale
+- `docs/DYNAMIC_DASHBOARD_TASK_PLAN.md` -- current sprint execution plan
 - `docs/ROADMAP.md` -- backlog and current priorities
-- `docs/SCOPE2_TASK_SPLIT.md` -- Scope 2 task ownership and acceptance criteria
-- `docs/SCOPE3_DELIVERY_TASKS.md` -- Scope 3 final sprint task definitions
 - `docs/SCOPE1_ACCEPTANCE_CHECKLIST.md` -- repeatable validation flow
 - `docs/UDS_dashboard_spec.md` -- dashboard panel specifications
 - `docs/PRODUCTION_GUIDE.md` -- deployment and operations guide
@@ -166,6 +178,9 @@ These are kept for reference but are no longer the active project docs:
 - `docs/archive/SCOPE1_REVIEW_FINDINGS.md`
 - `docs/archive/NEXT_STEPS.md`
 - `docs/archive/FUTURE_CHECKS.md`
+- `docs/archive/SCOPE2_TASK_SPLIT.md`
+- `docs/archive/SCOPE3_DELIVERY_TASKS.md`
+- `docs/archive/SCOPE3_TASK3_IMPLEMENTATION_CHECKLIST.md`
 - `docs/archive/WORK_DISTRIBUTION.md`
 - `docs/archive/underveisNotater.md`
 
@@ -231,6 +246,7 @@ These are NOT part of the repo and should never be committed.
 If you add new MCP tools, dashboards, or make architectural changes:
 1. Update this CLAUDE.md file
 2. Update README.md if user-facing behavior changes
-3. Update docs/ROADMAP.md if backlog items change
-4. Update docs/SCOPE1_ACCEPTANCE_CHECKLIST.md if validation steps change
-5. Keep docs/architecture.md current with the system design
+3. Update `docs/DYNAMIC_DASHBOARD_TASK_PLAN.md` if the current sprint execution plan changes
+4. Update docs/ROADMAP.md if backlog items change
+5. Update docs/SCOPE1_ACCEPTANCE_CHECKLIST.md if validation steps change
+6. Keep docs/architecture.md current with the system design

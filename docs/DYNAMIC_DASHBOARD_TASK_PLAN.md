@@ -5,11 +5,15 @@
 > 1. Read the **Arnt / Geir Feedback** section once for context (the *why*).
 > 2. Then jump to the **Dynamic Dashboard Task Plan** section below the divider (the *how*).
 > 3. Each person should mostly work from their own **Workstream A/B/C/D** section, not the whole 1000+ line file.
+> 4. Use `docs/ARNT_GEIR_FEEDBACK_2026-04-07.md` as the short standalone feedback record if you only need the rationale without the full task plan.
 >
 > One milestone owns this week:
 > `POST /api/v1/dynamic/trigger` -> generated dashboard appears in Grafana under UID `maritime_dynamic_incident`.
 >
 > Jonas's chat hardening and Onu's runtime fixes are already on `main`. Do **not** redo them.
+>
+> Jump labels for quick navigation:
+> `# Dynamic Dashboard Task Plan`, `# WORKSTREAM A`, `# WORKSTREAM B`, `# WORKSTREAM C`, `# WORKSTREAM D`
 
 ---
 
@@ -914,12 +918,15 @@ This workstream makes sure the project is communicated clearly to:
 - Geir
 - the bachelor presentation audience
 
+This workstream is presentation-first.
+It does not own runtime code, database work, or Grafana implementation.
 The goal is not to oversell.
-The goal is to explain the pivot honestly and show one convincing prototype.
+The goal is to explain the pivot honestly and get the presentation, storyline,
+and demo flow ready for Monday and the repeated presentation two days later.
 
 ## Goal
 
-Produce a clear architecture and demo story that explains:
+Produce a clear presentation package that explains:
 - what the project already had
 - what requirement was misunderstood
 - what the new dynamic dashboard layer adds
@@ -928,26 +935,28 @@ Produce a clear architecture and demo story that explains:
 ## Responsibilities
 
 You own:
-- the updated architecture wording
+- the presentation storyline
 - the dynamic dashboard story
 - the demo script for the new flow
 - fallback screenshots / backup plan
 - presentation-friendly explanation of the MCP role
+- keeping the presentation material aligned with what Workstreams A-C actually build
 
-You are responsible for making the prototype understandable and credible.
+You are responsible for making the prototype understandable, credible, and easy
+to present.
 
 ## Files To Create / Modify
-
-Modify:
-- `README.md`
-- `docs/architecture.md`
-- `docs/PRODUCTION_GUIDE.md`
-- `docs/DEMO_SCRIPT.md`
 
 Create:
 - `docs/DYNAMIC_DASHBOARD_PRESENTATION.md`
 
-Optional later:
+Modify later, only after Workstreams A-C stabilize the real flow:
+- `docs/DEMO_SCRIPT.md`
+- `docs/architecture.md`
+
+Optional later, if the team agrees:
+- `README.md`
+- `docs/PRODUCTION_GUIDE.md`
 - `CLAUDE.md`
 
 ## What NOT To Touch
@@ -960,6 +969,8 @@ Do not touch:
 - MCP code
 - agent code
 
+Do not become a blocker for Workstreams A-C by rewriting shared docs too early.
+
 Do not claim:
 - full production readiness
 - all user stories are dynamically generated
@@ -969,26 +980,32 @@ Do not claim:
 ## Deliverables
 
 The following must be ready:
-- updated project narrative in docs
-- architecture text that includes:
-  - Web UI
-  - Orchestrator
-  - MCP context fetch
-  - Scenario classification
-  - Dashboard generation
-  - Grafana update
+- one presentation helper document that includes:
+  - storyline for the presentation
+  - key speaking points
+  - exact demo flow
+  - fallback flow if the live demo fails
+  - backup screenshots / video plan
 - updated demo script with:
   - baseline dashboard
   - injected incident
   - trigger endpoint
   - generated dashboard
   - fallback drilldown
-- one presentation helper document that includes:
-  - key speaking points
-  - exact demo flow
-  - fallback flow if the live demo fails
+- architecture slide content that includes:
+  - Web UI
+  - Orchestrator
+  - MCP context fetch
+  - Scenario classification
+  - Dashboard generation
+  - Grafana update
 
 ## Step-by-Step Plan
+
+Important:
+- start by creating `docs/DYNAMIC_DASHBOARD_PRESENTATION.md` and building the presentation storyline
+- do not spend Day 1 editing shared repo docs unless the team explicitly needs it
+- only update shared docs after Workstreams A-C make the real flow clear
 
 1. Read these files first:
    - `README.md`
@@ -1021,6 +1038,10 @@ The following must be ready:
 
 ## How To Use Your AI
 
+Important:
+- this workstream should use AI for presentation structure, wording, and demo narration
+- it should not use AI to implement runtime code, database logic, or Grafana generation
+
 Tell Codex/Claude:
 - “This is a documentation and presentation task.”
 - “Ground everything in the current repo and the new pivot.”
@@ -1048,12 +1069,12 @@ Do not ask your AI to:
 - Workstream A: Grafana upsert must work
 - Workstream B: trigger route skeleton and explicit-context flow
 - Workstream C: logging table and one incident-injection mode
-- Workstream D: architecture and presentation draft structure
+- Workstream D: presentation draft, storyline, and speaking-point skeleton
 
 ## Day 2 priority
 - Workstream A + B integration
 - Workstream C verifies a reproducible incident
-- Workstream D updates narrative based on the real flow
+- Workstream D updates slides and demo story based on the real flow
 
 ## Day 3 priority
 - scenario-based dashboard content

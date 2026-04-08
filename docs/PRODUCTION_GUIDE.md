@@ -4,6 +4,13 @@ This document describes how to deploy, configure, and operate the Maritime
 Agentic Observability platform. It is intended for handover to Knowit Sorlandet
 and any future maintainers.
 
+## Current Sprint Note
+
+This guide documents the implemented prototype foundation that is already in the
+repo. The new dynamic-dashboard flow described in
+`docs/DYNAMIC_DASHBOARD_TASK_PLAN.md` is the current sprint extension and should
+be treated as in-progress work until it is actually merged and validated.
+
 ## System Requirements
 
 - **Docker Desktop** (Docker Engine 24+ with Compose v2)
