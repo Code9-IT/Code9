@@ -34,6 +34,20 @@ docker compose logs -f uds-seeder  # wait for "Backfill complete"
 - Agent API: http://localhost:8000/docs
 - MCP API: http://localhost:8001/docs
 
+## Current Focus (updated 2026-04-08)
+
+**Dynamic Dashboard pivot.** After the 2026-04-07 meeting with Arnt and Geir,
+the team is building a small agentic dynamic-dashboard flow on top of the
+existing prototype. The single working document for this is
+`docs/DYNAMIC_DASHBOARD_TASK_PLAN.md` (feedback + 4-workstream build plan).
+
+This week's milestone:
+`POST /api/v1/dynamic/trigger` -> generated dashboard appears in Grafana under
+the stable UID `maritime_dynamic_incident`.
+
+The Scope 1-3 prototype below is the foundation. Do not rewrite it; build the
+dynamic flow alongside it.
+
 ## Current Status (updated 2026-04-01)
 
 ### Scope 1 - Single Vessel Incident (User Story 1) -- COMPLETE

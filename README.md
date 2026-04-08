@@ -22,6 +22,17 @@ The project implements three user stories from Geir Borgi (Telenor Maritime):
    When a support ticket arrives, show full vessel state, recent errors, connectivity
    status, and historical context for troubleshooting.
 
+## Current Focus
+
+After the 2026-04-07 meeting with Arnt and Geir, the team is building a small
+agentic **dynamic dashboard** flow on top of the existing prototype: an agent
+detects an incident, picks a scenario template, and writes a Grafana dashboard
+via the Grafana HTTP API. The single working document is
+[`docs/DYNAMIC_DASHBOARD_TASK_PLAN.md`](docs/DYNAMIC_DASHBOARD_TASK_PLAN.md).
+
+This week's milestone: `POST /api/v1/dynamic/trigger` produces a dashboard
+under the stable UID `maritime_dynamic_incident`.
+
 ## Current Status
 
 **Scope 1** and **Scope 2** are complete: all three user stories have dashboard

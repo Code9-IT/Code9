@@ -1,3 +1,18 @@
+# Dynamic Dashboard - Team Working Document
+
+> **How to read this document**
+>
+> 1. Read the **Arnt / Geir Feedback** section once for context (the *why*).
+> 2. Then jump to the **Dynamic Dashboard Task Plan** section below the divider (the *how*).
+> 3. Each person should mostly work from their own **Workstream A/B/C/D** section, not the whole 1000+ line file.
+>
+> One milestone owns this week:
+> `POST /api/v1/dynamic/trigger` -> generated dashboard appears in Grafana under UID `maritime_dynamic_incident`.
+>
+> Jonas's chat hardening and Onu's runtime fixes are already on `main`. Do **not** redo them.
+
+---
+
 # Arnt / Geir Feedback - 2026-04-07
 
 Context:
