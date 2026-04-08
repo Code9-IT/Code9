@@ -97,6 +97,10 @@ services:
       QUICK_ANALYSIS_NUM_PREDICT: ${QUICK_ANALYSIS_NUM_PREDICT:-180}
       MCP_URL:      ${MCP_URL:-http://mcp:8001}
       MCP_API_KEY:  ${MCP_API_KEY:-code9-scope1-demo-key}
+      GRAFANA_API_URL: ${GRAFANA_API_URL:-http://grafana:3000}
+      GRAFANA_PUBLIC_URL: ${GRAFANA_PUBLIC_URL:-http://localhost:3000}
+      GRAFANA_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GRAFANA_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000}
       STUB_MODE:    ${STUB_MODE:-false}
       RAG_TOP_K:    ${RAG_TOP_K:-5}
@@ -200,4 +204,3 @@ services:
 volumes:
   timescaledb_data:
   ollama_data:
-
