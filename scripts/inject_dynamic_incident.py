@@ -4,9 +4,15 @@ inject_dynamic_incident.py
 ==========================
 Deterministic incident injector for the dynamic-dashboard demo.
 
-Creates a known alert + log entry + degraded metric samples for a
-specific vessel/app pair so the dynamic trigger endpoint has something
-concrete to act on.
+Creates a known alert + degraded metric samples for a specific vessel/app
+pair so the dynamic trigger endpoint has something concrete to act on.
+The corresponding ``app_logs`` row is created automatically by the
+``trg_sync_app_log_from_alert`` trigger defined in
+``db/init/003_uds.sql`` -- the script no longer inserts logs by hand.
+
+Reruns are safe: each scenario uses a stable fingerprint so a previous
+injection of the same scenario is wiped first (alerts, generated logs,
+metric samples), then re-inserted with fresh timestamps.
 
 Usage:
     python scripts/inject_dynamic_incident.py --scenario service_down
@@ -23,6 +29,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
+import json
 import os
 import sys
 from datetime import datetime, timezone, timedelta
@@ -34,14 +41,14 @@ except ImportError:
     print("ERROR: asyncpg is required.  pip install asyncpg")
     sys.exit(1)
 
-# ── DB connection defaults (same env vars as the agent service) ──────────
+# DB connection defaults (same env vars as the agent service)
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = int(os.getenv("DB_PORT", "5432"))
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
 DB_NAME = os.getenv("DB_NAME", "maritime_telemetry")
 
-# ── Scenario definitions ────────────────────────────────────────────────
+# Scenario definitions
 # Each scenario maps to a deterministic vessel + app + alert combination
 # that aligns with the existing seed semantics in uds_seed.sql.
 SCENARIOS: dict[str, dict] = {
@@ -51,13 +58,12 @@ SCENARIOS: dict[str, dict] = {
         "alert_name": "ServiceDown",
         "severity": "critical",
         "alert_type": "service_down",
-        "log_level": "error",
-        "log_source": "application",
-        "log_message": (
-            "Health checks are failing and the application is unavailable. "
-            "Injected for dynamic-dashboard demo."
+        "summary": (
+            "Health checks are failing and uds-edge-parquet-sync is "
+            "unavailable on MV Edge Borealis. Injected for dynamic-"
+            "dashboard demo."
         ),
-        "description": "Service down on MV Nordic Bulk (IMO9300002) / uds-edge-parquet-sync",
+        "description": "Service down on MV Edge Borealis (IMO9300002) / uds-edge-parquet-sync",
     },
     "connectivity": {
         "vessel_imo": "IMO9300001",
@@ -65,11 +71,10 @@ SCENARIOS: dict[str, dict] = {
         "alert_name": "ReportingStale",
         "severity": "warning",
         "alert_type": "reporting_stale",
-        "log_level": "warning",
-        "log_source": "sync-agent",
-        "log_message": (
-            "No fresh metrics received in the expected reporting window; "
-            "showing last known values. Injected for dynamic-dashboard demo."
+        "summary": (
+            "data-quality-processor on MV Edge Aurora has not reported "
+            "fresh metrics in the expected window; showing last known "
+            "values. Injected for dynamic-dashboard demo."
         ),
         "description": "Connectivity / stale reporting on MV Edge Aurora (IMO9300001) / data-quality-processor",
     },
@@ -79,20 +84,19 @@ SCENARIOS: dict[str, dict] = {
         "alert_name": "ResourcePressure",
         "severity": "warning",
         "alert_type": "resource_pressure",
-        "log_level": "warning",
-        "log_source": "runtime",
-        "log_message": (
-            "CPU, handle count, or database pressure is elevated. "
-            "Injected for dynamic-dashboard demo."
+        "summary": (
+            "CPU, memory, and request latency are elevated on time-"
+            "series-processor on MT Nordic Fjord. Injected for dynamic-"
+            "dashboard demo."
         ),
-        "description": "Runtime pressure on MV Coastal Spirit (IMO9300003) / time-series-processor",
+        "description": "Runtime pressure on MT Nordic Fjord (IMO9300003) / time-series-processor",
     },
 }
 
 
-def _fingerprint(vessel_imo: str, app_id: str, scenario: str, ts: str) -> str:
-    """Deterministic fingerprint matching the seed convention."""
-    raw = f"{vessel_imo}:{app_id}:{scenario}:{ts}:dynamic-inject"
+def _fingerprint(vessel_imo: str, app_id: str, scenario: str) -> str:
+    """Stable fingerprint per scenario so reruns wipe and replace cleanly."""
+    raw = f"{vessel_imo}:{app_id}:{scenario}:dynamic-inject"
     return hashlib.md5(raw.encode()).hexdigest()
 
 
@@ -117,8 +121,43 @@ async def _resolve_ids(
     return loc_id, app_id
 
 
+async def _wipe_previous(
+    conn: asyncpg.Connection,
+    sc: dict,
+    scenario_key: str,
+    fingerprint: str,
+) -> None:
+    """Remove any prior injection of this scenario.
+
+    Order matters because of FK + UNIQUE constraints:
+      1. app_logs (FK to alerts via alert_id)
+      2. metric_samples (no FK but tagged with labels)
+      3. alerts (parent row)
+    """
+    await conn.execute(
+        "DELETE FROM app_logs WHERE correlation_key = $1",
+        fingerprint,
+    )
+    await conn.execute(
+        """
+        DELETE FROM metric_samples
+        WHERE imo_nr = $1
+          AND app_id = $2
+          AND labels ->> 'source' = 'dynamic_inject'
+          AND labels ->> 'scenario' = $3
+        """,
+        sc["vessel_imo"],
+        sc["app_external_id"],
+        scenario_key,
+    )
+    await conn.execute(
+        "DELETE FROM alerts WHERE fingerprint = $1",
+        fingerprint,
+    )
+
+
 async def inject(scenario_key: str) -> None:
-    """Insert one alert + one log entry + degraded metric samples."""
+    """Insert one alert (which auto-creates a log) + degraded metric samples."""
     if scenario_key not in SCENARIOS:
         print(f"Unknown scenario: {scenario_key}")
         print(f"Available: {', '.join(SCENARIOS)}")
@@ -127,7 +166,7 @@ async def inject(scenario_key: str) -> None:
     sc = SCENARIOS[scenario_key]
     now = datetime.now(timezone.utc).replace(microsecond=0)
     ts_str = now.isoformat()
-    fingerprint = _fingerprint(sc["vessel_imo"], sc["app_external_id"], scenario_key, ts_str)
+    fingerprint = _fingerprint(sc["vessel_imo"], sc["app_external_id"], scenario_key)
 
     conn = await asyncpg.connect(
         host=DB_HOST,
@@ -140,9 +179,25 @@ async def inject(scenario_key: str) -> None:
     try:
         loc_id, app_id = await _resolve_ids(conn, sc["vessel_imo"], sc["app_external_id"])
 
-        # ── 1. Insert the alert ──────────────────────────────────────
+        # 0. Wipe any prior injection so reruns are deterministic
+        await _wipe_previous(conn, sc, scenario_key, fingerprint)
+
+        # 1. Insert the alert. The trg_sync_app_log_from_alert trigger
+        #    automatically creates a matching app_logs row using
+        #    annotations.summary as the user-facing message.
         alert_id = uuid4()
         starts_at = now - timedelta(minutes=3)
+
+        labels = {
+            "imo": sc["vessel_imo"],
+            "app_id": sc["app_external_id"],
+            "scenario": scenario_key,
+            "injected": True,
+        }
+        annotations = {
+            "summary": sc["summary"],
+            "injected_at": ts_str,
+        }
 
         await conn.execute(
             """
@@ -153,7 +208,7 @@ async def inject(scenario_key: str) -> None:
             ) VALUES (
                 $1, $2, $3,
                 $4, $5, 'firing', $6, $7,
-                $8, $9, $10, NULL, $11
+                $8::jsonb, $9::jsonb, $10, NULL, $11
             )
             """,
             alert_id,
@@ -163,55 +218,15 @@ async def inject(scenario_key: str) -> None:
             sc["severity"],
             sc["alert_type"],
             fingerprint,
-            {
-                "imo": sc["vessel_imo"],
-                "app_id": sc["app_external_id"],
-                "scenario": scenario_key,
-                "injected": True,
-            },
-            {
-                "summary": f'{sc["alert_name"]} detected for {sc["app_external_id"]}',
-                "injected_at": ts_str,
-            },
+            json.dumps(labels),
+            json.dumps(annotations),
             starts_at,
             now,
         )
         print(f"  Alert inserted:  {alert_id}  ({sc['alert_name']}, {sc['severity']})")
+        print("  Log inserted:    auto-generated by trg_sync_app_log_from_alert")
 
-        # ── 2. Insert an app log ─────────────────────────────────────
-        log_id = uuid4()
-        await conn.execute(
-            """
-            INSERT INTO app_logs (
-                id, uds_location_id, application_id, app_external_id,
-                level, source, message, logged_at,
-                alert_id, correlation_key, context
-            ) VALUES (
-                $1, $2, $3, $4,
-                $5, $6, $7, $8,
-                $9, $10, $11
-            )
-            """,
-            log_id,
-            loc_id,
-            app_id,
-            sc["app_external_id"],
-            sc["log_level"],
-            sc["log_source"],
-            sc["log_message"],
-            now - timedelta(minutes=2),
-            alert_id,
-            fingerprint,
-            {
-                "imo": sc["vessel_imo"],
-                "app_id": sc["app_external_id"],
-                "scenario": scenario_key,
-                "injected": True,
-            },
-        )
-        print(f"  Log inserted:    {log_id}")
-
-        # ── 3. Insert degraded metric samples ────────────────────────
+        # 2. Insert degraded metric samples
         sync_id = uuid4()
         metric_rows = _build_metric_rows(sc, scenario_key, sync_id, now, loc_id, app_id)
         inserted = 0
@@ -225,7 +240,7 @@ async def inject(scenario_key: str) -> None:
                 ) VALUES (
                     $1, $2, $3, $4,
                     $5, $6, $7, $8,
-                    $9, $10, $11, $12
+                    $9, $10, $11, $12::jsonb
                 )
                 ON CONFLICT DO NOTHING
                 """,
@@ -272,6 +287,7 @@ def _build_metric_rows(
         "scenario": scenario_key,
         "injected": True,
     }
+    labels_json = json.dumps(labels)
 
     # Core metrics that matter for each scenario
     if scenario_key == "service_down":
@@ -322,7 +338,7 @@ def _build_metric_rows(
                 metric_type,
                 metric_unit,
                 sc["vessel_imo"],
-                labels,
+                labels_json,
             ))
 
     return rows
@@ -347,7 +363,7 @@ def main():
     if args.list:
         print("Available scenarios:")
         for key, sc in SCENARIOS.items():
-            print(f"  {key:20s} — {sc['description']}")
+            print(f"  {key:20s} -- {sc['description']}")
         sys.exit(0)
 
     if not args.scenario:
