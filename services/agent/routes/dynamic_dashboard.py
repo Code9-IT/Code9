@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -41,6 +41,11 @@ class DynamicTriggerResponse(BaseModel):
     summary: str
     used_tools: list[str] = Field(default_factory=list)
     dry_run: bool = False
+    # Populated only when dry_run=true so callers have a usable fallback
+    # if Grafana is unreachable on demo day. Skipped for live runs to keep
+    # the response payload small.
+    dashboard_json: dict[str, Any] | None = None
+    grafana_result: dict[str, Any] | None = None
 
 
 class DynamicStatusRun(BaseModel):
@@ -52,6 +57,7 @@ class DynamicStatusRun(BaseModel):
     severity: str | None = None
     scenario_key: str
     dashboard_uid: str
+    dry_run: bool = False
 
 
 class DynamicStatusResponse(BaseModel):

@@ -101,9 +101,10 @@ class DynamicDashboardOrchestrator:
             summary=summary,
             used_tools=used_tools,
             dashboard_json=dashboard_payload,
+            dry_run=request.dry_run,
         )
 
-        return {
+        response: dict[str, Any] = {
             "dashboard_uid": DYNAMIC_DASHBOARD_UID,
             "dashboard_url": self.grafana_client.dashboard_url(DYNAMIC_DASHBOARD_UID),
             "scenario_key": scenario_key,
@@ -114,6 +115,13 @@ class DynamicDashboardOrchestrator:
             "dry_run": request.dry_run,
             "grafana_result": grafana_result,
         }
+        # In dry-run mode the caller never sees a Grafana write, so return
+        # the generated payload inline. This is the fallback Codex asked for:
+        # if Grafana is unreachable on demo day we can still show the JSON
+        # the orchestrator produced.
+        if request.dry_run:
+            response["dashboard_json"] = dashboard_payload
+        return response
 
     async def status(self) -> dict[str, Any]:
         pool = get_pool()
@@ -121,7 +129,7 @@ class DynamicDashboardOrchestrator:
             rows = await conn.fetch(
                 """
                 SELECT created_at, trigger_mode, vessel_imo, app_external_id, alert_name,
-                       severity, scenario_key, dashboard_uid
+                       severity, scenario_key, dashboard_uid, dry_run
                 FROM dynamic_dashboard_runs
                 ORDER BY created_at DESC
                 LIMIT 10
@@ -192,7 +200,10 @@ class DynamicDashboardOrchestrator:
                 "app_external_id": latest.get("app_external_id"),
                 "alert_name": latest.get("alert_name"),
                 "severity": latest.get("severity"),
-                "source_alert_fingerprint": None,
+                # Preserve the alert's fingerprint so _select_alert can use the
+                # fast-path lookup and the audit row records which alert this
+                # run was bound to.
+                "source_alert_fingerprint": latest.get("fingerprint"),
             },
             ["get_fleet_alerts"],
         )
@@ -294,6 +305,7 @@ class DynamicDashboardOrchestrator:
         summary: str,
         used_tools: list[str],
         dashboard_json: dict[str, Any],
+        dry_run: bool,
     ) -> None:
         pool = get_pool()
         async with pool.acquire() as conn:
@@ -310,9 +322,10 @@ class DynamicDashboardOrchestrator:
                     dashboard_uid,
                     summary,
                     used_tools_json,
-                    dashboard_json
+                    dashboard_json,
+                    dry_run
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12)
                 """,
                 trigger_mode,
                 source_alert_fingerprint,
@@ -325,6 +338,7 @@ class DynamicDashboardOrchestrator:
                 summary,
                 json.dumps(used_tools),
                 json.dumps(dashboard_json),
+                dry_run,
             )
 
 
