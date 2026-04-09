@@ -111,6 +111,18 @@ Read in this order when starting a new task:
 - Primary milestone: `POST /api/v1/dynamic/trigger` produces
   `maritime_dynamic_incident`
 - Keep the existing Scope 1-3 prototype intact and layer the new flow on top
+- Integration branch: `merge/dynamic-dashboard-pivot` (off `main`)
+  - Workstream B (Jonas) merged in full as the runtime base
+  - Workstream C (Nidal) selectively merged: inject script + demo runbook only
+    (Nidal's UUID-shaped SQL replaced by hand-authored authoritative
+    `db/init/005_dynamic_dashboard_runs.sql`)
+  - Workstream A (Onu) deferred until after Monday's dry run
+  - Codex review bugs fixed: stable inject fingerprint with cleanup-aware
+    reruns, dropped manual `app_logs` insert, preserved fingerprint in
+    `latest_firing_alert` mode, dry_run propagation through `_log_run` and
+    response, dashboard_json fallback in dry_run mode
+  - See "Merge Status - 2026-04-09" section in
+    `docs/DYNAMIC_DASHBOARD_TASK_PLAN.md` for the full catalogue
 
 ## Architecture Overview
 

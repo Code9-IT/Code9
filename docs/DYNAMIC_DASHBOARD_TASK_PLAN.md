@@ -17,6 +17,72 @@
 
 ---
 
+# Merge Status - 2026-04-09
+
+Integration branch: `merge/dynamic-dashboard-pivot` (off `main`).
+
+Currently merged into the integration branch:
+
+- **Workstream B (Jonas)** - merged in full. The orchestrator
+  (`services/agent/dynamic/orchestrator.py`), Grafana writer
+  (`services/agent/dynamic/grafana_client.py`), dashboard builder, scenario
+  selector, MCP client, and `routes/dynamic_dashboard.py` route are the runtime
+  base. `POST /api/v1/dynamic/trigger` and `GET /api/v1/dynamic/status` are
+  reachable from the agent service.
+- **Workstream C (Nidal)** - selectively merged: only
+  `scripts/inject_dynamic_incident.py` and the demo runbook
+  (`docs/DYNAMIC_DASHBOARD_DEMO.md`). Nidal's separate UUID-shaped SQL was
+  dropped in favour of a hand-authored authoritative
+  `db/init/005_dynamic_dashboard_runs.sql` (BIGSERIAL + `dry_run` column,
+  matching the orchestrator's INSERT shape).
+- **Workstream A (Onu)** - **not yet merged.** Onu's improved
+  `dashboard_builder.py` / `grafana_client.py` are deferred until after
+  Monday's dry run. We're keeping Workstream B's internally-coherent stack as
+  the runtime base to minimize integration risk this week.
+
+Bug fixes applied on top of the merges (catalogued by Codex's review of the
+first merge plan):
+
+1. **Codex #1 - duplicate app_logs row.** `inject_dynamic_incident.py` no
+   longer hand-inserts an `app_logs` row. The `trg_sync_app_log_from_alert`
+   trigger in `db/init/003_uds.sql` already creates the matching log entry
+   from `annotations.summary`, and `app_logs.alert_id` is UNIQUE so the
+   manual insert was a guaranteed conflict on rerun.
+2. **Codex #2 - timestamp-based fingerprint accumulated alerts.** The
+   inject script now uses a stable per-scenario fingerprint and wipes any
+   prior injection of the same scenario (alerts, generated logs, metric
+   samples, in FK-safe order) before inserting fresh rows. Reruns are now
+   deterministic.
+3. **Codex #3 - lost `source_alert_fingerprint` in `latest_firing_alert`
+   mode.** The orchestrator was hard-coding `None`. Now it forwards the
+   picked alert's fingerprint so `_select_alert` can use the fast-path lookup
+   and the audit row records which alert this run was bound to.
+4. **asyncpg jsonb codec.** Dict arguments in the inject script are now
+   `json.dumps()`'d with `::jsonb` casts in the SQL.
+5. **Vessel name typos.** `MV Nordic Bulk` -> `MV Edge Borealis` and
+   `MV Coastal Spirit` -> `MT Nordic Fjord` in scenario descriptions.
+6. **dry_run propagation.** The `dry_run` field on `DynamicTriggerRequest`
+   was accepted but never persisted. It now flows through `_log_run` to
+   `dynamic_dashboard_runs.dry_run`, is selected back in `status()`, and is
+   surfaced on `DynamicStatusRun` so `/dynamic/status` shows whether each
+   run actually wrote to Grafana.
+7. **dry_run = useful fallback.** When `dry_run=true` the trigger response
+   now includes the generated `dashboard_json` inline. This is the fallback
+   if Grafana is unreachable on demo day - we can still show the JSON the
+   orchestrator produced.
+8. **Container demo path.** `./scripts:/app/scripts:ro` is mounted on the
+   `agent` service so the demo can run
+   `docker compose exec agent python /app/scripts/inject_dynamic_incident.py`
+   without installing asyncpg on the host.
+
+Pending before merging to `main`:
+
+- Fresh-stack validation: `down -v` -> `up --build` -> `dynamic/status` ->
+  inject -> trigger -> rerun -> `latest_firing_alert` mode.
+- Open the PR for review (do not push directly to `main`).
+
+---
+
 # Arnt / Geir Feedback - 2026-04-07
 
 Context:
