@@ -108,6 +108,11 @@ services:
       KNOWLEDGE_DIR: ${KNOWLEDGE_DIR:-/app/docs/knowledge}
     volumes:
       - ./docs/knowledge:/app/docs/knowledge:ro
+      # Mount the host scripts dir read-only so the dynamic-dashboard
+      # demo can run inject_dynamic_incident.py from inside the agent
+      # container without having to install asyncpg on the host:
+      #   docker compose exec agent python /app/scripts/inject_dynamic_incident.py --scenario service_down
+      - ./scripts:/app/scripts:ro
     depends_on:
       timescaledb:
         condition: service_healthy

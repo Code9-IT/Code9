@@ -100,15 +100,44 @@ curl -X POST http://localhost:8000/api/v1/dynamic/trigger \
   }'
 ```
 
+## Dry-run Mode (Grafana-less Fallback)
+
+If Grafana is unreachable on demo day, you can still produce the generated
+dashboard JSON by passing `dry_run: true`:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/dynamic/trigger \
+  -H "Content-Type: application/json" \
+  -d '{
+    "vessel_imo": "IMO9300002",
+    "app_external_id": "uds-edge-parquet-sync",
+    "alert_name": "ServiceDown",
+    "severity": "critical",
+    "mode": "explicit_context",
+    "dry_run": true
+  }'
+```
+
+The response will include the full `dashboard_json` payload that *would* have
+been written to Grafana. The orchestrator still records the run in
+`dynamic_dashboard_runs` with `dry_run = TRUE` so the audit story holds.
+
 ## Checking the Runs Log
 
 After triggering, the run should appear in the `dynamic_dashboard_runs` table:
 
 ```sql
-SELECT id, created_at, scenario_key, vessel_imo, app_external_id, dashboard_uid
+SELECT id, created_at, scenario_key, vessel_imo, app_external_id,
+       dashboard_uid, dry_run
 FROM dynamic_dashboard_runs
 ORDER BY created_at DESC
 LIMIT 5;
+```
+
+You can also reach the same data via the API:
+
+```bash
+curl http://localhost:8000/api/v1/dynamic/status | jq
 ```
 
 ## Listing Available Scenarios
@@ -127,6 +156,18 @@ docker compose up -d --build
 # Wait for backfill, then inject again
 ```
 
-To re-inject without a full reset, just run the inject script again. The alert
-insert uses `ON CONFLICT DO NOTHING`-style unique fingerprints, so duplicate
-runs are safe and will produce new alerts with fresh timestamps.
+**Re-running without a full reset is safe.** Each scenario uses a stable
+fingerprint, and the inject script wipes any prior injection of the same
+scenario (alerts, generated logs, metric samples) before inserting a fresh
+copy. So you can run:
+
+```bash
+python scripts/inject_dynamic_incident.py --scenario service_down
+# ... do the demo, then inject the same scenario again ...
+python scripts/inject_dynamic_incident.py --scenario service_down
+```
+
+and end up with exactly one alert/log/metric set per scenario, with fresh
+timestamps. The auto-generated `app_logs` row is created by the
+`trg_sync_app_log_from_alert` trigger in `db/init/003_uds.sql` -- the script
+no longer inserts logs by hand.
