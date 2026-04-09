@@ -7,29 +7,24 @@ from typing import Any
 
 SCENARIO_METRICS: dict[str, list[str]] = {
     "service_down": [
-        "service_up",
-        "health_check_status",
+        "process_cpu_usage",
+        "http_error_rate_5xx",
         "process_uptime_seconds",
     ],
     "runtime_pressure": [
         "process_cpu_usage",
-        "process_memory_bytes",
-        "process_open_handles",
         "http_request_duration_p95",
         "http_error_rate_5xx",
         "db_query_duration_p95",
     ],
     "connectivity": [
         "last_sync_age_seconds",
-        "reporting_stale",
-        "sync_delayed",
-        "http_error_rate_5xx",
+        "process_cpu_usage",
     ],
     "generic_incident": [
-        "service_up",
-        "health_check_status",
         "http_error_rate_5xx",
         "process_cpu_usage",
+        "http_request_duration_p95",
     ],
 }
 

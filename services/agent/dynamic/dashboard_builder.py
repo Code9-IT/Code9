@@ -46,8 +46,8 @@ def build_dashboard_payload(context: dict[str, Any]) -> dict[str, Any]:
         _table_panel(4, "Recent Alerts", _recent_alerts_sql(vessel_imo, app_external_id, lookback_hours), x=12, y=9, w=12, h=10),
         _table_panel(5, "Incident Timeline", _incident_timeline_sql(vessel_imo, app_external_id, lookback_hours), x=0, y=19, w=12, h=10),
         _table_panel(6, "Recent Logs", _recent_logs_sql(vessel_imo, app_external_id, lookback_hours), x=12, y=19, w=12, h=10),
-        _timeseries_panel(7, f"Scenario Metrics ({lookback_hours}h)", _scenario_metrics_sql(vessel_imo, app_external_id, metric_names, lookback_hours), x=0, y=29, w=24, h=10),
-        _table_panel(8, f"Metric Summary ({lookback_hours}h)", _metric_summary_sql(vessel_imo, app_external_id, metric_names, lookback_hours), x=0, y=39, w=24, h=8),
+        _timeseries_panel(7, f"Scenario Trends ({lookback_hours}h)", _scenario_metrics_sql(vessel_imo, app_external_id, metric_names, lookback_hours), x=0, y=29, w=24, h=10),
+        _table_panel(8, f"Signal Summary ({lookback_hours}h)", _metric_summary_sql(vessel_imo, app_external_id, metric_names, lookback_hours), x=0, y=39, w=24, h=8),
     ]
 
     return {
@@ -375,8 +375,14 @@ def _scenario_metrics_sql(
     return f"""
 SELECT
     ms.time AS "time",
-    ms.metric_name AS metric,
-    ms.value AS value
+    CASE
+        WHEN ms.metric_name = 'last_sync_age_seconds' THEN 'last_sync_age_minutes'
+        ELSE ms.metric_name
+    END AS metric,
+    CASE
+        WHEN ms.metric_name = 'last_sync_age_seconds' THEN ms.value / 60.0
+        ELSE ms.value
+    END AS value
 FROM metric_samples ms
 WHERE ms.imo_nr = {_sql_literal(vessel_imo)}
   AND LOWER(ms.app_id) = LOWER({_sql_literal(app_external_id)})
@@ -400,7 +406,20 @@ def _metric_summary_sql(
     metric_list = ", ".join(_sql_literal(metric) for metric in metric_names)
     return f"""
 WITH filtered_metrics AS (
-    SELECT ms.metric_name, ms.value, ms.time, ms.metric_unit
+    SELECT
+        CASE
+            WHEN ms.metric_name = 'last_sync_age_seconds' THEN 'last_sync_age_minutes'
+            ELSE ms.metric_name
+        END AS metric_name,
+        CASE
+            WHEN ms.metric_name = 'last_sync_age_seconds' THEN ms.value / 60.0
+            ELSE ms.value
+        END AS value,
+        ms.time,
+        CASE
+            WHEN ms.metric_name = 'last_sync_age_seconds' THEN 'Minutes'
+            ELSE ms.metric_unit
+        END AS metric_unit
     FROM metric_samples ms
     WHERE ms.imo_nr = {_sql_literal(vessel_imo)}
       AND LOWER(ms.app_id) = LOWER({_sql_literal(app_external_id)})
