@@ -87,35 +87,14 @@ async def ensure_agent_schema():
             ON ai_analyses(vessel_imo, app_external_id, alert_name, timestamp DESC)
             """
         )
+        # Authoritative dynamic_dashboard_runs schema lives in
+        # db/init/005_dynamic_dashboard_runs.sql. We only patch in dry_run here
+        # so volumes that were created by earlier builds (before the column
+        # existed) keep working without a fresh init.
         await conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS dynamic_dashboard_runs (
-                id BIGSERIAL PRIMARY KEY,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('UTC', now()),
-                trigger_mode TEXT NOT NULL,
-                source_alert_fingerprint VARCHAR(255),
-                vessel_imo VARCHAR(255) NOT NULL,
-                app_external_id VARCHAR(255),
-                alert_name VARCHAR(255),
-                severity VARCHAR(50),
-                scenario_key VARCHAR(100) NOT NULL,
-                dashboard_uid VARCHAR(255) NOT NULL,
-                summary TEXT NOT NULL DEFAULT '',
-                used_tools_json JSONB NOT NULL DEFAULT '[]'::jsonb,
-                dashboard_json JSONB NOT NULL DEFAULT '{}'::jsonb
-            )
-            """
-        )
-        await conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_dynamic_dashboard_runs_created_at
-            ON dynamic_dashboard_runs(created_at DESC)
-            """
-        )
-        await conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS idx_dynamic_dashboard_runs_vessel_app
-            ON dynamic_dashboard_runs(vessel_imo, app_external_id, created_at DESC)
+            ALTER TABLE IF EXISTS dynamic_dashboard_runs
+            ADD COLUMN IF NOT EXISTS dry_run BOOLEAN NOT NULL DEFAULT FALSE
             """
         )
 
