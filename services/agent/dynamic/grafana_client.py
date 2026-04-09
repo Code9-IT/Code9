@@ -25,7 +25,8 @@ class GrafanaClient:
             public_url or os.getenv("GRAFANA_PUBLIC_URL", "http://localhost:3000")
         ).rstrip("/")
         self.username = (username or os.getenv("GRAFANA_ADMIN_USER", "admin")).strip()
-        self.password = password or os.getenv("GRAFANA_ADMIN_PASSWORD", "admin")
+        # Default kept in sync with docker-compose.yml and .env.example.
+        self.password = password or os.getenv("GRAFANA_ADMIN_PASSWORD", "code9-demo-admin")
         self.timeout_seconds = timeout_seconds
 
     async def health(self) -> dict[str, Any]:

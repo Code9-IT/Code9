@@ -37,6 +37,19 @@ python scripts/inject_dynamic_incident.py --scenario service_down
 docker compose exec agent python /app/scripts/inject_dynamic_incident.py --scenario service_down
 ```
 
+> **Windows / Git Bash users:** the in-container path `/app/scripts/...`
+> looks like a Windows root path to MSYS, which silently rewrites it to
+> `C:/Program Files/Git/app/scripts/...` and then `python` fails with
+> `[Errno 2] No such file or directory`. Prefix the command with
+> `MSYS_NO_PATHCONV=1` to disable the rewrite:
+>
+> ```bash
+> MSYS_NO_PATHCONV=1 docker compose exec agent \
+>   python /app/scripts/inject_dynamic_incident.py --scenario service_down
+> ```
+>
+> PowerShell, cmd, WSL, and Linux/macOS shells are unaffected.
+
 The script prints the exact `POST` body to use next.
 
 ### 3. Trigger the dynamic dashboard

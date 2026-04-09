@@ -71,7 +71,7 @@ defaults):
 | `DB_PASSWORD` | `postgres` | PostgreSQL password |
 | `DB_NAME` | `maritime_telemetry` | Database name |
 | `GRAFANA_ADMIN_USER` | `admin` | Grafana admin username |
-| `GRAFANA_ADMIN_PASSWORD` | `admin` | Grafana admin password |
+| `GRAFANA_ADMIN_PASSWORD` | `code9-demo-admin` | Grafana admin password (repo default; a local `.env` overrides it on a given machine) |
 | `MCP_API_KEY` | `code9-scope1-demo-key` | API key for MCP tool access |
 | `OLLAMA_MODEL` | `llama3.2` | LLM model for analysis |
 | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Embedding model for RAG |

@@ -393,6 +393,15 @@ def _select_alert(
     filtered = [alert for alert in alerts if matches(alert)]
     if filtered:
         return filtered[0]
+
+    # If the caller specified app_external_id or alert_name and nothing
+    # matched, do NOT silently substitute a different alert -- that caused
+    # the runtime_pressure / HighLatency mismatch where the request said
+    # ResourcePressure but the summary described an unrelated alert that
+    # happened to be at index 0. Only fall back to alerts[0] when the
+    # caller gave no selection criteria at all.
+    if app_external_id or alert_name:
+        return None
     return alerts[0] if alerts else None
 
 
