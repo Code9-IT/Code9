@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from db import init_pool, close_pool
 from routes.analyze import router as analyze_router
 from routes.chat import router as chat_router
+from routes.dynamic_dashboard import router as dynamic_dashboard_router
 from routes.events  import router as events_router
 from routes.validation import router as validation_router
 from rag.ingest import ingest_if_empty
@@ -157,6 +158,7 @@ app.add_middleware(
 # --- Routers --------------------------------------------------------------
 app.include_router(analyze_router, prefix="/api/v1")
 app.include_router(chat_router, prefix="/api/v1")
+app.include_router(dynamic_dashboard_router, prefix="/api/v1")
 app.include_router(events_router,  prefix="/api/v1")
 app.include_router(validation_router, prefix="/api/v1")
 

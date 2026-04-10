@@ -1,5 +1,7 @@
 {
-  "annotations": {"list": []},
+  "annotations": {
+    "list": []
+  },
   "description": "Fleet-wide UDS overview for DevOps engineers. Use the dashboard links to move between fleet, incident, NOC, and the mapped legacy Ship Operations view for MV Edge Aurora (IMO9300001).",
   "editable": true,
   "graphTooltip": 1,
@@ -80,23 +82,67 @@
   ],
   "panels": [
     {
+      "id": 61,
+      "title": "",
+      "type": "text",
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "html",
+        "content": "<style>@keyframes live-blink{0%,100%{opacity:1}50%{opacity:0.2}}@keyframes gradient-sweep{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}.live-bar{display:flex;align-items:center;padding:7px 18px;background:linear-gradient(270deg,#0d1117,#0d1a2e,#0d1117);background-size:400% 400%;animation:gradient-sweep 12s ease infinite;border-radius:6px;gap:14px;height:40px;border:1px solid #1a2030}.live-dot{width:9px;height:9px;border-radius:50%;background:#5794F2;box-shadow:0 0 7px #5794F2;animation:live-blink 1.4s step-start infinite;flex-shrink:0}.live-txt{font-size:11px;font-weight:700;letter-spacing:2px;color:#5794F2;text-transform:uppercase}.sep{color:#1e2535;font-size:16px}.sys-name{font-size:12px;color:#bbb;font-weight:500}.icon{font-size:17px;animation:bob 3.5s ease-in-out infinite}.right-section{margin-left:auto}.tag{font-size:10px;color:#444;letter-spacing:1px;text-transform:uppercase}</style><div class=\"live-bar\"><div class=\"live-dot\"></div><span class=\"live-txt\">Live</span><span class=\"sep\">|</span><span class=\"icon\">&#128674;</span><span class=\"sys-name\">Fleet Overview &mdash; Multi-vessel operational status</span><div class=\"right-section\"><span class=\"tag\">auto-refresh 30s</span></div></div>"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "targets": [],
+      "transparent": true
+    },
+    {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 3
+      },
       "id": 1,
       "title": "Fleet Health Overview",
       "type": "row"
     },
     {
-      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 1},
-              {"color": "red", "value": 3}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
             ]
           },
           "unit": "short",
@@ -104,35 +150,62 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 1},
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 4
+      },
       "id": 2,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
         "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
-      "targets": [{
-        "format": "table",
-        "rawSql": "SELECT COUNT(DISTINCT u.id) AS \"Total Vessels\" FROM udslocations u",
-        "refId": "A"
-      }],
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT COUNT(DISTINCT u.id) AS \"Total Vessels\" FROM udslocations u",
+          "refId": "A"
+        }
+      ],
       "title": "Total Vessels",
       "type": "stat"
     },
     {
-      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 1},
-              {"color": "red", "value": 3}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
             ]
           },
           "unit": "short",
@@ -140,35 +213,62 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 1},
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 4
+      },
       "id": 3,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
         "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
-      "targets": [{
-        "format": "table",
-        "rawSql": "SELECT COUNT(*) AS \"Active Alerts\" FROM alerts WHERE status = 'firing' AND (ends_at IS NULL OR ends_at > NOW())",
-        "refId": "A"
-      }],
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS \"Active Alerts\" FROM alerts WHERE status = 'firing' AND (ends_at IS NULL OR ends_at > NOW())",
+          "refId": "A"
+        }
+      ],
       "title": "Fleet Active Alerts",
       "type": "stat"
     },
     {
-      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "orange", "value": 1},
-              {"color": "red", "value": 2}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
             ]
           },
           "unit": "short",
@@ -176,35 +276,62 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 1},
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 4
+      },
       "id": 4,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
         "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
-      "targets": [{
-        "format": "table",
-        "rawSql": "SELECT COUNT(DISTINCT u.imo_nr) AS \"Critical Vessels\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id WHERE al.status = 'firing' AND al.severity = 'critical' AND (al.ends_at IS NULL OR al.ends_at > NOW())",
-        "refId": "A"
-      }],
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT COUNT(DISTINCT u.imo_nr) AS \"Critical Vessels\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id WHERE al.status = 'firing' AND al.severity = 'critical' AND (al.ends_at IS NULL OR al.ends_at > NOW())",
+          "refId": "A"
+        }
+      ],
       "title": "Vessels with Critical Alerts",
       "type": "stat"
     },
     {
-      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "thresholds"},
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "orange", "value": 1},
-              {"color": "red", "value": 3}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 3
+              }
             ]
           },
           "unit": "short",
@@ -212,27 +339,45 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 1},
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 4
+      },
       "id": 5,
       "options": {
         "colorMode": "background",
         "graphMode": "none",
         "justifyMode": "center",
         "orientation": "auto",
-        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
         "textMode": "auto"
       },
-      "targets": [{
-        "format": "table",
-        "rawSql": "SELECT COUNT(*) AS \"Correlated Apps\" FROM ( SELECT a.external_id FROM alerts al JOIN applications a ON a.id = al.application_id JOIN udslocations u ON u.id = al.uds_location_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY a.external_id HAVING COUNT(DISTINCT u.imo_nr) > 1 ) correlated_apps",
-        "refId": "A"
-      }],
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT COUNT(*) AS \"Correlated Apps\" FROM ( SELECT a.external_id FROM alerts al JOIN applications a ON a.id = al.application_id JOIN udslocations u ON u.id = al.uds_location_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY a.external_id HAVING COUNT(DISTINCT u.imo_nr) > 1 ) correlated_apps",
+          "refId": "A"
+        }
+      ],
       "title": "Apps Affected on Multiple Vessels",
       "type": "stat"
     },
     {
       "datasource": null,
-      "gridPos": {"h": 3, "w": 24, "x": 0, "y": 5},
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
       "id": 6,
       "options": {
         "content": "## Drilldown\n\nClick `Vessel` or `IMO` to open the Scope 1 incident workbench for that vessel. In the active-alert table, clicking `Application` or `App ID` opens the same vessel with that app preselected.",
@@ -242,492 +387,865 @@
       "type": "text"
     },
     {
-      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": {"displayMode": "auto", "filterable": true},
-          "color": {"mode": "thresholds"},
+          "custom": {
+            "displayMode": "auto",
+            "filterable": true
+          },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null}
+              {
+                "color": "green",
+                "value": null
+              }
             ]
           }
         },
         "overrides": [
           {
-            "matcher": {"id": "byName", "options": "Status"},
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
             "properties": [
               {
                 "id": "mappings",
                 "value": [
-                  {"type": "value", "options": {"healthy": {"text": "Healthy", "color": "green"}}},
-                  {"type": "value", "options": {"degraded": {"text": "Degraded", "color": "orange"}}},
-                  {"type": "value", "options": {"critical": {"text": "Critical", "color": "red"}}}
+                  {
+                    "type": "value",
+                    "options": {
+                      "healthy": {
+                        "text": "Healthy",
+                        "color": "green"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "degraded": {
+                        "text": "Degraded",
+                        "color": "orange"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "text": "Critical",
+                        "color": "red"
+                      }
+                    }
+                  }
                 ]
               },
-              {"id": "custom.displayMode", "value": "color-background-solid"}
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              }
             ]
           },
           {
-            "matcher": {"id": "byName", "options": "Active Alerts"},
+            "matcher": {
+              "id": "byName",
+              "options": "Active Alerts"
+            },
             "properties": [
               {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    {"color": "green", "value": null},
-                    {"color": "yellow", "value": 1},
-                    {"color": "red", "value": 3}
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 3
+                    }
                   ]
                 }
               },
-              {"id": "custom.displayMode", "value": "color-background-solid"}
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              }
             ]
           },
           {
-            "matcher": {"id": "byName", "options": "Vessel"},
+            "matcher": {
+              "id": "byName",
+              "options": "Vessel"
+            },
             "properties": [
-              {"id": "links", "value": [
-                {
-                  "title": "Open vessel incident workbench",
-                  "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__data.fields[\"IMO\"]}&var-incident_window=6%20hours",
-                  "targetBlank": false
-                }
-              ]}
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open vessel incident workbench",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__data.fields[\"IMO\"]}&var-incident_window=6%20hours",
+                    "targetBlank": false
+                  }
+                ]
+              }
             ]
           },
           {
-            "matcher": {"id": "byName", "options": "IMO"},
+            "matcher": {
+              "id": "byName",
+              "options": "IMO"
+            },
             "properties": [
-              {"id": "links", "value": [
-                {
-                  "title": "Open vessel incident workbench",
-                  "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__value.raw}&var-incident_window=6%20hours",
-                  "targetBlank": false
-                }
-              ]}
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open vessel incident workbench",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__value.raw}&var-incident_window=6%20hours",
+                    "targetBlank": false
+                  }
+                ]
+              }
             ]
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
       "id": 10,
       "options": {
         "showHeader": true,
-        "sortBy": [{"displayName": "Active Alerts", "desc": true}],
-        "footer": {"show": false}
+        "sortBy": [
+          {
+            "displayName": "Active Alerts",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
       },
-      "targets": [{
-        "format": "table",
-        "rawSql": "SELECT u.name AS \"Vessel\", u.imo_nr AS \"IMO\", COUNT(DISTINCT CASE WHEN al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.id END) AS \"Active Alerts\", COUNT(DISTINCT CASE WHEN al.status = 'firing' AND al.severity = 'critical' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.id END) AS \"Critical\", COUNT(DISTINCT CASE WHEN al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.application_id END) AS \"Affected Apps\", (SELECT COUNT(*) FROM uds_location_application_instances WHERE uds_location_id = u.id) AS \"Total Apps\", CASE WHEN COUNT(DISTINCT CASE WHEN al.status = 'firing' AND al.severity = 'critical' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.id END) > 0 THEN 'critical' WHEN COUNT(DISTINCT CASE WHEN al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.id END) > 0 THEN 'degraded' ELSE 'healthy' END AS \"Status\", to_char(MAX(ms.time), 'YYYY-MM-DD HH24:MI:SS') AS \"Latest Metric\" FROM udslocations u LEFT JOIN alerts al ON al.uds_location_id = u.id LEFT JOIN metric_samples ms ON ms.imo_nr = u.imo_nr GROUP BY u.id, u.name, u.imo_nr ORDER BY \"Active Alerts\" DESC, u.name ASC",
-        "refId": "A"
-      }],
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT u.name AS \"Vessel\", u.imo_nr AS \"IMO\", COUNT(DISTINCT CASE WHEN al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.id END) AS \"Active Alerts\", COUNT(DISTINCT CASE WHEN al.status = 'firing' AND al.severity = 'critical' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.id END) AS \"Critical\", COUNT(DISTINCT CASE WHEN al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.application_id END) AS \"Affected Apps\", (SELECT COUNT(*) FROM uds_location_application_instances WHERE uds_location_id = u.id) AS \"Total Apps\", CASE WHEN COUNT(DISTINCT CASE WHEN al.status = 'firing' AND al.severity = 'critical' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.id END) > 0 THEN 'critical' WHEN COUNT(DISTINCT CASE WHEN al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) THEN al.id END) > 0 THEN 'degraded' ELSE 'healthy' END AS \"Status\", to_char(MAX(ms.time), 'YYYY-MM-DD HH24:MI:SS') AS \"Latest Metric\" FROM udslocations u LEFT JOIN alerts al ON al.uds_location_id = u.id LEFT JOIN metric_samples ms ON ms.imo_nr = u.imo_nr GROUP BY u.id, u.name, u.imo_nr ORDER BY \"Active Alerts\" DESC, u.name ASC",
+          "refId": "A"
+        }
+      ],
       "title": "Fleet Vessel Status",
       "type": "table"
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 16},
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 19
+      },
       "id": 20,
       "title": "Cross-Vessel Active Alerts",
       "type": "row"
     },
     {
-      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": {"displayMode": "auto", "filterable": true}
+          "custom": {
+            "displayMode": "auto",
+            "filterable": true
+          }
         },
         "overrides": [
           {
-            "matcher": {"id": "byName", "options": "Severity"},
+            "matcher": {
+              "id": "byName",
+              "options": "Severity"
+            },
             "properties": [
               {
                 "id": "mappings",
                 "value": [
-                  {"type": "value", "options": {"critical": {"text": "Critical", "color": "red"}}},
-                  {"type": "value", "options": {"warning": {"text": "Warning", "color": "orange"}}}
+                  {
+                    "type": "value",
+                    "options": {
+                      "critical": {
+                        "text": "Critical",
+                        "color": "red"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "warning": {
+                        "text": "Warning",
+                        "color": "orange"
+                      }
+                    }
+                  }
                 ]
               },
-              {"id": "custom.displayMode", "value": "color-background-solid"}
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              }
             ]
           },
           {
-            "matcher": {"id": "byName", "options": "Status"},
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
             "properties": [
               {
                 "id": "mappings",
                 "value": [
-                  {"type": "value", "options": {"firing": {"text": "Firing", "color": "red"}}},
-                  {"type": "value", "options": {"resolved": {"text": "Resolved", "color": "green"}}}
+                  {
+                    "type": "value",
+                    "options": {
+                      "firing": {
+                        "text": "Firing",
+                        "color": "red"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "resolved": {
+                        "text": "Resolved",
+                        "color": "green"
+                      }
+                    }
+                  }
                 ]
               },
-              {"id": "custom.displayMode", "value": "color-background-solid"}
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              }
             ]
           },
           {
-            "matcher": {"id": "byName", "options": "Vessel"},
+            "matcher": {
+              "id": "byName",
+              "options": "Vessel"
+            },
             "properties": [
-              {"id": "links", "value": [
-                {
-                  "title": "Open vessel incident workbench",
-                  "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__data.fields[\"IMO\"]}&var-incident_window=6%20hours",
-                  "targetBlank": false
-                }
-              ]}
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open vessel incident workbench",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__data.fields[\"IMO\"]}&var-incident_window=6%20hours",
+                    "targetBlank": false
+                  }
+                ]
+              }
             ]
           },
           {
-            "matcher": {"id": "byName", "options": "IMO"},
+            "matcher": {
+              "id": "byName",
+              "options": "IMO"
+            },
             "properties": [
-              {"id": "links", "value": [
-                {
-                  "title": "Open vessel incident workbench",
-                  "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__value.raw}&var-incident_window=6%20hours",
-                  "targetBlank": false
-                }
-              ]}
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open vessel incident workbench",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__value.raw}&var-incident_window=6%20hours",
+                    "targetBlank": false
+                  }
+                ]
+              }
             ]
           },
           {
-            "matcher": {"id": "byName", "options": "Application"},
+            "matcher": {
+              "id": "byName",
+              "options": "Application"
+            },
             "properties": [
-              {"id": "links", "value": [
-                {
-                  "title": "Open incident workbench for this app",
-                  "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__data.fields[\"IMO\"]}&var-app=${__data.fields[\"App ID\"]}&var-incident_window=6%20hours",
-                  "targetBlank": false
-                }
-              ]}
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open incident workbench for this app",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__data.fields[\"IMO\"]}&var-app=${__data.fields[\"App ID\"]}&var-incident_window=6%20hours",
+                    "targetBlank": false
+                  }
+                ]
+              }
             ]
           },
           {
-            "matcher": {"id": "byName", "options": "App ID"},
+            "matcher": {
+              "id": "byName",
+              "options": "App ID"
+            },
             "properties": [
-              {"id": "links", "value": [
-                {
-                  "title": "Open incident workbench for this app",
-                  "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__data.fields[\"IMO\"]}&var-app=${__value.raw}&var-incident_window=6%20hours",
-                  "targetBlank": false
-                }
-              ]}
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open incident workbench for this app",
+                    "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${__data.fields[\"IMO\"]}&var-app=${__value.raw}&var-incident_window=6%20hours",
+                    "targetBlank": false
+                  }
+                ]
+              }
             ]
           }
         ]
       },
-      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 17},
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
       "id": 21,
       "options": {
         "showHeader": true,
-        "sortBy": [{"displayName": "Severity", "desc": true}],
-        "footer": {"show": false}
+        "sortBy": [
+          {
+            "displayName": "Severity",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
       },
-      "targets": [{
-        "format": "table",
-        "rawSql": "SELECT u.name AS \"Vessel\", u.imo_nr AS \"IMO\", a.name AS \"Application\", a.external_id AS \"App ID\", al.alert_name AS \"Alert\", al.severity AS \"Severity\", al.status AS \"Status\", al.alert_type AS \"Type\", to_char(al.starts_at, 'YYYY-MM-DD HH24:MI') AS \"Started\", CASE WHEN al.ends_at IS NOT NULL THEN ROUND(EXTRACT(EPOCH FROM (al.ends_at - al.starts_at)) / 60)::text || ' min' ELSE ROUND(EXTRACT(EPOCH FROM (NOW() - al.starts_at)) / 60)::text || ' min (ongoing)' END AS \"Duration\", COALESCE(al.annotations->>'summary', '') AS \"Summary\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id LEFT JOIN applications a ON a.id = al.application_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) ORDER BY CASE al.severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END ASC, al.starts_at DESC",
-        "refId": "A"
-      }],
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT u.name AS \"Vessel\", u.imo_nr AS \"IMO\", a.name AS \"Application\", a.external_id AS \"App ID\", al.alert_name AS \"Alert\", al.severity AS \"Severity\", al.status AS \"Status\", al.alert_type AS \"Type\", to_char(al.starts_at, 'YYYY-MM-DD HH24:MI') AS \"Started\", CASE WHEN al.ends_at IS NOT NULL THEN ROUND(EXTRACT(EPOCH FROM (al.ends_at - al.starts_at)) / 60)::text || ' min' ELSE ROUND(EXTRACT(EPOCH FROM (NOW() - al.starts_at)) / 60)::text || ' min (ongoing)' END AS \"Duration\", COALESCE(al.annotations->>'summary', '') AS \"Summary\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id LEFT JOIN applications a ON a.id = al.application_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) ORDER BY CASE al.severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END ASC, al.starts_at DESC",
+          "refId": "A"
+        }
+      ],
       "title": "Active Alerts Across Fleet",
       "type": "table"
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 27},
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
       "id": 30,
       "title": "Cross-Vessel Correlation",
       "type": "row"
     },
     {
-      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": {"displayMode": "auto", "filterable": true},
-          "color": {"mode": "thresholds"},
+          "custom": {
+            "displayMode": "auto",
+            "filterable": true
+          },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null}
+              {
+                "color": "green",
+                "value": null
+              }
             ]
           }
         },
         "overrides": [
           {
-            "matcher": {"id": "byName", "options": "Affected Vessels"},
+            "matcher": {
+              "id": "byName",
+              "options": "Affected Vessels"
+            },
             "properties": [
               {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    {"color": "green", "value": null},
-                    {"color": "orange", "value": 2},
-                    {"color": "red", "value": 3}
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 2
+                    },
+                    {
+                      "color": "red",
+                      "value": 3
+                    }
                   ]
                 }
               },
-              {"id": "custom.displayMode", "value": "color-background-solid"}
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              }
             ]
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 31
+      },
       "id": 31,
       "options": {
         "showHeader": true,
-        "sortBy": [{"displayName": "Affected Vessels", "desc": true}],
-        "footer": {"show": false}
+        "sortBy": [
+          {
+            "displayName": "Affected Vessels",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
       },
-      "targets": [{
-        "format": "table",
-        "rawSql": "SELECT a.external_id AS \"App ID\", a.name AS \"Application\", COUNT(DISTINCT u.imo_nr) AS \"Affected Vessels\", STRING_AGG(DISTINCT u.name || ' (' || u.imo_nr || ')', ', ' ORDER BY u.name || ' (' || u.imo_nr || ')') AS \"Vessels\", STRING_AGG(DISTINCT al.alert_name, ', ') AS \"Alert Types\", STRING_AGG(DISTINCT al.severity, ', ') AS \"Severities\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id JOIN applications a ON a.id = al.application_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY a.external_id, a.name HAVING COUNT(DISTINCT u.imo_nr) > 1 ORDER BY COUNT(DISTINCT u.imo_nr) DESC, a.name ASC",
-        "refId": "A"
-      }],
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT a.external_id AS \"App ID\", a.name AS \"Application\", COUNT(DISTINCT u.imo_nr) AS \"Affected Vessels\", STRING_AGG(DISTINCT u.name || ' (' || u.imo_nr || ')', ', ' ORDER BY u.name || ' (' || u.imo_nr || ')') AS \"Vessels\", STRING_AGG(DISTINCT al.alert_name, ', ') AS \"Alert Types\", STRING_AGG(DISTINCT al.severity, ', ') AS \"Severities\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id JOIN applications a ON a.id = al.application_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY a.external_id, a.name HAVING COUNT(DISTINCT u.imo_nr) > 1 ORDER BY COUNT(DISTINCT u.imo_nr) DESC, a.name ASC",
+          "refId": "A"
+        }
+      ],
       "title": "Correlated App Issues (Same App on Multiple Vessels)",
       "type": "table"
     },
     {
-      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": {"displayMode": "auto", "filterable": true},
-          "color": {"mode": "thresholds"},
+          "custom": {
+            "displayMode": "auto",
+            "filterable": true
+          },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null}
+              {
+                "color": "green",
+                "value": null
+              }
             ]
           }
         },
         "overrides": [
           {
-            "matcher": {"id": "byName", "options": "Affected Vessels"},
+            "matcher": {
+              "id": "byName",
+              "options": "Affected Vessels"
+            },
             "properties": [
               {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    {"color": "green", "value": null},
-                    {"color": "orange", "value": 2},
-                    {"color": "red", "value": 3}
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 2
+                    },
+                    {
+                      "color": "red",
+                      "value": 3
+                    }
                   ]
                 }
               },
-              {"id": "custom.displayMode", "value": "color-background-solid"}
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              }
             ]
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 31
+      },
       "id": 32,
       "options": {
         "showHeader": true,
-        "sortBy": [{"displayName": "Affected Vessels", "desc": true}],
-        "footer": {"show": false}
+        "sortBy": [
+          {
+            "displayName": "Affected Vessels",
+            "desc": true
+          }
+        ],
+        "footer": {
+          "show": false
+        }
       },
-      "targets": [{
-        "format": "table",
-        "rawSql": "SELECT al.alert_name AS \"Alert Type\", al.alert_type AS \"Category\", COUNT(DISTINCT u.imo_nr) AS \"Affected Vessels\", STRING_AGG(DISTINCT u.name || ' (' || u.imo_nr || ')', ', ' ORDER BY u.name || ' (' || u.imo_nr || ')') AS \"Vessels\", STRING_AGG(DISTINCT a.name, ', ') AS \"Applications\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id LEFT JOIN applications a ON a.id = al.application_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY al.alert_name, al.alert_type HAVING COUNT(DISTINCT u.imo_nr) > 1 ORDER BY COUNT(DISTINCT u.imo_nr) DESC, al.alert_name ASC",
-        "refId": "A"
-      }],
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "SELECT al.alert_name AS \"Alert Type\", al.alert_type AS \"Category\", COUNT(DISTINCT u.imo_nr) AS \"Affected Vessels\", STRING_AGG(DISTINCT u.name || ' (' || u.imo_nr || ')', ', ' ORDER BY u.name || ' (' || u.imo_nr || ')') AS \"Vessels\", STRING_AGG(DISTINCT a.name, ', ') AS \"Applications\" FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id LEFT JOIN applications a ON a.id = al.application_id WHERE al.status = 'firing' AND (al.ends_at IS NULL OR al.ends_at > NOW()) GROUP BY al.alert_name, al.alert_type HAVING COUNT(DISTINCT u.imo_nr) > 1 ORDER BY COUNT(DISTINCT u.imo_nr) DESC, al.alert_name ASC",
+          "refId": "A"
+        }
+      ],
       "title": "Correlated Alert Types (Same Alert on Multiple Vessels)",
       "type": "table"
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 36},
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 39
+      },
       "id": 40,
       "title": "Fleet Connectivity",
       "type": "row"
     },
     {
-      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
       "fieldConfig": {
         "defaults": {
-          "custom": {"displayMode": "auto", "filterable": true},
-          "color": {"mode": "thresholds"},
+          "custom": {
+            "displayMode": "auto",
+            "filterable": true
+          },
+          "color": {
+            "mode": "thresholds"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null}
+              {
+                "color": "green",
+                "value": null
+              }
             ]
           }
         },
         "overrides": [
           {
-            "matcher": {"id": "byName", "options": "Connectivity"},
+            "matcher": {
+              "id": "byName",
+              "options": "Connectivity"
+            },
             "properties": [
               {
                 "id": "mappings",
                 "value": [
-                  {"type": "value", "options": {"Fresh": {"text": "Fresh", "color": "green"}}},
-                  {"type": "value", "options": {"Delayed": {"text": "Delayed", "color": "orange"}}},
-                  {"type": "value", "options": {"Stale": {"text": "Stale", "color": "red"}}}
+                  {
+                    "type": "value",
+                    "options": {
+                      "Fresh": {
+                        "text": "Fresh",
+                        "color": "green"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "Delayed": {
+                        "text": "Delayed",
+                        "color": "orange"
+                      }
+                    }
+                  },
+                  {
+                    "type": "value",
+                    "options": {
+                      "Stale": {
+                        "text": "Stale",
+                        "color": "red"
+                      }
+                    }
+                  }
                 ]
               },
-              {"id": "custom.displayMode", "value": "color-background-solid"}
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              }
             ]
           },
           {
-            "matcher": {"id": "byName", "options": "Sync Age"},
+            "matcher": {
+              "id": "byName",
+              "options": "Sync Age"
+            },
             "properties": [
               {
                 "id": "thresholds",
                 "value": {
                   "mode": "absolute",
                   "steps": [
-                    {"color": "green", "value": null},
-                    {"color": "orange", "value": 300},
-                    {"color": "red", "value": 1800}
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 300
+                    },
+                    {
+                      "color": "red",
+                      "value": 1800
+                    }
                   ]
                 }
               },
-              {"id": "custom.displayMode", "value": "color-background-solid"},
-              {"id": "unit", "value": "s"}
+              {
+                "id": "custom.displayMode",
+                "value": "color-background-solid"
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              }
             ]
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 37},
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
       "id": 41,
       "options": {
         "showHeader": true,
-        "sortBy": [{"displayName": "Connectivity", "desc": false}],
-        "footer": {"show": false}
+        "sortBy": [
+          {
+            "displayName": "Connectivity",
+            "desc": false
+          }
+        ],
+        "footer": {
+          "show": false
+        }
       },
-      "targets": [{
-        "format": "table",
-        "rawSql": "WITH latest_sync AS ( SELECT ms.imo_nr, MAX(ms.time) AS latest_metric_time, AVG(CASE WHEN ms.metric_name = 'last_sync_age_seconds' THEN ms.value END) AS avg_sync_age, MAX(CASE WHEN ms.metric_name = 'reporting_stale' THEN ms.value END) AS reporting_stale, MAX(CASE WHEN ms.metric_name = 'sync_delayed' THEN ms.value END) AS sync_delayed FROM metric_samples ms WHERE ms.metric_name IN ('last_sync_age_seconds', 'reporting_stale', 'sync_delayed') AND ms.time > NOW() - INTERVAL '2 hours' GROUP BY ms.imo_nr ) SELECT u.name AS \"Vessel\", u.imo_nr AS \"IMO\", to_char(ls.latest_metric_time, 'YYYY-MM-DD HH24:MI:SS') AS \"Latest Metric\", ROUND(EXTRACT(EPOCH FROM (NOW() - ls.latest_metric_time)))::int AS \"Freshness (s)\", ROUND(COALESCE(ls.avg_sync_age, 0))::int AS \"Sync Age\", CASE WHEN COALESCE(ls.reporting_stale, 0) >= 1 THEN 'Stale' WHEN COALESCE(ls.sync_delayed, 0) >= 1 THEN 'Delayed' WHEN ls.latest_metric_time IS NULL THEN 'Stale' WHEN EXTRACT(EPOCH FROM (NOW() - ls.latest_metric_time)) > 1800 THEN 'Stale' WHEN EXTRACT(EPOCH FROM (NOW() - ls.latest_metric_time)) > 600 THEN 'Delayed' ELSE 'Fresh' END AS \"Connectivity\", COALESCE(stale_apps.cnt, 0) AS \"Stale Apps\", COALESCE(delayed_apps.cnt, 0) AS \"Delayed Apps\" FROM udslocations u LEFT JOIN latest_sync ls ON ls.imo_nr = u.imo_nr LEFT JOIN LATERAL ( SELECT COUNT(DISTINCT ms2.app_id)::int AS cnt FROM metric_samples ms2 WHERE ms2.imo_nr = u.imo_nr AND ms2.metric_name = 'reporting_stale' AND ms2.value >= 1 AND ms2.time > NOW() - INTERVAL '2 hours' ) stale_apps ON true LEFT JOIN LATERAL ( SELECT COUNT(DISTINCT ms3.app_id)::int AS cnt FROM metric_samples ms3 WHERE ms3.imo_nr = u.imo_nr AND ms3.metric_name = 'sync_delayed' AND ms3.value >= 1 AND ms3.time > NOW() - INTERVAL '2 hours' ) delayed_apps ON true ORDER BY CASE WHEN COALESCE(ls.reporting_stale, 0) >= 1 THEN 0 WHEN COALESCE(ls.sync_delayed, 0) >= 1 THEN 1 ELSE 2 END ASC, u.name ASC",
-        "refId": "A"
-      }],
+      "targets": [
+        {
+          "format": "table",
+          "rawSql": "WITH latest_sync AS ( SELECT ms.imo_nr, MAX(ms.time) AS latest_metric_time, AVG(CASE WHEN ms.metric_name = 'last_sync_age_seconds' THEN ms.value END) AS avg_sync_age, MAX(CASE WHEN ms.metric_name = 'reporting_stale' THEN ms.value END) AS reporting_stale, MAX(CASE WHEN ms.metric_name = 'sync_delayed' THEN ms.value END) AS sync_delayed FROM metric_samples ms WHERE ms.metric_name IN ('last_sync_age_seconds', 'reporting_stale', 'sync_delayed') AND ms.time > NOW() - INTERVAL '2 hours' GROUP BY ms.imo_nr ) SELECT u.name AS \"Vessel\", u.imo_nr AS \"IMO\", to_char(ls.latest_metric_time, 'YYYY-MM-DD HH24:MI:SS') AS \"Latest Metric\", ROUND(EXTRACT(EPOCH FROM (NOW() - ls.latest_metric_time)))::int AS \"Freshness (s)\", ROUND(COALESCE(ls.avg_sync_age, 0))::int AS \"Sync Age\", CASE WHEN COALESCE(ls.reporting_stale, 0) >= 1 THEN 'Stale' WHEN COALESCE(ls.sync_delayed, 0) >= 1 THEN 'Delayed' WHEN ls.latest_metric_time IS NULL THEN 'Stale' WHEN EXTRACT(EPOCH FROM (NOW() - ls.latest_metric_time)) > 1800 THEN 'Stale' WHEN EXTRACT(EPOCH FROM (NOW() - ls.latest_metric_time)) > 600 THEN 'Delayed' ELSE 'Fresh' END AS \"Connectivity\", COALESCE(stale_apps.cnt, 0) AS \"Stale Apps\", COALESCE(delayed_apps.cnt, 0) AS \"Delayed Apps\" FROM udslocations u LEFT JOIN latest_sync ls ON ls.imo_nr = u.imo_nr LEFT JOIN LATERAL ( SELECT COUNT(DISTINCT ms2.app_id)::int AS cnt FROM metric_samples ms2 WHERE ms2.imo_nr = u.imo_nr AND ms2.metric_name = 'reporting_stale' AND ms2.value >= 1 AND ms2.time > NOW() - INTERVAL '2 hours' ) stale_apps ON true LEFT JOIN LATERAL ( SELECT COUNT(DISTINCT ms3.app_id)::int AS cnt FROM metric_samples ms3 WHERE ms3.imo_nr = u.imo_nr AND ms3.metric_name = 'sync_delayed' AND ms3.value >= 1 AND ms3.time > NOW() - INTERVAL '2 hours' ) delayed_apps ON true ORDER BY CASE WHEN COALESCE(ls.reporting_stale, 0) >= 1 THEN 0 WHEN COALESCE(ls.sync_delayed, 0) >= 1 THEN 1 ELSE 2 END ASC, u.name ASC",
+          "refId": "A"
+        }
+      ],
       "title": "Fleet Connectivity Status",
       "type": "table"
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 45},
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 48
+      },
       "id": 50,
       "title": "Alert Trend",
       "type": "row"
     },
     {
-      "datasource": {"type": "postgres", "uid": "timescaledb"},
+      "datasource": {
+        "type": "postgres",
+        "uid": "timescaledb"
+      },
       "fieldConfig": {
         "defaults": {
-          "color": {"mode": "palette-classic"},
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {
             "fillOpacity": 30,
             "lineWidth": 2,
-            "stacking": {"mode": "normal"}
+            "stacking": {
+              "mode": "normal"
+            }
           },
           "unit": "short"
         },
         "overrides": []
       },
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 46},
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 49
+      },
       "id": 51,
       "options": {
-        "legend": {"displayMode": "list", "placement": "bottom"},
-        "tooltip": {"mode": "multi", "sort": "desc"}
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       },
-      "targets": [{
-        "format": "time_series",
-        "rawSql": "SELECT time_bucket('30 minutes', al.starts_at) AS \"time\", u.name AS metric, COUNT(*) AS value FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id WHERE al.starts_at > NOW() - INTERVAL '6 hours' GROUP BY 1, u.name ORDER BY 1",
-        "refId": "A"
-      }],
+      "targets": [
+        {
+          "format": "time_series",
+          "rawSql": "SELECT time_bucket('30 minutes', al.starts_at) AS \"time\", u.name AS metric, COUNT(*) AS value FROM alerts al JOIN udslocations u ON u.id = al.uds_location_id WHERE al.starts_at > NOW() - INTERVAL '6 hours' GROUP BY 1, u.name ORDER BY 1",
+          "refId": "A"
+        }
+      ],
       "title": "Alerts Over Time by Vessel (6h)",
       "type": "timeseries"
     }
   ],
   "refresh": "30s",
-  "schemaVersion": 39,
+  "schemaVersion": 40,
   "style": "dark",
-  "tags": ["maritime", "fleet", "scope2", "multi-vessel"],
-  "templating": {"list": [
-    {
-      "current": {
-        "selected": true,
-        "text": "vessel_001",
-        "value": "vessel_001"
-      },
-      "hide": 2,
-      "label": "Bridge Legacy Vessel",
-      "name": "bridge_legacy_vessel",
-      "options": [
-        {
+  "tags": [
+    "maritime",
+    "fleet",
+    "scope2",
+    "multi-vessel"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
           "selected": true,
           "text": "vessel_001",
           "value": "vessel_001"
-        }
-      ],
-      "query": "vessel_001",
-      "skipUrlSync": true,
-      "type": "constant"
-    },
-    {
-      "current": {
-        "selected": true,
-        "text": "IMO9300001",
-        "value": "IMO9300001"
+        },
+        "hide": 2,
+        "label": "Bridge Legacy Vessel",
+        "name": "bridge_legacy_vessel",
+        "options": [
+          {
+            "selected": true,
+            "text": "vessel_001",
+            "value": "vessel_001"
+          }
+        ],
+        "query": "vessel_001",
+        "skipUrlSync": true,
+        "type": "constant"
       },
-      "hide": 2,
-      "label": "Bridge UDS Vessel",
-      "name": "bridge_uds_vessel",
-      "options": [
-        {
+      {
+        "current": {
           "selected": true,
           "text": "IMO9300001",
           "value": "IMO9300001"
-        }
-      ],
-      "query": "IMO9300001",
-      "skipUrlSync": true,
-      "type": "constant"
-    },
-    {
-      "current": {
-        "selected": true,
-        "text": "6 hours",
-        "value": "6 hours"
+        },
+        "hide": 2,
+        "label": "Bridge UDS Vessel",
+        "name": "bridge_uds_vessel",
+        "options": [
+          {
+            "selected": true,
+            "text": "IMO9300001",
+            "value": "IMO9300001"
+          }
+        ],
+        "query": "IMO9300001",
+        "skipUrlSync": true,
+        "type": "constant"
       },
-      "hide": 2,
-      "label": "Default Incident Window",
-      "name": "bridge_default_incident_window",
-      "options": [
-        {
+      {
+        "current": {
           "selected": true,
           "text": "6 hours",
           "value": "6 hours"
-        }
-      ],
-      "query": "6 hours",
-      "skipUrlSync": true,
-      "type": "constant"
-    },
-    {
-      "current": {
-        "selected": true,
-        "text": "24 hours",
-        "value": "24 hours"
+        },
+        "hide": 2,
+        "label": "Default Incident Window",
+        "name": "bridge_default_incident_window",
+        "options": [
+          {
+            "selected": true,
+            "text": "6 hours",
+            "value": "6 hours"
+          }
+        ],
+        "query": "6 hours",
+        "skipUrlSync": true,
+        "type": "constant"
       },
-      "hide": 2,
-      "label": "Default NOC Window",
-      "name": "bridge_default_noc_window",
-      "options": [
-        {
+      {
+        "current": {
           "selected": true,
           "text": "24 hours",
           "value": "24 hours"
-        }
-      ],
-      "query": "24 hours",
-      "skipUrlSync": true,
-      "type": "constant"
-    }
-  ]},
-  "time": {"from": "now-6h", "to": "now"},
+        },
+        "hide": 2,
+        "label": "Default NOC Window",
+        "name": "bridge_default_noc_window",
+        "options": [
+          {
+            "selected": true,
+            "text": "24 hours",
+            "value": "24 hours"
+          }
+        ],
+        "query": "24 hours",
+        "skipUrlSync": true,
+        "type": "constant"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timepicker": {},
   "timezone": "browser",
   "title": "Fleet Overview",

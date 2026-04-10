@@ -82,12 +82,37 @@
   ],
   "panels": [
     {
+      "id": 210,
+      "title": "",
+      "type": "text",
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "html",
+        "content": "<style>@keyframes live-blink{0%,100%{opacity:1}50%{opacity:0.2}}@keyframes gradient-sweep{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}@keyframes alert-ring{0%,100%{box-shadow:0 0 0 0 rgba(242,73,92,0.5)}70%{box-shadow:0 0 0 8px rgba(242,73,92,0)}}.live-bar{display:flex;align-items:center;padding:7px 18px;background:linear-gradient(270deg,#0d1117,#1a1d2e,#0d1b0d);background-size:400% 400%;animation:gradient-sweep 10s ease infinite;border-radius:6px;gap:14px;height:40px;border:1px solid #1e2d1e}.live-dot{width:9px;height:9px;border-radius:50%;background:#73BF69;box-shadow:0 0 7px #73BF69;animation:live-blink 1.2s step-start infinite;flex-shrink:0}.live-txt{font-size:11px;font-weight:700;letter-spacing:2px;color:#73BF69;text-transform:uppercase}.sep{color:#2a3a2a;font-size:16px}.sys-name{font-size:12px;color:#bbb;font-weight:500}.right-section{margin-left:auto;display:flex;align-items:center;gap:12px}.tag{font-size:10px;color:#444;letter-spacing:1px;text-transform:uppercase}</style><div class=\"live-bar\"><div class=\"live-dot\"></div><span class=\"live-txt\">Live</span><span class=\"sep\">|</span><span class=\"sys-name\">UDS Incident Workbench &mdash; Real-time vessel application monitoring</span><div class=\"right-section\"><span class=\"tag\">auto-refresh 30s</span></div></div>"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "targets": [],
+      "transparent": true
+    },
+    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 0
+        "y": 3
       },
       "id": 100,
       "title": "Incident Overview",
@@ -128,7 +153,7 @@
         "h": 4,
         "w": 6,
         "x": 0,
-        "y": 1
+        "y": 4
       },
       "id": 1,
       "options": {
@@ -190,7 +215,7 @@
         "h": 4,
         "w": 6,
         "x": 6,
-        "y": 1
+        "y": 4
       },
       "id": 2,
       "options": {
@@ -252,7 +277,7 @@
         "h": 4,
         "w": 6,
         "x": 12,
-        "y": 1
+        "y": 4
       },
       "id": 3,
       "options": {
@@ -314,7 +339,7 @@
         "h": 4,
         "w": 6,
         "x": 18,
-        "y": 1
+        "y": 4
       },
       "id": 4,
       "options": {
@@ -445,7 +470,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 8
       },
       "id": 5,
       "options": {
@@ -585,7 +610,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 16
       },
       "id": 6,
       "options": {
@@ -613,7 +638,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 22
+        "y": 25
       },
       "id": 200,
       "title": "Selected App Drilldown",
@@ -709,7 +734,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 23
+        "y": 26
       },
       "id": 7,
       "options": {
@@ -795,7 +820,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 26
       },
       "id": 8,
       "options": {
@@ -833,7 +858,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 30
+        "y": 33
       },
       "id": 9,
       "options": {
@@ -914,7 +939,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 30
+        "y": 33
       },
       "id": 10,
       "options": {
@@ -971,7 +996,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 38
+        "y": 41
       },
       "id": 11,
       "options": {
@@ -1015,7 +1040,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 38
+        "y": 41
       },
       "id": 12,
       "options": {
@@ -1084,7 +1109,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 46
+        "y": 49
       },
       "id": 13,
       "options": {
@@ -1128,7 +1153,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 46
+        "y": 49
       },
       "id": 14,
       "options": {
@@ -1185,7 +1210,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 54
+        "y": 57
       },
       "id": 16,
       "options": {
@@ -1291,7 +1316,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 54
+        "y": 57
       },
       "id": 17,
       "options": {
@@ -1324,7 +1349,7 @@
         "h": 9,
         "w": 24,
         "x": 0,
-        "y": 62
+        "y": 65
       },
       "id": 15,
       "options": {
@@ -1342,7 +1367,7 @@
     }
   ],
   "refresh": "30s",
-  "schemaVersion": 39,
+  "schemaVersion": 40,
   "style": "dark",
   "tags": [
     "maritime",
