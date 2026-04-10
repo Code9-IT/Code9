@@ -81,9 +81,11 @@ def _dashboard_links(vessel_imo: str, app_external_id: str | None) -> list[dict[
     vessel_value = quote(vessel_imo, safe="")
     uds_url = f"/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel={vessel_value}"
     noc_url = f"/d/maritime_noc_support/noc-support?var-vessel={vessel_value}"
+    selector_url = f"http://localhost:8000/api/v1/dynamic/select?vessel_imo={vessel_value}"
     if app_value:
         uds_url += f"&var-app={app_value}"
         noc_url += f"&var-app_filter={app_value}"
+        selector_url += f"&app_external_id={app_value}"
     return [
         {
             "asDropdown": False,
@@ -108,6 +110,18 @@ def _dashboard_links(vessel_imo: str, app_external_id: str | None) -> list[dict[
             "tooltip": "Open the broader troubleshooting dashboard for the same vessel",
             "type": "link",
             "url": noc_url,
+        },
+        {
+            "asDropdown": False,
+            "icon": "link",
+            "includeVars": False,
+            "keepTime": False,
+            "tags": [],
+            "targetBlank": True,
+            "title": "Incident Selector",
+            "tooltip": "Choose another vessel, app, or alert for the dynamic dashboard",
+            "type": "link",
+            "url": selector_url,
         },
         {
             "asDropdown": False,

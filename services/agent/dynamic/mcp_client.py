@@ -46,6 +46,9 @@ class MCPClient:
     async def get_vessel_app_status(self, vessel_id: str) -> dict[str, Any]:
         return await self.call_tool("get_vessel_app_status", {"vessel_id": vessel_id})
 
+    async def get_fleet_status(self) -> dict[str, Any]:
+        return await self.call_tool("get_fleet_status", {})
+
     async def get_vessel_alerts(self, vessel_id: str, hours: int = 24) -> dict[str, Any]:
         return await self.call_tool(
             "get_vessel_alerts",
@@ -57,6 +60,9 @@ class MCPClient:
         if severity:
             arguments["severity"] = severity
         return await self.call_tool("get_fleet_alerts", arguments)
+
+    async def get_cross_vessel_correlation(self, hours: int = 24) -> dict[str, Any]:
+        return await self.call_tool("get_cross_vessel_correlation", {"hours": hours})
 
     async def get_app_metric_history(
         self,

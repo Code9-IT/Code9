@@ -10,12 +10,16 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
 
+from dynamic.fleet_orchestrator import DynamicFleetDashboardOrchestrator, FleetTriggerRequest
+from dynamic.noc_orchestrator import DynamicNOCDashboardOrchestrator, NOCTriggerRequest
 from dynamic.orchestrator import DynamicDashboardOrchestrator, TriggerRequest
 from scripts.inject_dynamic_incident import SCENARIOS, _fingerprint, inject as inject_dynamic_incident
 
 
 router = APIRouter(tags=["dynamic-dashboard"])
 orchestrator = DynamicDashboardOrchestrator()
+fleet_orchestrator = DynamicFleetDashboardOrchestrator()
+noc_orchestrator = DynamicNOCDashboardOrchestrator()
 
 
 class DynamicTriggerRequest(BaseModel):
@@ -73,6 +77,51 @@ class DynamicStatusResponse(BaseModel):
     recent_runs: list[DynamicStatusRun] = Field(default_factory=list)
 
 
+class DynamicVesselOption(BaseModel):
+    vessel_imo: str
+    vessel_name: str
+    external_id: str | None = None
+    status: str
+    active_alert_count: int = 0
+    app_count: int = 0
+
+
+class DynamicApplicationOption(BaseModel):
+    app_external_id: str
+    app_name: str
+    status: str
+    active_alert_count: int = 0
+    latest_metric_at: str | None = None
+
+
+class DynamicIncidentOption(BaseModel):
+    fingerprint: str
+    alert_name: str
+    severity: str | None = None
+    alert_type: str | None = None
+    app_external_id: str | None = None
+    app_name: str | None = None
+    starts_at: str | None = None
+    received_at: str | None = None
+    summary: str | None = None
+
+
+class DynamicVesselOptionsResponse(BaseModel):
+    vessels: list[DynamicVesselOption] = Field(default_factory=list)
+
+
+class DynamicApplicationOptionsResponse(BaseModel):
+    vessel_imo: str
+    vessel_name: str | None = None
+    applications: list[DynamicApplicationOption] = Field(default_factory=list)
+
+
+class DynamicIncidentOptionsResponse(BaseModel):
+    vessel_imo: str
+    app_external_id: str | None = None
+    incidents: list[DynamicIncidentOption] = Field(default_factory=list)
+
+
 class DynamicDemoRunRequest(BaseModel):
     scenario: Literal["service_down", "connectivity", "runtime_pressure"]
     dry_run: bool = False
@@ -83,6 +132,39 @@ class DynamicDemoRunResponse(BaseModel):
     description: str
     fingerprint: str
     trigger: DynamicTriggerResponse
+
+
+class DynamicFleetTriggerRequest(BaseModel):
+    mode: Literal["latest_correlated_incident", "explicit_context"] = "latest_correlated_incident"
+    app_external_id: str | None = None
+    alert_name: str | None = None
+    dry_run: bool = False
+
+    @field_validator("app_external_id", "alert_name")
+    @classmethod
+    def _normalize_fleet_optional_string(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split()).strip()
+        return normalized or None
+
+
+class DynamicNOCTriggerRequest(BaseModel):
+    mode: Literal["explicit_context", "latest_alerted_vessel"] = "explicit_context"
+    vessel_imo: str | None = None
+    app_external_id: str | None = None
+    alert_name: str | None = None
+    severity: str | None = None
+    source_alert_fingerprint: str | None = None
+    dry_run: bool = False
+
+    @field_validator("vessel_imo", "app_external_id", "alert_name", "severity", "source_alert_fingerprint")
+    @classmethod
+    def _normalize_noc_optional_string(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = " ".join(value.split()).strip()
+        return normalized or None
 
 
 @router.post("/dynamic/trigger", response_model=DynamicTriggerResponse)
@@ -119,6 +201,155 @@ async def dynamic_dashboard_status():
         raise HTTPException(status_code=502, detail=f"Dynamic dashboard status failed: {exc}") from exc
 
     return DynamicStatusResponse(**result)
+
+
+@router.post("/dynamic/fleet/trigger", response_model=DynamicTriggerResponse)
+async def trigger_dynamic_fleet_dashboard(request: DynamicFleetTriggerRequest):
+    """Trigger one deterministic fleet-focused dynamic dashboard generation run."""
+    try:
+        result = await fleet_orchestrator.trigger(
+            FleetTriggerRequest(
+                mode=request.mode,
+                dry_run=request.dry_run,
+                app_external_id=request.app_external_id,
+                alert_name=request.alert_name,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Dynamic fleet dashboard trigger failed: {exc}") from exc
+
+    return DynamicTriggerResponse(**result)
+
+
+@router.post("/dynamic/noc/trigger", response_model=DynamicTriggerResponse)
+async def trigger_dynamic_noc_dashboard(request: DynamicNOCTriggerRequest):
+    """Trigger one deterministic NOC support dashboard generation run."""
+    try:
+        result = await noc_orchestrator.trigger(
+            NOCTriggerRequest(
+                mode=request.mode,
+                dry_run=request.dry_run,
+                vessel_imo=request.vessel_imo,
+                app_external_id=request.app_external_id,
+                alert_name=request.alert_name,
+                severity=request.severity,
+                source_alert_fingerprint=request.source_alert_fingerprint,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Dynamic NOC dashboard trigger failed: {exc}") from exc
+
+    return DynamicTriggerResponse(**result)
+
+
+@router.get("/dynamic/options/vessels", response_model=DynamicVesselOptionsResponse)
+async def dynamic_vessel_options():
+    """List selectable vessels for the dynamic dashboard selector."""
+    try:
+        fleet_status = await orchestrator.mcp_client.get_fleet_status()
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Dynamic vessel options failed: {exc}") from exc
+
+    vessels = sorted(
+        (
+            DynamicVesselOption(
+                vessel_imo=str(item.get("imo_nr") or ""),
+                vessel_name=str(item.get("name") or item.get("imo_nr") or "Unknown vessel"),
+                external_id=item.get("external_id"),
+                status=str(item.get("status") or "unknown"),
+                active_alert_count=int(item.get("active_alert_count") or 0),
+                app_count=int(item.get("app_count") or 0),
+            )
+            for item in list(fleet_status.get("vessels") or [])
+            if item.get("imo_nr")
+        ),
+        key=lambda item: (item.vessel_name.lower(), item.vessel_imo),
+    )
+    return DynamicVesselOptionsResponse(vessels=vessels)
+
+
+@router.get("/dynamic/options/apps", response_model=DynamicApplicationOptionsResponse)
+async def dynamic_application_options(vessel_imo: str):
+    """List applications for one selected vessel."""
+    try:
+        vessel_status = await orchestrator.mcp_client.get_vessel_app_status(vessel_imo)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Dynamic application options failed: {exc}") from exc
+
+    vessel = vessel_status.get("vessel") or {}
+    applications = sorted(
+        (
+            DynamicApplicationOption(
+                app_external_id=str(item.get("external_id") or ""),
+                app_name=str(item.get("name") or item.get("external_id") or "Unknown application"),
+                status=str(item.get("status") or "unknown"),
+                active_alert_count=int(item.get("active_alert_count") or 0),
+                latest_metric_at=item.get("latest_metric_at"),
+            )
+            for item in list(vessel_status.get("applications") or [])
+            if item.get("external_id")
+        ),
+        key=lambda item: (-item.active_alert_count, item.app_name.lower(), item.app_external_id),
+    )
+    return DynamicApplicationOptionsResponse(
+        vessel_imo=vessel_imo,
+        vessel_name=vessel.get("name"),
+        applications=applications,
+    )
+
+
+@router.get("/dynamic/options/incidents", response_model=DynamicIncidentOptionsResponse)
+async def dynamic_incident_options(vessel_imo: str, app_external_id: str | None = None):
+    """List active incidents for one vessel and optional application."""
+    try:
+        vessel_alerts = await orchestrator.mcp_client.get_vessel_alerts(vessel_imo, hours=24)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Dynamic incident options failed: {exc}") from exc
+
+    incidents = []
+    for item in list(vessel_alerts.get("alerts") or []):
+        if app_external_id and item.get("app_external_id") != app_external_id:
+            continue
+        incidents.append(
+            DynamicIncidentOption(
+                fingerprint=str(item.get("fingerprint") or ""),
+                alert_name=str(item.get("alert_name") or "Unknown alert"),
+                severity=item.get("severity"),
+                alert_type=item.get("alert_type"),
+                app_external_id=item.get("app_external_id"),
+                app_name=item.get("app_name"),
+                starts_at=item.get("starts_at"),
+                received_at=item.get("received_at"),
+                summary=_annotation_summary(item.get("annotations")),
+            )
+        )
+    incidents.sort(
+        key=lambda item: (
+            str(item.received_at or ""),
+            str(item.starts_at or ""),
+            item.alert_name.lower(),
+        ),
+        reverse=True,
+    )
+    return DynamicIncidentOptionsResponse(
+        vessel_imo=vessel_imo,
+        app_external_id=app_external_id,
+        incidents=incidents,
+    )
+
+
+@router.get("/dynamic/select", response_class=HTMLResponse)
+async def dynamic_dashboard_selector_page():
+    """Selector UI for vessel/app/incident-driven dynamic dashboard runs."""
+    return HTMLResponse(_render_dynamic_selector_html())
 
 
 @router.get("/dynamic/demo", response_class=HTMLResponse)
@@ -164,6 +395,596 @@ async def run_dynamic_dashboard_demo(request: DynamicDemoRunRequest):
         fingerprint=fingerprint,
         trigger=DynamicTriggerResponse(**trigger_result),
     )
+
+
+def _annotation_summary(raw_annotations: Any) -> str | None:
+    if raw_annotations is None:
+        return None
+    if isinstance(raw_annotations, dict):
+        return raw_annotations.get("summary")
+    if isinstance(raw_annotations, str):
+        try:
+            parsed = json.loads(raw_annotations)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(parsed, dict):
+            return parsed.get("summary")
+    return None
+
+
+def _render_dynamic_selector_html() -> str:
+    dashboard_url = "http://localhost:3000/d/maritime_dynamic_incident/dynamic-incident-dashboard"
+    demo_url = "/api/v1/dynamic/demo"
+    return f"""
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dynamic Dashboard Selector</title>
+  <style>
+    :root {{
+      --bg: #f4efe6;
+      --ink: #17202b;
+      --muted: #576275;
+      --card: rgba(255,255,255,0.84);
+      --line: rgba(23,32,43,0.12);
+      --hero: #18314f;
+      --hero-ink: #f7f2e9;
+      --accent: #b85d17;
+      --accent-soft: rgba(184,93,23,0.12);
+      --warn: #9b2c2c;
+      --shadow: 0 18px 42px rgba(16,37,66,0.12);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      min-height: 100vh;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(184,93,23,0.16), transparent 26rem),
+        radial-gradient(circle at top right, rgba(24,49,79,0.16), transparent 26rem),
+        linear-gradient(180deg, #f9f4ec 0%, var(--bg) 100%);
+    }}
+    main {{
+      width: min(1120px, calc(100vw - 32px));
+      margin: 24px auto 40px;
+      display: grid;
+      gap: 18px;
+    }}
+    .hero {{
+      padding: 28px;
+      border-radius: 24px;
+      color: var(--hero-ink);
+      background: linear-gradient(135deg, rgba(24,49,79,0.98), rgba(17,37,66,0.92));
+      box-shadow: var(--shadow);
+    }}
+    .eyebrow {{
+      margin: 0 0 8px;
+      font-size: 0.78rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      opacity: 0.8;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 3.7rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }}
+    .hero p {{
+      max-width: 58rem;
+      margin: 14px 0 0;
+      color: rgba(247,242,233,0.88);
+      line-height: 1.55;
+      font-size: 1.02rem;
+    }}
+    .hero-actions {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }}
+    .hero-actions a {{
+      text-decoration: none;
+      color: var(--hero-ink);
+      border: 1px solid rgba(247,242,233,0.2);
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(247,242,233,0.08);
+    }}
+    .layout {{
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.9fr);
+      gap: 18px;
+    }}
+    .card {{
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      box-shadow: 0 12px 28px rgba(16,37,66,0.08);
+      backdrop-filter: blur(10px);
+    }}
+    .selector-card, .status-card {{
+      padding: 22px;
+    }}
+    .selector-card h2, .status-card h2 {{
+      margin: 0 0 16px;
+      font-size: 1.1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }}
+    .selector-grid {{
+      display: grid;
+      gap: 14px;
+    }}
+    .field {{
+      display: grid;
+      gap: 8px;
+    }}
+    label {{
+      font-size: 0.92rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }}
+    select, button {{
+      width: 100%;
+      font: inherit;
+      border-radius: 14px;
+    }}
+    select {{
+      appearance: none;
+      padding: 13px 14px;
+      border: 1px solid rgba(23,32,43,0.14);
+      background: rgba(255,255,255,0.92);
+      color: var(--ink);
+    }}
+    .checkbox-row {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 0;
+      color: var(--muted);
+      text-transform: none;
+      letter-spacing: normal;
+    }}
+    .checkbox-row input {{
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }}
+    .actions {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-top: 4px;
+    }}
+    .actions button {{
+      width: auto;
+      border: none;
+      padding: 12px 18px;
+      cursor: pointer;
+    }}
+    .primary {{
+      background: var(--accent);
+      color: white;
+    }}
+    .secondary {{
+      background: rgba(24,49,79,0.08);
+      color: var(--ink);
+    }}
+    .status-card {{
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }}
+    .pill {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+    }}
+    .summary-box {{
+      padding: 16px;
+      border-radius: 16px;
+      background: rgba(24,49,79,0.05);
+      min-height: 120px;
+    }}
+    .summary-box strong {{
+      display: block;
+      margin-bottom: 8px;
+    }}
+    .summary-box p {{
+      margin: 0;
+      line-height: 1.5;
+      color: var(--muted);
+    }}
+    .meta {{
+      display: grid;
+      gap: 8px;
+      font-size: 0.96rem;
+    }}
+    .meta div {{
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 10px;
+    }}
+    .meta span:first-child {{
+      color: var(--muted);
+    }}
+    .status-line {{
+      min-height: 1.4rem;
+      color: var(--muted);
+      margin: 0;
+    }}
+    .status-line.error {{
+      color: var(--warn);
+    }}
+    .hint {{
+      margin: 0;
+      line-height: 1.5;
+      color: var(--muted);
+    }}
+    .links {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .links a {{
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 700;
+    }}
+    code {{
+      font-family: "Cascadia Code", Consolas, monospace;
+    }}
+    @media (max-width: 900px) {{
+      .layout {{
+        grid-template-columns: 1fr;
+      }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <p class="eyebrow">Dynamic Dashboard Selector</p>
+      <h1>Pick the incident first.</h1>
+      <p>
+        Choose a vessel, narrow to one application, and then generate the incident-focused
+        Grafana dashboard for that exact context. This uses the same dynamic trigger backend
+        as the demo flow, but lets an operator decide what to inspect.
+      </p>
+      <div class="hero-actions">
+        <a href="{escape(demo_url)}">Open Demo Controls</a>
+        <a href="{escape(dashboard_url)}" target="_blank" rel="noreferrer">Open Current Dashboard</a>
+      </div>
+    </section>
+
+    <section class="layout">
+      <article class="card selector-card">
+        <h2>Context</h2>
+        <div class="selector-grid">
+          <div class="field">
+            <label for="vesselSelect">Ship</label>
+            <select id="vesselSelect">
+              <option value="">Loading vessels...</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="appSelect">Application</label>
+            <select id="appSelect" disabled>
+              <option value="">Choose a ship first</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="incidentSelect">Incident</label>
+            <select id="incidentSelect" disabled>
+              <option value="">Choose an application first</option>
+            </select>
+          </div>
+
+          <label class="checkbox-row" for="dryRun">
+            <input id="dryRun" type="checkbox">
+            Generate as dry run if you only want the payload and summary
+          </label>
+
+          <div class="actions">
+            <button class="primary" id="generateButton" type="button" disabled>Generate Dashboard</button>
+            <button class="secondary" id="refreshButton" type="button">Refresh Lists</button>
+          </div>
+        </div>
+      </article>
+
+      <aside class="card status-card">
+        <h2>Run Status</h2>
+        <span class="pill">Operator-Driven</span>
+        <div class="summary-box">
+          <strong id="summaryTitle">No incident selected yet</strong>
+          <p id="summaryCopy">Pick a ship, application, and alert to generate the dashboard for that specific context.</p>
+        </div>
+        <div class="meta">
+          <div><span>Ship</span><span id="metaVessel">-</span></div>
+          <div><span>Application</span><span id="metaApp">-</span></div>
+          <div><span>Severity</span><span id="metaSeverity">-</span></div>
+          <div><span>Fingerprint</span><span id="metaFingerprint">-</span></div>
+        </div>
+        <p class="status-line" id="statusLine"></p>
+        <div class="links">
+          <a href="{escape(dashboard_url)}" id="dashboardLink" target="_blank" rel="noreferrer">Open Current Dynamic Dashboard</a>
+        </div>
+        <p class="hint">
+          The selected incident is sent to <code>POST /api/v1/dynamic/trigger</code> with
+          <code>explicit_context</code>, so the same dashboard UID is regenerated for your choice.
+        </p>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const vesselSelect = document.getElementById("vesselSelect");
+    const appSelect = document.getElementById("appSelect");
+    const incidentSelect = document.getElementById("incidentSelect");
+    const dryRunInput = document.getElementById("dryRun");
+    const generateButton = document.getElementById("generateButton");
+    const refreshButton = document.getElementById("refreshButton");
+    const statusLine = document.getElementById("statusLine");
+    const summaryTitle = document.getElementById("summaryTitle");
+    const summaryCopy = document.getElementById("summaryCopy");
+    const metaVessel = document.getElementById("metaVessel");
+    const metaApp = document.getElementById("metaApp");
+    const metaSeverity = document.getElementById("metaSeverity");
+    const metaFingerprint = document.getElementById("metaFingerprint");
+    const dashboardLink = document.getElementById("dashboardLink");
+
+    let vesselOptions = [];
+    let appOptions = [];
+    let incidentOptions = [];
+
+    function setStatus(message, isError = false) {{
+      statusLine.textContent = message;
+      statusLine.className = isError ? "status-line error" : "status-line";
+    }}
+
+    function resetSelect(select, placeholder, disabled = true) {{
+      select.innerHTML = "";
+      const option = document.createElement("option");
+      option.value = "";
+      option.textContent = placeholder;
+      select.appendChild(option);
+      select.disabled = disabled;
+    }}
+
+    function selectedOption(list, key, value) {{
+      return list.find((item) => item[key] === value) || null;
+    }}
+
+    function updateSidebar() {{
+      const vessel = selectedOption(vesselOptions, "vessel_imo", vesselSelect.value);
+      const app = selectedOption(appOptions, "app_external_id", appSelect.value);
+      const incident = selectedOption(incidentOptions, "fingerprint", incidentSelect.value);
+      metaVessel.textContent = vessel ? `${{vessel.vessel_name}} (${{vessel.vessel_imo}})` : "-";
+      metaApp.textContent = app ? `${{app.app_name}} (${{app.app_external_id}})` : "-";
+      metaSeverity.textContent = incident?.severity || "-";
+      metaFingerprint.textContent = incident?.fingerprint || "-";
+      summaryTitle.textContent = incident ? incident.alert_name : "No incident selected yet";
+      summaryCopy.textContent = incident?.summary || "Pick a ship, application, and alert to generate the dashboard for that specific context.";
+      generateButton.disabled = !(vessel && app);
+    }}
+
+    function syncQueryParams() {{
+      const params = new URLSearchParams(window.location.search);
+      if (vesselSelect.value) {{
+        params.set("vessel_imo", vesselSelect.value);
+      }} else {{
+        params.delete("vessel_imo");
+      }}
+      if (appSelect.value) {{
+        params.set("app_external_id", appSelect.value);
+      }} else {{
+        params.delete("app_external_id");
+      }}
+      if (incidentSelect.value) {{
+        params.set("source_alert_fingerprint", incidentSelect.value);
+      }} else {{
+        params.delete("source_alert_fingerprint");
+      }}
+      const query = params.toString();
+      const next = query ? `${{window.location.pathname}}?${{query}}` : window.location.pathname;
+      window.history.replaceState(null, "", next);
+    }}
+
+    async function loadVessels() {{
+      setStatus("Loading vessels...");
+      resetSelect(vesselSelect, "Loading vessels...", true);
+      const res = await fetch("/api/v1/dynamic/options/vessels");
+      if (!res.ok) {{
+        throw new Error("Could not load vessels");
+      }}
+      const data = await res.json();
+      vesselOptions = data.vessels || [];
+      resetSelect(vesselSelect, "Select a ship", false);
+      for (const vessel of vesselOptions) {{
+        const option = document.createElement("option");
+        option.value = vessel.vessel_imo;
+        option.textContent = `${{vessel.vessel_name}} (${{vessel.status}}, ${{vessel.active_alert_count}} alerts)`;
+        vesselSelect.appendChild(option);
+      }}
+      setStatus(vesselOptions.length ? "Choose a ship to continue." : "No vessels available.");
+    }}
+
+    async function loadApps(vesselImo, preferredApp = "") {{
+      appOptions = [];
+      resetSelect(appSelect, vesselImo ? "Loading applications..." : "Choose a ship first", !vesselImo);
+      resetSelect(incidentSelect, "Choose an application first", true);
+      if (!vesselImo) {{
+        updateSidebar();
+        return;
+      }}
+      const res = await fetch(`/api/v1/dynamic/options/apps?vessel_imo=${{encodeURIComponent(vesselImo)}}`);
+      if (!res.ok) {{
+        throw new Error("Could not load applications");
+      }}
+      const data = await res.json();
+      appOptions = data.applications || [];
+      resetSelect(appSelect, appOptions.length ? "Select an application" : "No applications found", false);
+      for (const app of appOptions) {{
+        const option = document.createElement("option");
+        option.value = app.app_external_id;
+        option.textContent = `${{app.app_name}} (${{app.status}}, ${{app.active_alert_count}} alerts)`;
+        appSelect.appendChild(option);
+      }}
+      if (preferredApp && appOptions.some((item) => item.app_external_id === preferredApp)) {{
+        appSelect.value = preferredApp;
+      }}
+      updateSidebar();
+      await loadIncidents(vesselImo, appSelect.value);
+    }}
+
+    async function loadIncidents(vesselImo, appExternalId, preferredFingerprint = "") {{
+      incidentOptions = [];
+      if (!vesselImo) {{
+        resetSelect(incidentSelect, "Choose an application first", true);
+        updateSidebar();
+        return;
+      }}
+      if (!appExternalId) {{
+        resetSelect(incidentSelect, "Choose an application first", true);
+        updateSidebar();
+        return;
+      }}
+      resetSelect(incidentSelect, "Loading incidents...", true);
+      const query = new URLSearchParams({{ vessel_imo: vesselImo, app_external_id: appExternalId }});
+      const res = await fetch(`/api/v1/dynamic/options/incidents?${{query.toString()}}`);
+      if (!res.ok) {{
+        throw new Error("Could not load incidents");
+      }}
+      const data = await res.json();
+      incidentOptions = data.incidents || [];
+      resetSelect(
+        incidentSelect,
+        incidentOptions.length ? "Select an incident (optional)" : "No active incidents for this application",
+        false
+      );
+      for (const incident of incidentOptions) {{
+        const option = document.createElement("option");
+        option.value = incident.fingerprint;
+        option.textContent = `${{incident.alert_name}} (${{incident.severity || "n/a"}})`;
+        incidentSelect.appendChild(option);
+      }}
+      if (preferredFingerprint && incidentOptions.some((item) => item.fingerprint === preferredFingerprint)) {{
+        incidentSelect.value = preferredFingerprint;
+      }}
+      updateSidebar();
+    }}
+
+    async function generateDashboard() {{
+      const vessel = selectedOption(vesselOptions, "vessel_imo", vesselSelect.value);
+      const app = selectedOption(appOptions, "app_external_id", appSelect.value);
+      const incident = selectedOption(incidentOptions, "fingerprint", incidentSelect.value);
+      if (!vessel || !app) {{
+        setStatus("Pick both a ship and an application first.", true);
+        return;
+      }}
+      generateButton.disabled = true;
+      setStatus("Generating dynamic dashboard...");
+      try {{
+        const payload = {{
+          mode: "explicit_context",
+          vessel_imo: vessel.vessel_imo,
+          app_external_id: app.app_external_id,
+          alert_name: incident?.alert_name || null,
+          severity: incident?.severity || null,
+          source_alert_fingerprint: incident?.fingerprint || null,
+          dry_run: dryRunInput.checked,
+        }};
+        const res = await fetch("/api/v1/dynamic/trigger", {{
+          method: "POST",
+          headers: {{ "Content-Type": "application/json" }},
+          body: JSON.stringify(payload),
+        }});
+        const data = await res.json();
+        if (!res.ok) {{
+          throw new Error(data.detail || "Dynamic trigger failed");
+        }}
+        summaryTitle.textContent = data.scenario_key.replaceAll("_", " ");
+        summaryCopy.textContent = data.summary;
+        dashboardLink.href = data.dashboard_url;
+        setStatus(data.dry_run ? "Dry run complete. Summary and JSON were generated." : "Dashboard regenerated successfully.");
+        if (!data.dry_run) {{
+          window.open(data.dashboard_url, "_blank", "noopener,noreferrer");
+        }}
+      }} catch (error) {{
+        setStatus(error.message || "Dynamic trigger failed", true);
+      }} finally {{
+        generateButton.disabled = false;
+      }}
+    }}
+
+    async function bootstrap() {{
+      const params = new URLSearchParams(window.location.search);
+      const preferredVessel = params.get("vessel_imo") || "";
+      const preferredApp = params.get("app_external_id") || "";
+      const preferredFingerprint = params.get("source_alert_fingerprint") || "";
+      try {{
+        await loadVessels();
+        if (preferredVessel && vesselOptions.some((item) => item.vessel_imo === preferredVessel)) {{
+          vesselSelect.value = preferredVessel;
+        }}
+        await loadApps(vesselSelect.value, preferredApp);
+        if (preferredFingerprint) {{
+          await loadIncidents(vesselSelect.value, appSelect.value, preferredFingerprint);
+        }}
+        updateSidebar();
+        syncQueryParams();
+      }} catch (error) {{
+        setStatus(error.message || "Failed to load selector data", true);
+      }}
+    }}
+
+    vesselSelect.addEventListener("change", async () => {{
+      syncQueryParams();
+      try {{
+        await loadApps(vesselSelect.value);
+        setStatus("Application list updated.");
+      }} catch (error) {{
+        setStatus(error.message || "Failed to load applications", true);
+      }}
+      syncQueryParams();
+    }});
+
+    appSelect.addEventListener("change", async () => {{
+      syncQueryParams();
+      try {{
+        await loadIncidents(vesselSelect.value, appSelect.value);
+        setStatus("Incident list updated.");
+      }} catch (error) {{
+        setStatus(error.message || "Failed to load incidents", true);
+      }}
+      syncQueryParams();
+    }});
+
+    incidentSelect.addEventListener("change", () => {{
+      updateSidebar();
+      syncQueryParams();
+    }});
+
+    refreshButton.addEventListener("click", bootstrap);
+    generateButton.addEventListener("click", generateDashboard);
+    bootstrap();
+  </script>
+</body>
+</html>
+""".strip()
 
 
 def _render_dynamic_demo_html() -> str:
@@ -451,6 +1272,7 @@ def _render_dynamic_demo_html() -> str:
         demo operator panel, not a production workflow.
       </p>
       <div class="hero-actions">
+        <a href="/api/v1/dynamic/select">Open Incident Selector</a>
         <a href="{escape(dashboard_url)}" target="_blank" rel="noreferrer">Open Dashboard</a>
         <a href="/api/v1/dynamic/status" target="_blank" rel="noreferrer">Open Status JSON</a>
         <button type="button" onclick="refreshStatus()">Refresh Status</button>
