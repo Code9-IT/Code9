@@ -15,6 +15,8 @@ from dynamic.scenario_selector import metric_names_for_scenario, select_scenario
 
 
 LOOKBACK_HOURS = 24
+DYNAMIC_FOLDER_UID = "maritime-dynamic-dashboards"
+DYNAMIC_FOLDER_TITLE = "Dynamic Dashboards"
 
 
 @dataclass
@@ -84,8 +86,13 @@ class DynamicDashboardOrchestrator:
 
         grafana_result: dict[str, Any] | None = None
         if not request.dry_run:
+            await self.grafana_client.ensure_folder(
+                title=DYNAMIC_FOLDER_TITLE,
+                uid=DYNAMIC_FOLDER_UID,
+            )
             grafana_result = await self.grafana_client.upsert_dashboard(
                 dashboard_payload,
+                folder_uid=DYNAMIC_FOLDER_UID,
                 message=f"Dynamic incident update: {scenario_key} / {resolved['vessel_imo']}",
             )
 
@@ -446,6 +453,19 @@ def _build_summary(
         alert_fragment = (
             f" The current alert is {selected_alert.get('alert_name', 'unknown alert')}"
             f" with severity {selected_alert.get('severity', 'unknown')}."
+        )
+
+    if scenario_key == "propulsion_anomaly":
+        return (
+            f"CRITICAL PROPULSION ANOMALY — The Maritime AI Agent has detected "
+            f"simultaneous extreme deviations across multiple propulsion sensors "
+            f"on {vessel_name}. Shaft vibration has spiked far above safe "
+            f"operating limits, propulsion power has dropped sharply, vessel "
+            f"speed is falling despite engines compensating at high load, and "
+            f"stern tube temperature is rising rapidly. This pattern is "
+            f"consistent with severe physical obstruction or impact damage to "
+            f"the propeller assembly. {active_alerts} active alert(s) on "
+            f"{app_name}.{alert_fragment}{latest_log_text}"
         )
 
     return (

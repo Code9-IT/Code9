@@ -85,6 +85,7 @@ def _dashboard_links(vessel_imo: str, focus_app_id: str | None) -> list[dict[str
         {"asDropdown": False, "icon": "dashboard", "includeVars": False, "keepTime": True, "tags": [], "targetBlank": False, "title": "NOC Support", "tooltip": "Open the static NOC support dashboard", "type": "link", "url": noc_url},
         {"asDropdown": False, "icon": "dashboard", "includeVars": False, "keepTime": True, "tags": [], "targetBlank": False, "title": "UDS Incident Workbench", "tooltip": "Open the static incident dashboard", "type": "link", "url": uds_url},
         {"asDropdown": False, "icon": "dashboard", "includeVars": False, "keepTime": False, "tags": [], "targetBlank": True, "title": "Dynamic Fleet Dashboard", "tooltip": "Open the fleet-focused dynamic dashboard", "type": "link", "url": "http://localhost:3000/d/maritime_dynamic_fleet_incident/dynamic-fleet-incident-dashboard"},
+        {"asDropdown": False, "icon": "external link", "includeVars": False, "keepTime": False, "tags": [], "targetBlank": True, "title": "Presentation Monitor", "tooltip": "Open the external presentation shell for the staged critical event demo", "type": "link", "url": "http://localhost:8000/api/v1/dynamic/monitor?presentation=1"},
         {"asDropdown": False, "icon": "external link", "includeVars": False, "keepTime": False, "tags": [], "targetBlank": True, "title": "AI Chat", "tooltip": "Ask the chat assistant about this support case", "type": "link", "url": "http://localhost:8000/api/v1/chat"},
     ]
 

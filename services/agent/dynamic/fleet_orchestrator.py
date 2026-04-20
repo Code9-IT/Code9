@@ -18,6 +18,8 @@ from dynamic.mcp_client import MCPClient
 
 LOOKBACK_HOURS = 24
 FLEET_DASHBOARD_SLUG = "dynamic-fleet-incident-dashboard"
+DYNAMIC_FOLDER_UID = "maritime-dynamic-dashboards"
+DYNAMIC_FOLDER_TITLE = "Dynamic Dashboards"
 
 
 @dataclass
@@ -83,8 +85,13 @@ class DynamicFleetDashboardOrchestrator:
 
         grafana_result: dict[str, Any] | None = None
         if not request.dry_run:
+            await self.grafana_client.ensure_folder(
+                title=DYNAMIC_FOLDER_TITLE,
+                uid=DYNAMIC_FOLDER_UID,
+            )
             grafana_result = await self.grafana_client.upsert_dashboard(
                 dashboard_payload,
+                folder_uid=DYNAMIC_FOLDER_UID,
                 message=(
                     "Dynamic fleet incident update: "
                     f"{focus.get('focus_app_id') or focus.get('focus_alert_name') or 'fleet'}"

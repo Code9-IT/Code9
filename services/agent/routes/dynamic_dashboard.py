@@ -123,7 +123,7 @@ class DynamicIncidentOptionsResponse(BaseModel):
 
 
 class DynamicDemoRunRequest(BaseModel):
-    scenario: Literal["service_down", "connectivity", "runtime_pressure"]
+    scenario: Literal["service_down", "connectivity", "runtime_pressure", "propulsion_anomaly"]
     dry_run: bool = False
 
 
@@ -1401,6 +1401,611 @@ def _render_dynamic_demo_html() -> str:
 
     refreshStatus();
   </script>
+</body>
+</html>
+""".strip()
+
+
+@router.get("/dynamic/monitor", response_class=HTMLResponse)
+async def dynamic_monitor_page(presentation: bool = False):
+    """Presentation shell: Grafana iframe + catastrophic event overlay.
+
+    Open this page during a demo. Press **L** to stage a critical incident.
+    A dramatic overlay appears; clicking *Investigate* opens the generated
+    dynamic dashboard in Grafana.
+    """
+    return HTMLResponse(_render_monitor_html(presentation=presentation))
+
+
+def _render_monitor_html(*, presentation: bool = False) -> str:
+    grafana_workbench = (
+        "http://localhost:3000/d/maritime_uds_monitoring/uds-incident-workbench"
+        "?orgId=1&kiosk"
+    )
+    scenario_json = json.dumps(SCENARIOS)
+    body_class = "presentation-mode" if presentation else ""
+
+    return """
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Maritime Monitoring — Live</title>
+<style>
+  :root {
+    --red: #F2495C;
+    --red-glow: rgba(242,73,92,0.45);
+    --dark: #0b0e13;
+    --card: #11151d;
+    --border: #1e2533;
+    --text: #e4e8f0;
+    --muted: #6b7a90;
+    --accent: #5794F2;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%; width: 100%;
+    overflow: hidden;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--dark);
+    color: var(--text);
+  }
+
+  /* ---- Grafana iframe fills everything ---- */
+  #grafana-frame {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    border: none;
+    z-index: 1;
+  }
+
+  /* ---- Subtle status bar at bottom ---- */
+  #status-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    height: 32px;
+    background: linear-gradient(90deg, rgba(11,14,19,0.92), rgba(11,14,19,0.96));
+    backdrop-filter: blur(8px);
+    display: flex; align-items: center;
+    padding: 0 16px;
+    gap: 10px;
+    z-index: 5;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.5px;
+  }
+  body.presentation-mode #status-bar {
+    display: none;
+  }
+  #status-bar .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #73BF69;
+    box-shadow: 0 0 6px #73BF69;
+    animation: blink-dot 1.4s step-start infinite;
+  }
+  #status-bar.alert-active .dot {
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red);
+  }
+  @keyframes blink-dot {
+    0%,100% { opacity: 1; } 50% { opacity: 0.15; }
+  }
+
+  /* ---- Keyboard hint ---- */
+  .kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    font-family: monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  /* ---- Full-screen overlay ---- */
+  #overlay {
+    position: fixed; inset: 0;
+    z-index: 100;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #overlay.visible {
+    display: flex;
+  }
+
+  /* Backdrop dims and blurs the Grafana iframe */
+  #overlay-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(8,4,4,0.70);
+    backdrop-filter: blur(6px);
+    animation: fade-in 0.4s ease-out;
+  }
+  @keyframes fade-in {
+    from { opacity: 0; } to { opacity: 1; }
+  }
+
+  /* The alert card itself */
+  #alert-card {
+    position: relative;
+    z-index: 101;
+    width: min(640px, 90vw);
+    background: var(--card);
+    border: 1px solid var(--red);
+    border-radius: 16px;
+    box-shadow:
+      0 0 40px var(--red-glow),
+      0 0 120px rgba(242,73,92,0.15),
+      0 20px 60px rgba(0,0,0,0.5);
+    animation: card-enter 0.5s cubic-bezier(0.16,1,0.3,1);
+    overflow: hidden;
+  }
+  @keyframes card-enter {
+    from { opacity: 0; transform: translateY(30px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* Pulsing red top strip */
+  #alert-strip {
+    height: 5px;
+    background: var(--red);
+    animation: strip-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes strip-pulse {
+    0%,100% { opacity: 1; box-shadow: 0 0 12px var(--red-glow); }
+    50%     { opacity: 0.6; box-shadow: 0 0 30px var(--red-glow); }
+  }
+
+  /* Header area with icon + title */
+  #alert-header {
+    padding: 28px 32px 0;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  #alert-icon {
+    flex-shrink: 0;
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    background: rgba(242,73,92,0.12);
+    border: 1px solid rgba(242,73,92,0.25);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    animation: icon-pulse 2s ease-in-out infinite;
+  }
+  @keyframes icon-pulse {
+    0%,100% { transform: scale(1); }
+    50%     { transform: scale(1.08); }
+  }
+
+  #alert-title-block { flex: 1; min-width: 0; }
+
+  #alert-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 6px;
+  }
+
+  #alert-title {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.25;
+    color: #fff;
+  }
+
+  #alert-subtitle {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  /* Severity badge */
+  #alert-severity {
+    flex-shrink: 0;
+    padding: 5px 16px;
+    border-radius: 20px;
+    background: var(--red);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    animation: badge-beat 1.6s ease-in-out infinite;
+  }
+  @keyframes badge-beat {
+    0%,100% { transform: scale(1); }
+    50%     { transform: scale(1.06); }
+  }
+
+  /* Body content */
+  #alert-body {
+    padding: 20px 32px 0;
+  }
+
+  #alert-summary {
+    font-size: 16px;
+    line-height: 1.5;
+    font-weight: 600;
+    color: var(--text);
+    padding: 14px 18px;
+    background: rgba(242,73,92,0.06);
+    border-left: 3px solid var(--red);
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 10px;
+  }
+
+  #alert-next-step {
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+
+  /* Detail grid */
+  #alert-details {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 20px;
+    margin-bottom: 8px;
+  }
+  .detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .detail-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .detail-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  /* Action bar */
+  #alert-actions {
+    padding: 20px 32px 28px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  #btn-investigate {
+    flex: 1;
+    appearance: none;
+    border: none;
+    padding: 14px 24px;
+    border-radius: 10px;
+    background: var(--red);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  #btn-investigate:hover {
+    background: #e5384b;
+    box-shadow: 0 0 20px var(--red-glow);
+    transform: translateY(-1px);
+  }
+
+  #btn-dismiss {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    padding: 14px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  #btn-dismiss:hover {
+    border-color: var(--muted);
+    color: var(--text);
+  }
+
+  /* ---- Processing spinner overlay ---- */
+  #processing {
+    position: fixed; inset: 0;
+    z-index: 200;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(8,4,4,0.80);
+    backdrop-filter: blur(8px);
+  }
+  #processing.visible { display: flex; }
+
+  .spinner {
+    width: 48px; height: 48px;
+    border: 3px solid var(--border);
+    border-top-color: var(--red);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 20px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #processing-text {
+    font-size: 14px;
+    color: var(--text);
+    letter-spacing: 0.5px;
+  }
+  #processing-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 6px;
+  }
+
+  /* ---- Sound effect visual cue (screen flash) ---- */
+  @keyframes screen-flash {
+    0%   { opacity: 0.3; }
+    100% { opacity: 0; }
+  }
+  #screen-flash {
+    position: fixed; inset: 0;
+    background: var(--red);
+    z-index: 300;
+    pointer-events: none;
+    opacity: 0;
+  }
+  #screen-flash.flash {
+    animation: screen-flash 0.4s ease-out;
+  }
+
+  @media (max-width: 760px) {
+    #alert-header,
+    #alert-body,
+    #alert-actions {
+      padding-left: 22px;
+      padding-right: 22px;
+    }
+
+    #alert-details {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+  }
+</style>
+</head>
+<body class=\"""" + body_class + """\">
+
+<iframe id="grafana-frame"
+        src=\"""" + grafana_workbench + """\"
+        allow="fullscreen"></iframe>
+
+<div id="status-bar">
+  <div class="dot"></div>
+  <span id="status-text">Maritime Monitoring — Live</span>
+  <span id="status-hint" style="margin-left:auto; display:flex; align-items:center; gap:10px;">
+    <button id="btn-stage" onclick="stageCriticalEvent()"
+      style="appearance:none; border:1px solid rgba(242,73,92,0.4); background:rgba(242,73,92,0.1);
+             color:#F2495C; padding:3px 12px; border-radius:4px; font-size:11px; font-weight:600;
+             cursor:pointer; letter-spacing:0.5px;">
+      STAGE EVENT
+    </button>
+    <button id="btn-reset" onclick="document.getElementById('grafana-frame').src=GRAFANA_WORKBENCH; dismiss();"
+      style="appearance:none; border:1px solid var(--border); background:transparent;
+             color:var(--muted); padding:3px 10px; border-radius:4px; font-size:11px;
+             cursor:pointer;">
+      RESET
+    </button>
+    <span style="color:var(--border);">|</span>
+    <span class="kbd">L</span> <span class="kbd">R</span> <span class="kbd">Esc</span>
+  </span>
+</div>
+
+<div id="screen-flash"></div>
+
+<div id="processing">
+  <div class="spinner"></div>
+  <div id="processing-text">Detecting anomaly pattern...</div>
+  <div id="processing-sub">Agent is analyzing MCP data sources</div>
+</div>
+
+<div id="overlay">
+  <div id="overlay-backdrop"></div>
+  <div id="alert-card">
+    <div id="alert-strip"></div>
+    <div id="alert-header">
+      <div id="alert-icon">&#9888;&#65039;</div>
+      <div id="alert-title-block">
+        <div id="alert-label">CRITICAL INCIDENT DETECTED</div>
+        <div id="alert-title">—</div>
+        <div id="alert-subtitle">—</div>
+      </div>
+      <div id="alert-severity">CRITICAL</div>
+    </div>
+    <div id="alert-body">
+      <div id="alert-summary">—</div>
+      <div id="alert-next-step">Open the investigation dashboard to review propulsion metrics and agent analysis.</div>
+      <div id="alert-details">
+        <div class="detail-item">
+          <span class="detail-label">Vessel</span>
+          <span class="detail-value" id="det-vessel">—</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Affected System</span>
+          <span class="detail-value" id="det-system">—</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Detected At</span>
+          <span class="detail-value" id="det-time">—</span>
+        </div>
+      </div>
+    </div>
+    <div id="alert-actions">
+      <button id="btn-investigate" onclick="investigate()">
+        <span>&#128269;</span> Open Investigation
+      </button>
+      <button id="btn-dismiss" onclick="dismiss()">Dismiss</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SCENARIOS = """ + scenario_json + """;
+  const GRAFANA_WORKBENCH = '""" + grafana_workbench + """';
+
+  // Always use the propulsion anomaly scenario for demo
+  const DEMO_SCENARIO = 'propulsion_anomaly';
+
+  const VESSEL_NAMES = {
+    'IMO9300001': 'MV Edge Aurora',
+    'IMO9300002': 'MV Edge Borealis',
+    'IMO9300003': 'MT Nordic Fjord',
+  };
+
+  let dashboardUrl = null;
+  let isRunning = false;
+
+  /* ---- Focus management ----
+     The iframe steals keyboard focus. We reclaim it whenever the
+     user moves the mouse, so L/R/Esc work reliably. */
+  window.addEventListener('mousemove', () => {
+    if (document.activeElement === document.getElementById('grafana-frame')) {
+      window.focus();
+    }
+  });
+  // Also reclaim on any click on the status bar area
+  document.getElementById('status-bar').addEventListener('click', () => window.focus());
+
+  /* ---- Keyboard listener ---- */
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'l' || e.key === 'L') {
+      if (!isRunning) stageCriticalEvent();
+    }
+    if (e.key === 'r' || e.key === 'R') {
+      document.getElementById('grafana-frame').src = GRAFANA_WORKBENCH;
+      dismiss();
+    }
+    if (e.key === 'Escape') dismiss();
+  });
+
+  /* ---- Stage the event ---- */
+  async function stageCriticalEvent() {
+    if (isRunning) return;
+    isRunning = true;
+    document.getElementById('btn-stage').disabled = true;
+    const scenarioKey = DEMO_SCENARIO;
+
+    // 1. Show processing spinner
+    document.getElementById('processing').classList.add('visible');
+    document.getElementById('status-bar').classList.add('alert-active');
+
+    // 2. Animate processing text
+    const phases = [
+      ['Detecting anomaly pattern...', 'Scanning vessel telemetry streams'],
+      ['Correlating sensor signals...', 'Matching against known failure modes'],
+      ['Agent analyzing incident...', 'Calling MCP tools for context'],
+      ['Generating incident dashboard...', 'Building Grafana visualization'],
+    ];
+    let phase = 0;
+    const phaseTimer = setInterval(() => {
+      phase++;
+      if (phase < phases.length) {
+        document.getElementById('processing-text').textContent = phases[phase][0];
+        document.getElementById('processing-sub').textContent = phases[phase][1];
+      }
+    }, 1500);
+
+    try {
+      // 3. Call the existing demo/run endpoint
+      const res = await fetch('/api/v1/dynamic/demo/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenario: scenarioKey, dry_run: false }),
+      });
+
+      clearInterval(phaseTimer);
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Trigger failed');
+      }
+
+      const data = await res.json();
+      dashboardUrl = data.trigger.dashboard_url;
+
+      // 4. Hide processing, flash screen, show overlay
+      document.getElementById('processing').classList.remove('visible');
+
+      const flash = document.getElementById('screen-flash');
+      flash.classList.add('flash');
+      setTimeout(() => flash.classList.remove('flash'), 500);
+
+      showOverlay(data, scenarioKey);
+
+    } catch (err) {
+      clearInterval(phaseTimer);
+      document.getElementById('processing').classList.remove('visible');
+      document.getElementById('status-bar').classList.remove('alert-active');
+      alert('Event staging failed: ' + err.message);
+      isRunning = false;
+      document.getElementById('btn-stage').disabled = false;
+    }
+  }
+
+  /* ---- Populate and show the overlay ---- */
+  function showOverlay(data, scenarioKey) {
+    const t = data.trigger;
+    const s = SCENARIOS[scenarioKey];
+    const vesselName = VESSEL_NAMES[s.vessel_imo] || s.vessel_imo;
+
+    // Content
+    document.getElementById('alert-label').textContent = 'CRITICAL EVENT';
+    document.getElementById('alert-title').textContent =
+      'Propulsion anomaly detected';
+    document.getElementById('alert-subtitle').textContent =
+      vesselName + ' \\u00b7 Immediate investigation required';
+    document.getElementById('alert-severity').textContent = 'CRITICAL';
+    document.getElementById('alert-summary').textContent =
+      'Multiple propulsion signals deviated at the same time. Possible propeller obstruction or impact damage.';
+    document.getElementById('det-vessel').textContent = vesselName + ' (' + s.vessel_imo + ')';
+    document.getElementById('det-system').textContent = 'Propulsion line';
+    document.getElementById('det-time').textContent = new Date(t.generated_at).toLocaleString();
+
+    // Show
+    document.getElementById('overlay').classList.add('visible');
+  }
+
+  /* ---- Actions ---- */
+  function investigate() {
+    if (dashboardUrl) {
+      document.getElementById('grafana-frame').src = dashboardUrl + '?orgId=1&kiosk';
+    }
+    dismiss();
+  }
+
+  function dismiss() {
+    document.getElementById('overlay').classList.remove('visible');
+    document.getElementById('status-bar').classList.remove('alert-active');
+    isRunning = false;
+    document.getElementById('btn-stage').disabled = false;
+  }
+</script>
 </body>
 </html>
 """.strip()

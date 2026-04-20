@@ -25,6 +25,8 @@ from dynamic.orchestrator import (
 
 LOOKBACK_HOURS = 72
 NOC_DASHBOARD_SLUG = "dynamic-noc-support-dashboard"
+DYNAMIC_FOLDER_UID = "maritime-dynamic-dashboards"
+DYNAMIC_FOLDER_TITLE = "Dynamic Dashboards"
 NOC_SUPPORT_METRICS = [
     "service_up",
     "health_check_status",
@@ -100,8 +102,13 @@ class DynamicNOCDashboardOrchestrator:
 
         grafana_result: dict[str, Any] | None = None
         if not request.dry_run:
+            await self.grafana_client.ensure_folder(
+                title=DYNAMIC_FOLDER_TITLE,
+                uid=DYNAMIC_FOLDER_UID,
+            )
             grafana_result = await self.grafana_client.upsert_dashboard(
                 dashboard_payload,
+                folder_uid=DYNAMIC_FOLDER_UID,
                 message=(
                     "Dynamic NOC support update: "
                     f"{resolved['vessel_imo']} / {resolved.get('app_external_id') or 'vessel'}"

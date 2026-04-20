@@ -91,6 +91,32 @@ SCENARIOS: dict[str, dict] = {
         ),
         "description": "Runtime pressure on MT Nordic Fjord (IMO9300003) / time-series-processor",
     },
+    "propulsion_anomaly": {
+        "vessel_imo": "IMO9300001",
+        "app_external_id": "time-series-processor",
+        "alert_name": "SeverePropulsionAnomaly",
+        "severity": "critical",
+        "alert_type": "propulsion_anomaly",
+        "summary": (
+            "CRITICAL — Multiple propulsion-related signals on MV Edge Aurora "
+            "are showing simultaneous extreme deviations. Shaft vibration has "
+            "spiked to dangerous levels (>20 mm/s vs normal 2-3 mm/s), "
+            "propulsion power has dropped sharply, vessel speed is falling "
+            "despite engines compensating at high load, and stern tube "
+            "temperature is rising rapidly. This pattern is consistent with "
+            "severe physical obstruction or impact damage to the propeller "
+            "assembly. The AI agent has identified this as a rare multi-signal "
+            "anomaly that requires immediate investigation by the chief "
+            "engineer. This is NOT a routine alarm — the simultaneous failure "
+            "pattern across vibration, power, speed, and temperature channels "
+            "indicates a structural propulsion event."
+        ),
+        "description": (
+            "Severe propulsion anomaly on MV Edge Aurora (IMO9300001) — "
+            "simultaneous extreme deviations across shaft vibration, "
+            "propulsion power, vessel speed, and stern tube temperature"
+        ),
+    },
 }
 
 
@@ -313,10 +339,58 @@ def _build_metric_rows(
             ("http_request_duration_p95", 1.2 + random.random() * 1.5, "Application", "Seconds"),
             ("http_error_rate_5xx", 5.0 + random.random() * 8, "Application", "Percent"),
         ]
+    elif scenario_key == "propulsion_anomaly":
+        metrics = None  # handled separately below with time-evolving values
     else:
         metrics = [
             ("service_up", 1.0, "Application", "Count"),
         ]
+
+    # --- Propulsion anomaly: realistic time-evolving sensor traces --------
+    if scenario_key == "propulsion_anomaly":
+        rows = []
+        # Build 12 samples over the last hour: first 4 normal, then
+        # escalating to extreme.  This gives the time-series chart a
+        # visible "moment of impact" curve.
+        sample_times = [now - timedelta(minutes=m) for m in reversed(range(0, 60, 5))]
+        impact_index = 4  # sample 5 of 12 is when the event starts
+
+        # (metric_name, normal, peak, unit, metric_type)
+        propulsion_metrics = [
+            ("shaft_vibration_mm_s",     2.5,   22.0,  "mm/s",    "Gauge"),
+            ("propulsion_power_kw",   8000.0, 2200.0,  "kW",      "Gauge"),
+            ("vessel_speed_knots",      18.0,    7.5,  "knots",   "Gauge"),
+            ("engine_load_pct",         58.0,   94.0,  "Percent", "Gauge"),
+            ("propeller_rpm",          120.0,   45.0,  "RPM",     "Gauge"),
+            ("stern_tube_temp_c",       45.0,   82.0,  "Celsius", "Gauge"),
+        ]
+
+        for mi, (metric_name, normal, peak, unit, metric_type) in enumerate(propulsion_metrics):
+            for ti, t in enumerate(sample_times):
+                if ti < impact_index:
+                    # Normal readings with small jitter
+                    value = normal * (1.0 + (random.random() - 0.5) * 0.04)
+                else:
+                    # Escalate toward peak over the remaining samples
+                    progress = (ti - impact_index) / max(1, len(sample_times) - impact_index - 1)
+                    value = normal + (peak - normal) * min(1.0, progress * 1.1)
+                    value *= (1.0 + (random.random() - 0.5) * 0.06)
+
+                rows.append((
+                    sync_id,
+                    sc["app_external_id"],
+                    metric_name,
+                    t,
+                    app_id,
+                    float(value),
+                    None,
+                    None,
+                    metric_type,
+                    unit,
+                    sc["vessel_imo"],
+                    labels_json,
+                ))
+        return rows
 
     rows = []
     times = [now - timedelta(minutes=m) for m in [20, 10, 0]]

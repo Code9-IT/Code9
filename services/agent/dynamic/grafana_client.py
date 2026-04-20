@@ -29,6 +29,25 @@ class GrafanaClient:
         self.password = password or os.getenv("GRAFANA_ADMIN_PASSWORD", "code9-demo-admin")
         self.timeout_seconds = timeout_seconds
 
+    async def ensure_folder(self, *, title: str, uid: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=self.timeout_seconds, auth=self._auth()) as client:
+            existing = await client.get(f"{self.base_url}/api/folders/{uid}")
+            if existing.status_code == 200:
+                return existing.json()
+            if existing.status_code != 404:
+                existing.raise_for_status()
+
+            response = await client.post(
+                f"{self.base_url}/api/folders",
+                json={"title": title, "uid": uid},
+            )
+            if response.status_code == 412:
+                fallback = await client.get(f"{self.base_url}/api/folders/{uid}")
+                fallback.raise_for_status()
+                return fallback.json()
+            response.raise_for_status()
+            return response.json()
+
     async def health(self) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=self.timeout_seconds, auth=self._auth()) as client:
             response = await client.get(f"{self.base_url}/api/health")
@@ -39,15 +58,19 @@ class GrafanaClient:
         self,
         dashboard: dict[str, Any],
         *,
-        folder_id: int = 0,
+        folder_id: int | None = None,
+        folder_uid: str | None = None,
         message: str | None = None,
     ) -> dict[str, Any]:
         payload = {
             "dashboard": dashboard,
-            "folderId": folder_id,
             "overwrite": True,
             "message": message or "Dynamic incident dashboard update",
         }
+        if folder_uid:
+            payload["folderUid"] = folder_uid
+        else:
+            payload["folderId"] = 0 if folder_id is None else folder_id
         async with httpx.AsyncClient(timeout=self.timeout_seconds, auth=self._auth()) as client:
             response = await client.post(f"{self.base_url}/api/dashboards/db", json=payload)
             response.raise_for_status()

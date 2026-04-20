@@ -21,6 +21,14 @@ SCENARIO_METRICS: dict[str, list[str]] = {
         "last_sync_age_seconds",
         "process_cpu_usage",
     ],
+    "propulsion_anomaly": [
+        "shaft_vibration_mm_s",
+        "propulsion_power_kw",
+        "vessel_speed_knots",
+        "engine_load_pct",
+        "propeller_rpm",
+        "stern_tube_temp_c",
+    ],
     "generic_incident": [
         "http_error_rate_5xx",
         "process_cpu_usage",
@@ -48,6 +56,8 @@ def select_scenario(
         for metric in latest_metrics
     }
 
+    if _matches_propulsion_anomaly(alert_name, alert_type):
+        return "propulsion_anomaly"
     if _matches_service_down(alert_name, alert_type, app_state, metric_values):
         return "service_down"
     if _matches_connectivity(alert_name, alert_type, metric_values):
@@ -55,6 +65,12 @@ def select_scenario(
     if _matches_runtime_pressure(alert_name, alert_type, metric_values):
         return "runtime_pressure"
     return "generic_incident"
+
+
+def _matches_propulsion_anomaly(alert_name: str, alert_type: str) -> bool:
+    if any(token in alert_name for token in ("propulsion", "shaft", "propeller")):
+        return True
+    return alert_type in {"propulsion_anomaly", "propeller_damage", "shaft_failure"}
 
 
 def _matches_service_down(

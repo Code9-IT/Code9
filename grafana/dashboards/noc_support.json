@@ -74,6 +74,18 @@
       "keepTime": false,
       "tags": [],
       "targetBlank": true,
+      "title": "Presentation Monitor",
+      "tooltip": "Open the external presentation shell for the staged critical event demo",
+      "type": "link",
+      "url": "http://localhost:8000/api/v1/dynamic/monitor?presentation=1"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": true,
       "title": "AI Chat",
       "tooltip": "Ask the AI assistant about fleet, incidents, or specific vessels",
       "type": "link",

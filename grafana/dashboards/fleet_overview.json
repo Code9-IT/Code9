@@ -72,6 +72,18 @@
       "keepTime": false,
       "tags": [],
       "targetBlank": true,
+      "title": "Presentation Monitor",
+      "tooltip": "Open the external presentation shell for the staged critical event demo",
+      "type": "link",
+      "url": "http://localhost:8000/api/v1/dynamic/monitor?presentation=1"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": true,
       "title": "AI Chat",
       "tooltip": "Ask the AI assistant about fleet, incidents, or specific vessels",
       "type": "link",
@@ -231,17 +243,6 @@
       "type": "stat"
     },
     {
-      "datasource": null,
-      "gridPos": {"h": 3, "w": 24, "x": 0, "y": 5},
-      "id": 6,
-      "options": {
-        "content": "## Drilldown\n\nClick `Vessel` or `IMO` to open the Scope 1 incident workbench for that vessel. In the active-alert table, clicking `Application` or `App ID` opens the same vessel with that app preselected.",
-        "mode": "markdown"
-      },
-      "title": "Drilldown Status",
-      "type": "text"
-    },
-    {
       "datasource": {"type": "postgres", "uid": "timescaledb"},
       "fieldConfig": {
         "defaults": {
@@ -312,7 +313,7 @@
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 5},
       "id": 10,
       "options": {
         "showHeader": true,
@@ -329,7 +330,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 16},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 13},
       "id": 20,
       "title": "Cross-Vessel Active Alerts",
       "type": "row"
@@ -417,7 +418,7 @@
           }
         ]
       },
-      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 17},
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 14},
       "id": 21,
       "options": {
         "showHeader": true,
@@ -434,7 +435,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 27},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 24},
       "id": 30,
       "title": "Cross-Vessel Correlation",
       "type": "row"
@@ -472,7 +473,7 @@
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 25},
       "id": 31,
       "options": {
         "showHeader": true,
@@ -520,7 +521,7 @@
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 25},
       "id": 32,
       "options": {
         "showHeader": true,
@@ -537,7 +538,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 36},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 33},
       "id": 40,
       "title": "Fleet Connectivity",
       "type": "row"
@@ -590,7 +591,7 @@
           }
         ]
       },
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 37},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 34},
       "id": 41,
       "options": {
         "showHeader": true,
@@ -607,7 +608,7 @@
     },
     {
       "collapsed": false,
-      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 45},
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 42},
       "id": 50,
       "title": "Alert Trend",
       "type": "row"
@@ -626,7 +627,7 @@
         },
         "overrides": []
       },
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 46},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 43},
       "id": 51,
       "options": {
         "legend": {"displayMode": "list", "placement": "bottom"},
