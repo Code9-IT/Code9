@@ -1,222 +1,216 @@
 # Production Guide
 
-This document describes how to deploy, configure, and operate the Maritime
-Agentic Observability platform. It is intended for handover to Knowit Sorlandet
-and any future maintainers.
+This document describes how to run, configure, and maintain the Maritime Agentic
+Observability prototype. It is intended for maintainers and technical reviewers.
 
-## Current Sprint Note
-
-This guide documents the implemented prototype foundation that is already in the
-repo. The new dynamic-dashboard flow described in
-`docs/DYNAMIC_DASHBOARD_TASK_PLAN.md` is the current sprint extension and should
-be treated as in-progress work until it is actually merged and validated.
+The repository is a locally runnable prototype. Before operational use, it needs
+production hardening, deployment design, access control, backup routines, and
+validation with real operational data.
 
 ## System Requirements
 
-- **Docker Desktop** (Docker Engine 24+ with Compose v2)
-- **RAM**: 8 GB minimum (Ollama LLM requires ~4 GB for llama3.2)
-- **Disk**: ~5 GB for Docker images + volumes
-- **Ports**: 3000 (Grafana), 5432 (PostgreSQL), 8000 (Agent), 8001 (MCP), 11434 (Ollama)
+- Docker Desktop / Docker Engine 24+ with Compose v2
+- 8 GB RAM minimum
+- Approximately 5 GB disk space for Docker images and volumes
+- Available local ports: 3000, 5432, 8000, 8001, 11434
 
-No local Python, PostgreSQL, or Node.js installation is required.
+No local Python, PostgreSQL, Grafana, or Ollama installation is required.
 
-## Deployment
-
-### First-time setup
+## First-Time Setup
 
 ```bash
 git clone <repo-url>
 cd <repo-dir>
-cp .env.example .env        # adjust credentials if needed
+cp .env.example .env
 docker compose up -d --build
 ```
 
 On first start:
-1. `timescaledb` initializes the database and runs all SQL scripts in `db/init/`
-2. `ollama-init` pulls `llama3.2` and `nomic-embed-text` models
-3. `uds-seeder` backfills 6 hours of UDS history, then seeds every 30 minutes
-4. `agent` ingests RAG knowledge documents on startup
-5. `generator` begins producing legacy telemetry data
 
-Wait for the seeder to finish before using dashboards:
+1. `timescaledb` initializes all SQL scripts in `db/init/`
+2. `ollama-init` pulls `llama3.2` and `nomic-embed-text`
+3. `uds-seeder` backfills 6 hours of UDS history, then seeds every 30 minutes
+4. `agent` ingests RAG knowledge documents
+5. `generator` begins producing legacy telemetry events
+
+Wait for the seeder to finish before validating dashboards:
 
 ```bash
 docker compose logs -f uds-seeder
-# Wait for "Backfill complete"
 ```
 
-### Restarting without data loss
+Look for `Backfill complete`.
+
+## Restart and Reset
+
+Restart without deleting data:
 
 ```bash
 docker compose restart
 ```
 
-### Full reset (fresh database)
-
-Database init scripts only run on a fresh volume. To reset everything:
+Full reset with a fresh database:
 
 ```bash
-docker compose down -v          # removes all volumes
-docker compose up -d --build    # rebuilds and reinitializes
+docker compose down -v
+docker compose up -d --build
 ```
+
+The initialization scripts only run on a fresh database volume.
+
+## Main URLs
+
+| Service | URL |
+|---------|-----|
+| Grafana | http://localhost:3000 |
+| Agent API docs | http://localhost:8000/docs |
+| MCP-style tool API docs | http://localhost:8001/docs |
+| AI Chat | http://localhost:8000/api/v1/chat |
+| Dynamic dashboard selector | http://localhost:8000/api/v1/dynamic/select |
+| Validation dashboard | http://localhost:8000/api/v1/validate/dashboard |
+
+Default Grafana credentials:
+
+```text
+admin / code9-demo-admin
+```
+
+Change these before sharing the stack outside a local prototype environment.
 
 ## Configuration
 
-All configuration is via environment variables in `.env` (or `docker-compose.yml`
-defaults):
+Configuration is provided through `.env` or the defaults in `docker-compose.yml`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DB_USER` | `postgres` | PostgreSQL user |
 | `DB_PASSWORD` | `postgres` | PostgreSQL password |
 | `DB_NAME` | `maritime_telemetry` | Database name |
-| `GRAFANA_ADMIN_USER` | `admin` | Grafana admin username |
-| `GRAFANA_ADMIN_PASSWORD` | `code9-demo-admin` | Grafana admin password (repo default; a local `.env` overrides it on a given machine) |
-| `MCP_API_KEY` | `code9-scope1-demo-key` | API key for MCP tool access |
-| `OLLAMA_MODEL` | `llama3.2` | LLM model for analysis |
-| `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Embedding model for RAG |
-| `OLLAMA_TIMEOUT_SECONDS` | `600` | LLM call timeout |
+| `DB_PORT` | `5432` | Exposed PostgreSQL port |
+| `GRAFANA_ADMIN_USER` | `admin` | Grafana admin user |
+| `GRAFANA_ADMIN_PASSWORD` | `code9-demo-admin` | Grafana admin password |
+| `GRAFANA_PORT` | `3000` | Exposed Grafana port |
+| `GRAFANA_URL` | `http://grafana:3000` | Internal Grafana URL used by agent |
+| `GRAFANA_PUBLIC_URL` | `http://localhost:3000` | Public URL returned in dashboard links |
+| `AGENT_PORT` | `8000` | Exposed agent API port |
+| `MCP_PORT` | `8001` | Exposed MCP-style tool API port |
+| `MCP_URL` | `http://mcp:8001` | Internal MCP URL used by agent |
+| `MCP_API_KEY` | `code9-demo-key` | API key for MCP-style tool access |
+| `OLLAMA_PORT` | `11434` | Exposed Ollama port |
+| `OLLAMA_URL` | `http://ollama:11434` | Internal Ollama URL |
+| `OLLAMA_MODEL` | `llama3.2` | LLM model |
+| `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Embedding model |
+| `OLLAMA_TIMEOUT_SECONDS` | `300` | LLM call timeout |
 | `RAG_TOP_K` | `5` | Number of RAG documents to retrieve |
-| `RAG_MIN_SIMILARITY` | `0.60` | Minimum cosine similarity for RAG |
-| `RAG_AUTO_INGEST_RETRIES` | `120` | Agent startup RAG auto-ingest attempts (survives cold Ollama model pull) |
-| `RAG_AUTO_INGEST_DELAY_SECONDS` | `15` | Delay between RAG auto-ingest retries |
-| `UDS_SEED_INTERVAL_SECONDS` | `1800` | Interval between UDS seed runs |
-| `ANOMALY_PROBABILITY` | `0.00008` | Legacy anomaly generation rate |
-
-### Security notes
-
-- Change `MCP_API_KEY` and database credentials for any non-local deployment
-- Grafana admin password should be changed on first login
-- MCP auth is only enforced when `MCP_API_KEY` is non-empty
-- Do not expose ports 5432 or 11434 to the public internet
+| `RAG_MIN_SIMILARITY` | `0.60` | Minimum similarity threshold |
+| `UDS_SEED_INTERVAL_SECONDS` | `1800` | UDS seed interval |
+| `STUB_MODE` | `false` | Dynamic-dashboard dry-run/development fallback |
 
 ## Service Architecture
 
 | Service | Port | Purpose |
 |---------|------|---------|
 | `timescaledb` | 5432 | PostgreSQL 16 + TimescaleDB + pgvector |
-| `grafana` | 3000 | Dashboard visualization |
-| `agent` | 8000 | AI analysis pipeline (FastAPI) |
-| `mcp` | 8001 | MCP REST adapter (13 DB query tools) |
+| `grafana` | 3000 | Static and generated dashboards |
+| `agent` | 8000 | AI analysis, chat, validation, dynamic dashboard routes |
+| `mcp` | 8001 | MCP-style REST adapter with 13 tools |
 | `generator` | -- | Legacy telemetry data generator |
 | `uds-seeder` | -- | UDS metrics, alerts, and logs seeder |
-| `ollama` | 11434 | Local LLM inference |
+| `ollama` | 11434 | Local LLM inference and embeddings |
 | `ollama-init` | -- | One-shot model puller |
-
-### Data flow
-
-```
-generator --------> legacy telemetry/events -------> ship_operations dashboard
-                                                            |
-                                                      agent analyze
-                                                      /           \
-                                                RAG context     MCP tools
-
-uds-seeder -------> UDS metrics/alerts/logs -------> uds_monitoring
-                                                      fleet_overview
-                                                      noc_support
-                                                      alert_trends
-```
 
 ## Database Schema
 
-The database has four initialization scripts:
+Initialization scripts:
 
-1. `001_init.sql` — Legacy telemetry tables (events, telemetry, ai_analyses)
-2. `002_rag.sql` — pgvector RAG schema (knowledge_docs)
-3. `003_uds.sql` — UDS application monitoring (udslocations, applications,
-   metric_samples, alerts, app_logs)
-4. `004_uds_reference_data.sql` — Reference data (3 vessels, 6 apps, 18 links)
+1. `001_init.sql` - legacy telemetry tables
+2. `002_rag.sql` - pgvector RAG schema
+3. `003_uds.sql` - UDS application monitoring schema
+4. `004_uds_reference_data.sql` - demo vessels, applications, and links
+5. `005_dynamic_dashboard_runs.sql` - generated dashboard run storage
 
-### Key tables
+Key tables:
 
 | Table | Description |
 |-------|-------------|
-| `udslocations` | Vessels with IMO numbers |
-| `applications` | Monitored applications |
-| `metric_samples` | TimescaleDB hypertable for time-series metrics |
-| `alerts` | Active and historical alerts |
-| `app_logs` | Application log entries |
-| `events` | Legacy anomaly events |
 | `telemetry` | Legacy sensor readings |
-| `ai_analyses` | Persisted AI analysis results (extended with vessel_imo / app_external_id / alert_name for the UDS path) |
-| `knowledge_docs` | RAG knowledge base chunks with pgvector embeddings |
+| `events` | Legacy anomaly events |
+| `ai_analyses` | Persisted AI analysis results |
+| `knowledge_docs` | RAG knowledge chunks and embeddings |
+| `udslocations` | Demo vessels with IMO numbers |
+| `applications` | Monitored applications |
+| `metric_samples` | UDS time-series metrics |
+| `alerts` | Active and historical alerts |
+| `app_logs` | Prototype application log context |
+| `dynamic_dashboard_runs` | Generated dashboard run history |
 
-## MCP Tools (13 total)
+## Dynamic Dashboard Proof-of-Concept
 
-| Tool | Scope | Purpose |
-|------|-------|---------|
-| `get_telemetry` | Legacy | Raw telemetry query |
-| `get_events` | Legacy | Event list with filters |
-| `get_analysis` | Legacy | AI analysis for an event |
-| `get_vessel_app_status` | Scope 1 | All apps on one vessel |
-| `get_vessel_alerts` | Scope 1 | Active alerts for one vessel |
-| `get_app_metric_history` | Scope 1 | Time-series metrics for one app |
-| `get_app_logs` | Scope 1 | Recent logs for one app |
-| `get_fleet_status` | Scope 2 | All vessels with operational status |
-| `get_fleet_alerts` | Scope 2 | Fleet-wide alerts with severity filter |
-| `get_cross_vessel_correlation` | Scope 2 | Cross-vessel pattern detection |
-| `get_incident_timeline` | Scope 2 | Chronological event timeline |
-| `get_operational_snapshot` | Scope 2 | Full vessel state for NOC |
-| `get_alert_trend` | Scope 3 | Alert frequency trend detection (predictive) |
+Generate or update the default incident dashboard:
 
-## Dashboards
+```bash
+curl -X POST http://localhost:8000/api/v1/dynamic/trigger \
+  -H "Content-Type: application/json" \
+  -d "{\"mode\":\"latest_firing_alert\"}"
+```
 
-| Dashboard | Purpose |
-|-----------|---------|
-| Ship Operations | Legacy telemetry monitoring with AI analysis |
-| UDS Monitoring | Single-vessel incident investigation |
-| Fleet Overview | Multi-vessel operational overview |
-| NOC Support | Full vessel state for support cases |
-| Alert Trends | Predictive alert frequency analysis |
+Open the generated dashboard:
 
-## Monitoring and Health Checks
+```text
+http://localhost:3000/d/maritime_dynamic_incident
+```
 
-- **MCP health**: `GET http://localhost:8001/health`
-- **Agent health**: `GET http://localhost:8000/health`
-- **Database**: `pg_isready -U postgres -d maritime_telemetry` (via Docker healthcheck)
-- **Grafana**: check `http://localhost:3000/api/health`
+For a controlled demo scenario:
+
+```bash
+docker compose exec agent python /app/scripts/inject_dynamic_incident.py --scenario service_down
+```
+
+Then trigger the dashboard with the printed request body.
+
+## Health Checks
+
+- MCP health: `GET http://localhost:8001/health`
+- Agent health: `GET http://localhost:8000/health`
+- Grafana health: `GET http://localhost:3000/api/health`
+- Database health: Docker Compose `pg_isready` healthcheck
 
 ## Troubleshooting
 
-### LLM not responding
+### Dashboards show no data
+
+1. Wait for `uds-seeder` backfill to complete.
+2. Check `docker logs maritime_uds_seeder`.
+3. Check `docker logs maritime_timescaledb`.
+4. Verify the Grafana datasource under Grafana data source settings.
+
+### LLM analysis is slow or hangs
+
+1. Check that models are available:
+
+   ```bash
+   docker exec maritime_ollama ollama list
+   ```
+
+2. Check Ollama logs:
+
+   ```bash
+   docker logs maritime_ollama
+   ```
+
+3. Restart the agent after Ollama is ready:
+
+   ```bash
+   docker compose restart agent
+   ```
+
+### RAG knowledge base is empty
+
+The agent retries RAG ingestion during startup. If the model pull takes longer
+than expected, restart the agent after Ollama is ready:
 
 ```bash
-docker exec maritime_ollama ollama list    # check if models are pulled
-docker logs maritime_ollama                # check for errors
-docker restart maritime_ollama
-```
-
-### Dashboards show "No data"
-
-1. Wait for `uds-seeder` backfill to complete
-2. Check database connectivity: `docker logs maritime_timescaledb`
-3. Verify Grafana datasource: Settings > Data Sources > timescaledb > Test
-
-### Agent analysis hangs
-
-- Check Ollama is running and responsive
-- Increase `OLLAMA_TIMEOUT_SECONDS` if the model is slow
-- Check agent logs: `docker logs maritime_agent`
-
-### RAG knowledge base is empty after a fresh-volume start
-
-The agent retries RAG auto-ingest while waiting for the Ollama embeddings
-endpoint to come up. The default retry budget is `120 attempts * 15s = 30
-minutes`, sized to survive a cold-start `llama3.2 + nomic-embed-text` pull.
-On a slow link the model pull can still exceed that window. If
-`docker logs maritime_agent` shows
-`RAG auto-ingest skipped after N attempts`, do one of the following:
-
-```bash
-# 1. Confirm Ollama is healthy and the embeddings model is present:
-docker exec maritime_ollama ollama list
-
-# 2. Restart the agent so the startup hook re-runs ingest_if_empty():
 docker compose restart agent
-
-# 3. Or extend the retry budget for the next cold start:
-#    RAG_AUTO_INGEST_RETRIES=240 RAG_AUTO_INGEST_DELAY_SECONDS=15 docker compose up -d
 ```
 
 ### Reset everything
@@ -226,23 +220,32 @@ docker compose down -v
 docker compose up -d --build
 ```
 
-## Backup and Data Persistence
+## Backup
 
 Data is stored in Docker volumes:
-- `timescaledb_data` — All database data
-- `ollama_data` — Downloaded LLM models
 
-To back up the database:
+- `timescaledb_data`
+- `ollama_data`
+
+Example database backup:
 
 ```bash
 docker exec maritime_timescaledb pg_dump -U postgres maritime_telemetry > backup.sql
 ```
 
+## Security Notes
+
+- Do not expose the local prototype directly to the public internet.
+- Change all demo credentials before any non-local deployment.
+- Keep `MCP_API_KEY` non-empty outside local debugging.
+- Add proper authentication and authorization before operational use.
+- Review CORS settings before deployment.
+
 ## Known Limitations
 
-- Demo topology is fixed to 3 vessels and 6 applications
-- No migration strategy — fresh volumes are the only reliable reset path
-- MCP auth is API-key only (no JWT/OAuth)
-- `app_logs` is a lightweight prototype bridge, not a full log pipeline
-- LLM analysis quality depends on model size and prompt engineering
-- No multi-user or authentication on the agent service
+- The topology is fixed to 3 demo vessels and 6 demo applications.
+- UDS data is seeded for repeatable scenarios and is not live production data.
+- There is no migration strategy for existing database volumes.
+- `app_logs` is a lightweight prototype bridge, not a full log pipeline.
+- Local Ollama model quality and latency are limited.
+- The dynamic dashboard is a proof-of-concept and needs broader validation.

@@ -14,18 +14,6 @@
       "keepTime": false,
       "tags": [],
       "targetBlank": false,
-      "title": "Ship Operations (Legacy)",
-      "tooltip": "Legacy telemetry view for vessel_001",
-      "type": "link",
-      "url": "/d/maritime_ship_ops/ship-operations-legacy-telemetry?var-vessel=${vessel}"
-    },
-    {
-      "asDropdown": false,
-      "icon": "dashboard",
-      "includeVars": false,
-      "keepTime": false,
-      "tags": [],
-      "targetBlank": false,
       "title": "Fleet Overview",
       "tooltip": "Fleet-wide UDS health and correlation view",
       "type": "link",

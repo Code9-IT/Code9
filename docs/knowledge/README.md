@@ -71,10 +71,3 @@ Short description of what event/sensor patterns this note supports.
 | `p8_data_quality_lineage.md` | Data quality dimensions, lineage model, traceability metadata |
 | `p9_maritime_regulations.md` | Regulatory reference table (MSC.302, A.741, IACS UR E22/Z27, etc.) |
 | `p10_incident_analysis_reporting.md` | Marine casualty/incident/near-miss, RCA, event report structure |
-
-### Deferred
-- **Point 7** (Application state): Was waiting on IAS scripts from Geir. Meeting
-  on 03.03.2026 happened but scripts have not been received yet. Create this file
-  when/if Geir provides application-level IAS data.
-- **Point 11** (Color Line/Knowit-specific): Depends on documents from Color Line
-  that have not been provided. Deferred indefinitely.

@@ -59,15 +59,13 @@ services:
       - "${GRAFANA_PORT:-3000}:3000"
     environment:
       GF_SECURITY_ADMIN_USER:     ${GRAFANA_ADMIN_USER:-admin}
-      # Default kept in sync with .env.example and the user-facing docs
-      # (README.md, CLAUDE.md, DEMO_SCRIPT.md, DYNAMIC_DASHBOARD_DEMO.md)
-      # so the credential is consistent whether or not the operator copies
-      # .env.example to .env.
+      # Default kept in sync with .env.example and README.md so the credential
+      # is consistent whether or not the operator copies .env.example to .env.
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-code9-demo-admin}
       GF_SECURITY_ALLOW_EMBEDDING: "true"
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/ship_operations.json
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/fleet_overview.json
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_NAME: ${DB_NAME:-maritime_telemetry}
@@ -103,7 +101,7 @@ services:
       QUICK_ANALYSIS_MAX_CONTEXT_CHARS: ${QUICK_ANALYSIS_MAX_CONTEXT_CHARS:-900}
       QUICK_ANALYSIS_NUM_PREDICT: ${QUICK_ANALYSIS_NUM_PREDICT:-180}
       MCP_URL:      ${MCP_URL:-http://mcp:8001}
-      MCP_API_KEY:  ${MCP_API_KEY:-code9-scope1-demo-key}
+      MCP_API_KEY:  ${MCP_API_KEY:-code9-demo-key}
       GRAFANA_URL: ${GRAFANA_URL:-http://grafana:3000}
       GRAFANA_PUBLIC_URL: ${GRAFANA_PUBLIC_URL:-http://localhost:3000}
       GRAFANA_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
@@ -146,7 +144,7 @@ services:
       DB_USER:     ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
       DB_NAME:     ${DB_NAME:-maritime_telemetry}
-      MCP_API_KEY: ${MCP_API_KEY:-code9-scope1-demo-key}
+      MCP_API_KEY: ${MCP_API_KEY:-code9-demo-key}
       CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000}
     depends_on:
       timescaledb:

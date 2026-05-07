@@ -108,8 +108,8 @@ For cross-validation, ranges are consistent with descriptions in:
   mandatory alarm categories — though exact setpoints remain vessel/OEM specific.
 
 **For RAG use**: trust `sensors.py` values as the system's actual thresholds.
-**For the bachelor thesis**: cite as "project IAS sensor catalogue derived from
-anonymised ship telemetry data; values consistent with OEM and class society ranges."
+**Reference note**: the project IAS sensor catalogue is derived from anonymised
+ship telemetry data, with values consistent with OEM and class society ranges.
 
 ---
 

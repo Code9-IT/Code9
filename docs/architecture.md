@@ -2,27 +2,16 @@
 
 ## Purpose
 
-This repository now needs to be read as two layers:
+This document summarizes the delivered prototype architecture. The repository
+contains a locally runnable monitoring and incident-support stack with four
+connected paths:
 
-1. **Implemented foundation**
-   - legacy ship telemetry with AI analysis
-   - UDS application monitoring for single-vessel, fleet, and NOC use cases
-   - AI chat, predictive alert trends, and shared dashboard navigation
-2. **Current pivot**
-   - one agentic dynamic-dashboard flow that generates or updates a Grafana
-     dashboard for the incident that matters now
+1. legacy Ship Operations telemetry monitoring
+2. UDS application monitoring for single-vessel, fleet, and NOC workflows
+3. AI-supported analysis, chat, and alert trends
+4. a dynamic dashboard proof-of-concept for incident-specific Grafana views
 
-That means the current architecture story is:
-- **Scope 1** (delivered): single-vessel incident handling
-- **Scope 2** (delivered): multi-vessel fleet overview + NOC support
-- **Scope 3 foundation** (implemented): UDS AI analysis, AI chat, dashboard
-  coherence, and predictive alert trend analysis
-- **Dynamic dashboard pivot** (in progress): alert/warning -> orchestrator ->
-  MCP context -> scenario classification -> generated Grafana dashboard
-
-## Implemented Foundation
-
-### High-Level Component View
+## High-Level Component View
 
 ```text
 generator ----------------------> telemetry / events -----+
@@ -32,7 +21,7 @@ generator ----------------------> telemetry / events -----+
                                                            |
                                                      agent analyze
                                                      /           \
-                                                RAG context    MCP tools (legacy)
+                                                RAG context    MCP tools
 
 004_uds_reference_data.sql --> UDS reference tables -------+
                                                            |
@@ -44,75 +33,52 @@ uds-seeder ------> metric_samples / alerts / app_logs      |
        |      |           |           |              |     |
        +------+-----------+-----------+--------------+     |
                           |                                |
-                  MCP UDS tools (10 tools) <----------------+
+                  MCP-style UDS tools <--------------------+
                           |
-                  agent analyze (UDS events) + AI chat
+                  agent analyze + AI chat
+                          |
+                          v
+       dynamic-dashboard orchestrator -> generated Grafana dashboard
+                    stable UID: maritime_dynamic_incident
 ```
 
-### Main Services
+## Main Services
 
 | Service | Responsibility |
 |---------|----------------|
-| `timescaledb` | Stores legacy telemetry/events plus UDS tables and RAG vectors |
-| `generator` | Produces legacy synthetic ship telemetry and anomaly events |
-| `uds-seeder` | Produces periodic UDS metrics, alerts, and app logs |
-| `grafana` | Dashboards: Ship Operations, UDS Incident Workbench, Fleet Overview, NOC Support, Alert Trends |
-| `agent` | AI analysis, AI chat, and the current extension point for dynamic-dashboard work |
-| `mcp` | REST adapter exposing 13 database tools (legacy + UDS + predictive trend) |
+| `timescaledb` | PostgreSQL + TimescaleDB + pgvector data layer |
+| `generator` | Legacy synthetic ship telemetry and anomaly events |
+| `uds-seeder` | Periodic UDS metrics, alerts, and app logs |
+| `grafana` | Static dashboards and generated dynamic dashboards |
+| `agent` | AI analysis, AI chat, validation views, and dynamic-dashboard routes |
+| `mcp` | MCP-style REST adapter exposing 13 predefined tools |
 | `ollama` | Local LLM inference and embeddings |
-| `ollama-init` | Pulls required models on stack startup |
-
-## Current Pivot / Next Layer
-
-The current sprint adds a generated-dashboard path on top of the implemented
-foundation. This is the piece Arnt and Geir are now asking the team to prove.
-
-```text
-alert / warning / selected incident
-                |
-                v
-        orchestrator / trigger endpoint
-                |
-                v
-          MCP context collection
-                |
-                v
-        scenario classification
-                |
-                v
-generated Grafana dashboard (stable UID: maritime_dynamic_incident)
-```
-
-Important constraints for this layer:
-- it builds on the existing dashboards instead of replacing them
-- it reuses the MCP tool layer rather than bypassing it
-- it keeps dashboard structure deterministic
-- the LLM is optional and limited to summary text, not raw Grafana JSON
-
-This dynamic-dashboard layer is **not** part of the implemented foundation yet.
-It is the current extension the team is building and demoing this week.
+| `ollama-init` | One-shot model puller on stack startup |
 
 ## Data Model
 
-### Legacy path
+### Legacy Telemetry Path
 
 Defined in `db/init/001_init.sql`.
 
-Tables:
+Core tables:
+
 - `telemetry`
 - `events`
 - `ai_analyses`
 
 Used by:
+
 - `services/generator/`
 - `services/agent/routes/analyze.py`
 - `grafana/dashboards/ship_operations.json`
 
-### UDS path
+### UDS Monitoring Path
 
 Defined in `db/init/003_uds.sql` and `db/init/004_uds_reference_data.sql`.
 
 Core tables:
+
 - `owners`
 - `udslocations`
 - `applications`
@@ -124,111 +90,137 @@ Core tables:
 - `monitoring_configs`
 
 Seeded by:
+
 - `db/seed/uds_seed.sql`
 - `scripts/uds_seed_loop.sh`
 
-### RAG path
+### RAG Path
 
 Defined in `db/init/002_rag.sql`.
 
-Table:
+Core table:
+
 - `knowledge_docs`
 
 Knowledge files:
+
 - `docs/knowledge/`
 
-## MCP Tool Architecture
+### Dynamic Dashboard Path
+
+Defined in `db/init/005_dynamic_dashboard_runs.sql`.
+
+Core table:
+
+- `dynamic_dashboard_runs`
+
+Used by:
+
+- `services/agent/routes/dynamic_dashboard.py`
+- `services/agent/dynamic/`
+- Grafana dashboard UID `maritime_dynamic_incident`
+
+## MCP-Style Tool Architecture
 
 The MCP server (`services/mcp/main.py`) is a FastAPI REST adapter that exposes
 typed database tools. It is not the official MCP protocol, but it follows the
-same tool-definition idea and is the live data-access layer for the agent.
+same controlled tool-access idea and is the live data-access layer for the
+agent.
 
 Each tool has:
+
 1. a definition in the `TOOLS` list
 2. a Pydantic model for argument validation
 3. an async handler function
 4. an entry in `TOOL_HANDLERS`
 5. an HTTP POST endpoint
 
-### Tool Inventory (13 total)
+### Tool Inventory
 
-| Tool | Path | Scope |
-|------|------|-------|
-| `get_telemetry` | Legacy | Legacy |
-| `get_events` | Legacy | Legacy |
-| `get_analysis` | Legacy | Legacy |
-| `get_vessel_app_status` | UDS | Scope 1 |
-| `get_vessel_alerts` | UDS | Scope 1 |
-| `get_app_metric_history` | UDS | Scope 1 |
-| `get_app_logs` | UDS | Scope 1 |
-| `get_fleet_status` | UDS | Scope 2 |
-| `get_fleet_alerts` | UDS | Scope 2 |
-| `get_cross_vessel_correlation` | UDS | Scope 2 |
-| `get_incident_timeline` | UDS | Scope 2 |
-| `get_operational_snapshot` | UDS | Scope 2 |
-| `get_alert_trend` | UDS | Scope 3 foundation |
+| Tool | Area | Purpose |
+|------|-------|---------|
+| `get_telemetry` | Legacy | Raw telemetry query |
+| `get_events` | Legacy | Event list with filters |
+| `get_analysis` | Legacy | Stored AI analysis for an event |
+| `get_vessel_app_status` | UDS incident monitoring | Application status for one vessel |
+| `get_vessel_alerts` | UDS incident monitoring | Active alerts for one vessel |
+| `get_app_metric_history` | UDS incident monitoring | Time-series metrics for one app |
+| `get_app_logs` | UDS incident monitoring | Recent logs for one app |
+| `get_fleet_status` | Fleet/NOC | Operational status across vessels |
+| `get_fleet_alerts` | Fleet/NOC | Fleet-wide active alerts |
+| `get_cross_vessel_correlation` | Fleet/NOC | Cross-vessel incident patterns |
+| `get_incident_timeline` | Fleet/NOC | Chronological alerts and logs |
+| `get_operational_snapshot` | Fleet/NOC | Full vessel state for NOC support |
+| `get_alert_trend` | Alert trends | Alert frequency trend detection |
 
-## Dashboard Foundation
-
-### UDS Incident Workbench (`uds_monitoring.json`)
-- single-vessel incident handling
-- vessel/app/incident-window drilldown
-- active alerts, recent metrics, logs, and app context
-
-### Fleet Overview (`fleet_overview.json`)
-- multi-vessel overview
-- vessel health cards
-- alert counts and cross-vessel context
-- drilldown into the single-vessel workbench
-
-### NOC Support (`noc_support.json`)
-- investigation-focused vessel view
-- incident timeline, operational snapshot, connectivity, and historical metrics
+## Dashboards
 
 ### Ship Operations (`ship_operations.json`)
-- legacy telemetry visualization
-- presenter-friendly bridge into the UDS flow
+
+Legacy telemetry visualization with links to AI event analysis.
+
+### UDS Incident Workbench (`uds_monitoring.json`)
+
+Single-vessel incident handling with application state, alerts, recent context,
+and drilldown support.
+
+### Fleet Overview (`fleet_overview.json`)
+
+Multi-vessel operational overview with fleet status and cross-vessel context.
+
+### NOC Support (`noc_support.json`)
+
+Support-oriented vessel investigation view with operational state, timelines,
+connectivity, and historical panels.
 
 ### Alert Trends (`alert_trends.json`)
-- predictive alert-frequency analysis
-- vessel/severity filtering
-- backed by `get_alert_trend`
 
-### Shared Navigation
-- main demo dashboards share root navigation
-- `uds_app_health.json` is treated as a developer-only AI pipeline dashboard
+Alert frequency and trend view backed by the `get_alert_trend` tool.
 
-## Current Sprint Extension: Dynamic Incident Dashboard
+### AI Pipeline Health (`uds_app_health.json`)
 
-Target shape:
-- stable generated dashboard UID: `maritime_dynamic_incident`
-- triggered first from explicit incident context, then optionally from latest alert
-- reuses existing UDS MCP tools to gather context
-- selects one deterministic scenario template such as:
-  - connectivity
-  - service_down
-  - runtime_pressure
-  - generic_incident
-- writes the dashboard through the Grafana HTTP API
-- keeps existing dashboards as fallback and drilldown context
+Developer-facing dashboard for AI/RAG health checks.
+
+### Dynamic Incident Dashboard (`maritime_dynamic_incident`)
+
+Runtime-generated Grafana dashboard created through
+`POST /api/v1/dynamic/trigger`.
+
+## Dynamic Dashboard Flow
+
+```text
+selected incident / latest firing alert
+              |
+              v
+     dynamic-dashboard trigger
+              |
+              v
+      MCP-style context collection
+              |
+              v
+       scenario classification
+              |
+              v
+ deterministic dashboard builder
+              |
+              v
+       Grafana HTTP API upsert
+```
+
+Important design choices:
+
+- The generated dashboard builds on the existing UDS data model.
+- Context is collected through the MCP-style tool layer.
+- Scenario classification selects a deterministic dashboard template.
+- The language model is not used to generate Grafana JSON or SQL.
+- Existing dashboards remain available as drilldown and fallback views.
 
 ## Design Limitations
 
-### Fresh DB bias
-The prototype still validates most reliably from a fresh DB volume.
-
-### Cold-start timing
-First startup still depends on model pull, RAG ingest, and service readiness.
-
-### Security shortcuts
-This is still a local demo-oriented prototype:
-- demo credentials remain convenience-oriented
-- MCP auth is optional if `MCP_API_KEY` is unset
-- event acknowledge uses a confirmation-page workaround for Grafana
-
-### Prototype log bridge
-`app_logs` is seeded operational context, not a full production log pipeline.
-
-### Fixed demo topology
-3 vessels and 6 applications per vessel are enough for the current demo, but do
-not prove full production scalability by themselves.
+- The prototype validates most reliably from a fresh database volume.
+- First startup depends on model pull, RAG ingest, and service readiness.
+- Demo credentials are convenience-oriented and must be changed before any
+  non-local deployment.
+- MCP auth is optional if `MCP_API_KEY` is unset.
+- `app_logs` is seeded operational context, not a full production log pipeline.
+- The demo topology uses 3 vessels and 6 applications per vessel.

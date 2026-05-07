@@ -73,13 +73,13 @@ For the vessel telemetry data in this system, the key lineage facts are:
 | Field | Value |
 |---|---|
 | **Source** | IAS (Integrated Automation System) tags on a real ship |
-| **Agent** | Anonymised real ship operator (dataset origin); Geir at Color Line (project context) |
+| **Agent** | Anonymised real ship operator (dataset origin); project technical advisor (project context) |
 | **Activity** | Anonymised export of 128 IAS tags → `services/generator/sensors.py` |
 | **Entity** | 73 synthetic sensors driven by real IAS thresholds and tag references |
 | **Currency** | Synthetic data generated in real-time by the simulator; IAS thresholds are from a real vessel |
 | **Uncertainty** | Synthetic data adds Gaussian noise; thresholds are from real ship (high confidence) |
 
-**For bachelor thesis citation**: cite as "project IAS sensor catalogue, derived from anonymised real ship telemetry data (128-tag IAS dataset)".
+**Reference note**: the project IAS sensor catalogue is derived from anonymised real ship telemetry data.
 **For RAG use**: trust `sensors.py` values as the system's actual thresholds — they reflect a real ship's alarm setpoints.
 
 ---

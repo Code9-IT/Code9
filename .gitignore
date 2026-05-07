@@ -37,9 +37,19 @@ logs/
 
 # --- Local / personal folders (not part of the project) ---------------------
 tester/
-KristianEkstraFolder/
-geirDatabasebiter/
+*EkstraFolder/
+*Databasebiter/
+jobbSoknadHjelp/
+bachelorThesisSprintPhase/
+codex-skills/
+AGENTS.md
 
-# --- Temporary Claude file-write helpers ------------------------------------
+# --- Local report and working files -----------------------------------------
+docs/*Gruppe nr 9*.md
+docs/*.docx
+docs/FINAL_WEEK_TASK_SPLIT.md
+grafana/dashboards/*.bak
+
+# --- Temporary file-write helpers -------------------------------------------
 write_*.py
-databasecodeFraGeir/
+databasecode*/

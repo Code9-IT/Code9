@@ -66,18 +66,6 @@
     },
     {
       "asDropdown": false,
-      "icon": "dashboard",
-      "includeVars": false,
-      "keepTime": true,
-      "tags": [],
-      "targetBlank": false,
-      "title": "Alert Trends",
-      "tooltip": "Predictive alert frequency analysis (current view)",
-      "type": "link",
-      "url": "/d/maritime_alert_trends/alert-trends"
-    },
-    {
-      "asDropdown": false,
       "icon": "external link",
       "includeVars": false,
       "keepTime": false,

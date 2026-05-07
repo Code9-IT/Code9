@@ -38,22 +38,10 @@
       "keepTime": true,
       "tags": [],
       "targetBlank": false,
-      "title": "UDS Incident Workbench",
-      "tooltip": "Stay in the incident-first UDS view for the selected vessel and app",
-      "type": "link",
-      "url": "/d/maritime_uds_monitoring/uds-incident-workbench?var-vessel=${vessel}&var-incident_window=${incident_window}&var-app=${app}"
-    },
-    {
-      "asDropdown": false,
-      "icon": "dashboard",
-      "includeVars": false,
-      "keepTime": true,
-      "tags": [],
-      "targetBlank": false,
       "title": "NOC Support",
-      "tooltip": "Broader troubleshooting view for the selected vessel and app",
+      "tooltip": "Broader troubleshooting view for the selected vessel",
       "type": "link",
-      "url": "/d/maritime_noc_support/noc-support?var-vessel=${vessel}&var-time_window=${incident_window}&var-app_filter=${app}"
+      "url": "/d/maritime_noc_support/noc-support?var-vessel=${vessel}&var-time_window=${incident_window}"
     },
     {
       "asDropdown": false,
